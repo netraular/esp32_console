@@ -82,9 +82,13 @@ const char* sd_manager_get_mount_point(void) {
     return MOUNT_POINT;
 }
 
-void sd_manager_list_files(const char *path) {
+void sd_manager_list_files(const char *path, file_iterator_cb_t callback, void *user_data) {
     if (!is_mounted) {
         ESP_LOGE(TAG, "Cannot list files, SD card is not mounted.");
+        return;
+    }
+    if (!callback) {
+        ESP_LOGE(TAG, "Callback function is NULL.");
         return;
     }
 
@@ -92,32 +96,19 @@ void sd_manager_list_files(const char *path) {
     DIR *dir = opendir(path);
     if (!dir) {
         ESP_LOGE(TAG, "Failed to open directory '%s': %s", path, strerror(errno));
+        // Opcional: llamar al callback con un error
         return;
     }
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
+        // Ignorar las entradas '.' y '..'
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
 
-        char full_path[256 + 20];
-        snprintf(full_path, sizeof(full_path), "%s/%s", path, entry->d_name);
-
-        struct stat entry_stat;
-        if (stat(full_path, &entry_stat) == -1) {
-            ESP_LOGW(TAG, "Could not stat '%s', printing as is.", entry->d_name);
-             printf("  - %s\n", entry->d_name);
-            continue;
-        }
-
-        if (entry->d_type == DT_DIR) {
-            printf("  DIR : %s/\n", entry->d_name);
-        } else if (entry->d_type == DT_REG) {
-            printf("  FILE: %s (size: %jd bytes)\n", entry->d_name, (intmax_t)entry_stat.st_size);
-        } else {
-            printf("  OTHER: %s\n", entry->d_name);
-        }
+        // Llamar al callback con la información del archivo/directorio
+        callback(entry->d_name, (entry->d_type == DT_DIR), user_data);
     }
     closedir(dir);
 }
