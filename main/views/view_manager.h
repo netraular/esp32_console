@@ -8,6 +8,9 @@ typedef enum {
     VIEW_ID_MENU,
     VIEW_ID_MIC_TEST,
     VIEW_ID_SPEAKER_TEST,
+    VIEW_ID_SD_TEST,
+    VIEW_ID_IMAGE_TEST,
+    VIEW_ID_BUZZER_TEST,
     VIEW_ID_COUNT // Número total de vistas
 } view_id_t;
 
