@@ -7,6 +7,7 @@
 // Incluir los controladores principales
 #include "controllers/screen_manager/screen_manager.h"
 #include "controllers/button_manager/button_manager.h"
+#include "controllers/sd_card_manager/sd_card_manager.h"
 
 // Incluir el nuevo gestor de vistas
 #include "views/view_manager.h"
@@ -21,6 +22,13 @@ extern "C" void app_main(void) {
     if (!screen) {
         ESP_LOGE(TAG, "Fallo al inicializar la pantalla, deteniendo.");
         return;
+    }
+
+    // 1.1. Inicialización de la tarjeta SD (usa el bus SPI ya inicializado por la pantalla)
+    if (sd_manager_init()) {
+        ESP_LOGI(TAG, "SD Card manager inicializado correctamente.");
+    } else {
+        ESP_LOGE(TAG, "Fallo al inicializar SD Card manager.");
     }
 
     // 2. Inicialización de los botones

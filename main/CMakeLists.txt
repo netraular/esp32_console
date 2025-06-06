@@ -1,6 +1,7 @@
 idf_component_register(SRCS "main.cpp" 
                            "./controllers/screen_manager/screen_manager.cpp" 
                            "./controllers/button_manager/button_manager.cpp"
+                           "./controllers/sd_card_manager/sd_card_manager.cpp"
                            "./views/view_manager.cpp"
                            "./views/menu_view/menu_view.cpp"
                            "./views/mic_test_view/mic_test_view.cpp"
