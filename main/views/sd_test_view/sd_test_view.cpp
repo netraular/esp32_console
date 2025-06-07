@@ -17,7 +17,7 @@ typedef struct { lv_obj_t *list; lv_group_t *group; } add_file_context_t;
 
 // --- Prototipos ---
 static void cleanup_view();
-static void repopulate_list_cb(lv_timer_t *timer); // Ahora es un callback de timer
+static void repopulate_list_cb(lv_timer_t *timer);
 static void schedule_repopulate_list();
 static void clear_list_items(bool show_loading);
 static void list_item_delete_cb(lv_event_t * e);
@@ -42,18 +42,16 @@ static void handle_ok_press() {
     lv_obj_t * focused_obj = lv_group_get_focused(view_group);
     if (!focused_obj) return;
 
-    // Ignorar si el foco está en la propia lista (p.ej. directorio vacío)
-    if (focused_obj == list_widget) return;
+    // <-- CAMBIO: Esta comprobación ya no es necesaria, se elimina.
+    // if (focused_obj == list_widget) return;
 
     list_item_data_t* item_data = static_cast<list_item_data_t*>(lv_obj_get_user_data(focused_obj));
     if (!item_data || !item_data->is_dir) {
-        // Es un archivo, no un directorio
         const char* file_name = lv_list_get_button_text(list_widget, focused_obj);
         ESP_LOGI(TAG, "Archivo seleccionado: %s (acción no definida)", file_name);
         return;
     }
 
-    // Es un directorio, procedemos a navegar
     const char* dir_name = lv_list_get_button_text(list_widget, focused_obj);
     ESP_LOGI(TAG, "Entrando en el directorio: %s", dir_name);
 
@@ -62,7 +60,6 @@ static void handle_ok_press() {
     }
     strcat(current_path, dir_name);
     
-    // En lugar de llamar directamente, programamos la actualización
     schedule_repopulate_list();
 }
 
@@ -77,7 +74,6 @@ static void handle_cancel_press() {
     
     ESP_LOGI(TAG, "Volviendo al directorio padre desde: %s", current_path);
     char *last_slash = strrchr(current_path, '/');
-    // Asegurarse de que no nos salgamos del punto de montaje
     if (last_slash > current_path && (size_t)(last_slash - current_path) >= strlen(mount_point)) {
          *last_slash = '\0';
     } else {
@@ -85,7 +81,6 @@ static void handle_cancel_press() {
     }
     ESP_LOGI(TAG, "Nueva ruta: %s", current_path);
 
-    // En lugar de llamar directamente, programamos la actualización
     schedule_repopulate_list();
 }
 
@@ -105,26 +100,22 @@ static void list_item_delete_cb(lv_event_t * e) {
 
 // *** LÓGICA DE ACTUALIZACIÓN ASÍNCRONA ***
 
-// Limpia la lista y opcionalmente muestra "Cargando..."
 static void clear_list_items(bool show_loading) {
     if (!list_widget) return;
     lv_group_remove_all_objs(view_group);
     lv_obj_clean(list_widget);
 
-    // Añadimos la propia lista al grupo como fallback de foco
-    lv_group_add_obj(view_group, list_widget);
+    // <-- CAMBIO: Ya no añadimos la lista al grupo.
+    // lv_group_add_obj(view_group, list_widget);
 
     if (show_loading) {
         lv_list_add_text(list_widget, "Cargando...");
     }
 }
 
-// Esta es la función que hace el trabajo pesado. Se ejecuta como un callback de timer.
 static void repopulate_list_cb(lv_timer_t *timer) {
-    // 1. Limpiamos la lista (sin el "Cargando", que ya estaba)
     clear_list_items(false);
 
-    // 2. Leemos la SD y añadimos los botones
     if (sd_manager_is_mounted()) {
         add_file_context_t context = { .list = list_widget, .group = view_group };
         sd_manager_list_files(current_path, add_file_entry_to_list, &context);
@@ -132,30 +123,19 @@ static void repopulate_list_cb(lv_timer_t *timer) {
         lv_list_add_text(list_widget, "Error: No se montó la SD");
     }
 
-    // 3. Restauramos el foco
-    if (lv_group_get_obj_count(view_group) > 1) { // >1 porque la lista siempre está
-        lv_group_focus_next(view_group); // Enfoca el primer botón
-    } else {
-        lv_group_focus_obj(list_widget); // Enfoca la lista si está vacía
+    // <-- CAMBIO: Lógica de foco simplificada.
+    // Si hay algún botón en el grupo, enfoca el primero. Si no, no hagas nada.
+    if (lv_group_get_obj_count(view_group) > 0) {
+        lv_group_focus_next(view_group);
     }
-
-    // 4. Borramos el timer para que solo se ejecute una vez.
+    
     lv_timer_delete(timer);
 }
 
-// Esta función se llama desde los handlers de botones.
-// Su única misión es preparar la UI y crear el timer que hará el trabajo.
 static void schedule_repopulate_list() {
-    // 1. Limpiamos la lista y mostramos "Cargando..." de inmediato.
-    // Esta es una operación rápida que no bloquea.
     clear_list_items(true);
-
-    // 2. Usamos el método de creación estándar de timers.
-    // lv_timer_create(callback, periodo_en_ms, datos_de_usuario)
-    // El callback (repopulate_list_cb) se encargará de borrar el timer.
     lv_timer_create(repopulate_list_cb, 10, NULL);
 }
-
 
 static void add_file_entry_to_list(const char *name, bool is_dir, void *user_data) {
     add_file_context_t *context = static_cast<add_file_context_t *>(user_data);
@@ -200,7 +180,7 @@ void sd_test_view_create(lv_obj_t *parent) {
     strcpy(current_path, sd_manager_get_mount_point());
     
     view_group = lv_group_create();
-    lv_group_set_wrap(view_group, true);
+    lv_group_set_wrap(view_group, true); // Esta línea es la que permite el "wrap around"
     lv_group_set_focus_cb(view_group, focus_changed_cb);
     lv_group_set_default(view_group);
 
@@ -222,7 +202,6 @@ void sd_test_view_create(lv_obj_t *parent) {
     list_widget = lv_list_create(main_cont);
     lv_obj_set_size(list_widget, lv_pct(95), lv_pct(80));
 
-    // La población inicial también se hace de forma asíncrona
     schedule_repopulate_list();
 
     button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press);
