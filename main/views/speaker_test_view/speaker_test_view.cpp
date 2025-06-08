@@ -2,6 +2,7 @@
 #include "../view_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
+#include "controllers/audio_manager/audio_manager.h"
 #include "../file_explorer/file_explorer.h"
 #include "esp_log.h"
 #include <string.h>
@@ -9,14 +10,27 @@
 static const char *TAG = "SPEAKER_TEST_VIEW";
 
 // --- Variables de estado de la vista ---
-static lv_obj_t *view_parent = NULL; // Contenedor principal de la vista, para limpiarlo
-static bool is_playing = false;      // Estado de reproducción (play/pause)
+static lv_obj_t *view_parent = NULL; // Contenedor principal de la vista
 static lv_obj_t *play_pause_btn_label = NULL; // Puntero al label del botón para cambiar el icono
+static char current_song_path[256]; // Guardar la ruta del archivo seleccionado
 
-// --- Prototipos de las funciones que crean cada "pantalla" ---
+// --- Widgets de la UI de reproducción que necesitan ser actualizados ---
+static lv_obj_t *slider_widget = NULL;
+static lv_obj_t *time_current_label_widget = NULL;
+static lv_obj_t *time_total_label_widget = NULL;
+static lv_timer_t *ui_update_timer = NULL;
+
+// --- Prototipos de las funciones ---
 static void create_initial_speaker_view();
 static void show_file_explorer();
 static void create_now_playing_view(const char *file_path);
+static void handle_ok_press_playing();
+static void handle_cancel_press_playing();
+static void on_audio_file_selected(const char *path);
+static void on_explorer_exit_speaker();
+static void handle_ok_press_initial();
+static void handle_cancel_press_initial();
+static void ui_update_timer_cb(lv_timer_t *timer);
 
 // --- Funciones de utilidad ---
 
@@ -33,8 +47,6 @@ static bool is_wav_file(const char *path) {
 
 /**
  * @brief Extrae el nombre del archivo de una ruta completa.
- * @param path Ruta completa del archivo (p.ej. "/sdcard/music/song.wav").
- * @return Puntero al inicio del nombre del archivo ("song.wav").
  */
 static const char* get_filename_from_path(const char* path) {
     const char* filename = strrchr(path, '/');
@@ -44,26 +56,85 @@ static const char* get_filename_from_path(const char* path) {
     return path;
 }
 
+/**
+ * @brief Formatea un tiempo en segundos a un string MM:SS.
+ */
+static void format_time(char *buf, size_t buf_size, uint32_t time_s) {
+    snprintf(buf, buf_size, "%02lu:%02lu", time_s / 60, time_s % 60);
+}
+
+
+// --- Timer para actualizar la UI ---
+
+/**
+ * @brief Callback del timer que actualiza la barra de progreso y los tiempos.
+ */
+static void ui_update_timer_cb(lv_timer_t *timer) {
+    audio_player_state_t state = audio_manager_get_state();
+    
+    // Si la canción terminó o fue detenida por otra razón
+    if (state == AUDIO_STATE_STOPPED) {
+        if (play_pause_btn_label) lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PLAY);
+        if (slider_widget) lv_slider_set_value(slider_widget, 0, LV_ANIM_OFF);
+        if (time_current_label_widget) lv_label_set_text(time_current_label_widget, "00:00");
+        
+        // Detenemos este timer para no consumir recursos
+        lv_timer_delete(ui_update_timer);
+        ui_update_timer = NULL;
+        return;
+    }
+
+    uint32_t duration = audio_manager_get_duration_s();
+    uint32_t progress = audio_manager_get_progress_s();
+
+    // Actualizar la duración total (solo se hace una vez cuando cambia de 0)
+    if (duration > 0 && lv_slider_get_max_value(slider_widget) != duration) {
+        char time_buf[8];
+        format_time(time_buf, sizeof(time_buf), duration);
+        lv_label_set_text(time_total_label_widget, time_buf);
+        lv_slider_set_range(slider_widget, 0, duration);
+    }
+
+    // Actualizar el progreso actual
+    char time_buf[8];
+    format_time(time_buf, sizeof(time_buf), progress);
+    lv_label_set_text(time_current_label_widget, time_buf);
+    lv_slider_set_value(slider_widget, progress, LV_ANIM_OFF);
+}
+
 
 // --- Callbacks y Handlers para la pantalla "Now Playing" ---
 
 static void handle_ok_press_playing() {
-    is_playing = !is_playing; // Invertir estado
-    if (is_playing) {
-        lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PAUSE);
-        ESP_LOGI(TAG, "Audio: Play");
-        // Aquí iría la lógica para iniciar/reanudar la reproducción
-    } else {
+    audio_player_state_t state = audio_manager_get_state();
+
+    if (state == AUDIO_STATE_STOPPED) {
+        ESP_LOGI(TAG, "Comando: Play");
+        if (audio_manager_play(current_song_path)) {
+            lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PAUSE);
+            // Iniciar el timer si no está corriendo
+            if (ui_update_timer == NULL) {
+                ui_update_timer = lv_timer_create(ui_update_timer_cb, 500, NULL);
+            }
+        }
+    } else if (state == AUDIO_STATE_PLAYING) {
+        ESP_LOGI(TAG, "Comando: Pause");
+        audio_manager_pause();
         lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PLAY);
-        ESP_LOGI(TAG, "Audio: Pause");
-        // Aquí iría la lógica para pausar la reproducción
+    } else if (state == AUDIO_STATE_PAUSED) {
+        ESP_LOGI(TAG, "Comando: Resume");
+        audio_manager_resume();
+        lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PAUSE);
     }
 }
 
 static void handle_cancel_press_playing() {
     ESP_LOGI(TAG, "Volviendo al explorador de archivos");
-    // Limpiar la pantalla "Now Playing" y volver a mostrar el explorador
-    is_playing = false; // Resetear estado
+    if (ui_update_timer) { // Detener y limpiar el timer de UI
+        lv_timer_delete(ui_update_timer);
+        ui_update_timer = NULL;
+    }
+    audio_manager_stop(); // Detener la música
     play_pause_btn_label = NULL;
     show_file_explorer();
 }
@@ -80,7 +151,6 @@ static void on_audio_file_selected(const char *path) {
         create_now_playing_view(path);
     } else {
         ESP_LOGW(TAG, "No es un archivo WAV. Selección ignorada.");
-        // Opcional: mostrar un popup de error
     }
 }
 
@@ -103,7 +173,6 @@ static void show_file_explorer() {
     ESP_LOGI(TAG, "Abriendo explorador de archivos...");
     lv_obj_clean(view_parent);
 
-    // Creamos un contenedor que ocupe toda la pantalla para el explorador
     lv_obj_t * explorer_container = lv_obj_create(view_parent);
     lv_obj_remove_style_all(explorer_container);
     lv_obj_set_size(explorer_container, lv_pct(100), lv_pct(100));
@@ -119,7 +188,7 @@ static void show_file_explorer() {
 
 static void create_now_playing_view(const char *file_path) {
     lv_obj_clean(view_parent); // Limpiar la pantalla anterior
-    is_playing = false; // Estado inicial es pausado
+    strncpy(current_song_path, file_path, sizeof(current_song_path) - 1);
 
     // --- Contenedor principal con layout de columna ---
     lv_obj_t *main_cont = lv_obj_create(view_parent);
@@ -146,7 +215,8 @@ static void create_now_playing_view(const char *file_path) {
     lv_obj_set_style_radius(visualizer_area, 8, 0);
     
     lv_obj_t *vis_label = lv_label_create(visualizer_area);
-    lv_label_set_text(vis_label, LV_SYMBOL_AUDIO " Visualizer");
+    lv_label_set_text(vis_label, LV_SYMBOL_AUDIO);
+    lv_obj_set_style_text_font(vis_label, &lv_font_montserrat_32, 0);
     lv_obj_set_style_text_color(vis_label, lv_color_hex(0x888888), 0);
     lv_obj_center(vis_label);
 
@@ -158,18 +228,16 @@ static void create_now_playing_view(const char *file_path) {
     lv_obj_set_flex_flow(progress_cont, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(progress_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *time_current_label = lv_label_create(progress_cont);
-    lv_label_set_text(time_current_label, "00:00");
+    time_current_label_widget = lv_label_create(progress_cont);
+    lv_label_set_text(time_current_label_widget, "00:00");
     
-    lv_obj_t *slider = lv_slider_create(progress_cont);
-    // *** ESTA ES LA LÍNEA CORREGIDA ***
-    lv_obj_set_style_flex_grow(slider, 1, 0); // Para que ocupe el espacio disponible
-    lv_obj_remove_flag(slider, LV_OBJ_FLAG_CLICKABLE); // No se puede mover con el dedo/ratón
-    lv_slider_set_value(slider, 0, LV_ANIM_OFF);
-    lv_obj_set_style_margin_hor(slider, 10, 0);
+    slider_widget = lv_slider_create(progress_cont);
+    lv_obj_set_style_flex_grow(slider_widget, 1, 0);
+    lv_obj_remove_flag(slider_widget, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_margin_hor(slider_widget, 10, 0);
 
-    lv_obj_t *time_total_label = lv_label_create(progress_cont);
-    lv_label_set_text(time_total_label, "03:45"); // Placeholder
+    time_total_label_widget = lv_label_create(progress_cont);
+    lv_label_set_text(time_total_label_widget, "??:??"); // Placeholder
 
     // --- 4. Botón de Play/Pause ---
     lv_obj_t *play_pause_btn = lv_button_create(main_cont);
@@ -180,6 +248,9 @@ static void create_now_playing_view(const char *file_path) {
     // --- Registrar Handlers para esta pantalla ---
     button_manager_register_view_handler(BUTTON_OK, handle_ok_press_playing);
     button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press_playing);
+
+    // --- INICIAR REPRODUCCIÓN AUTOMÁTICAMENTE ---
+    handle_ok_press_playing();
 }
 
 
@@ -190,6 +261,12 @@ static void handle_ok_press_initial() {
 }
 
 static void handle_cancel_press_initial() {
+    // Asegurarse de que no quede nada corriendo al salir de la vista
+    if (ui_update_timer) {
+        lv_timer_delete(ui_update_timer);
+        ui_update_timer = NULL;
+    }
+    audio_manager_stop(); 
     view_manager_load_view(VIEW_ID_MENU);
 }
 
@@ -207,6 +284,8 @@ static void create_initial_speaker_view() {
     button_manager_register_view_handler(BUTTON_OK, handle_ok_press_initial);
     button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press_initial);
 }
+
+// --- Función pública de entrada ---
 
 void speaker_test_view_create(lv_obj_t *parent) {
     view_parent = parent;

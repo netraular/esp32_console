@@ -8,6 +8,7 @@
 #include "controllers/screen_manager/screen_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
+#include "controllers/audio_manager/audio_manager.h" // <-- AÑADIR ESTA LÍNEA
 
 // Incluir el nuevo gestor de vistas
 #include "views/view_manager.h"
@@ -34,6 +35,10 @@ extern "C" void app_main(void) {
     // 2. Inicialización de los botones
     button_manager_init();
     ESP_LOGI(TAG, "Button manager inicializado.");
+
+    // 2.1. Inicialización del gestor de audio  // <-- AÑADIR ESTO
+    audio_manager_init();
+    ESP_LOGI(TAG, "Audio manager inicializado.");
 
     // 3. Inicializar el gestor de vistas, que se encargará de crear la UI.
     view_manager_init();
