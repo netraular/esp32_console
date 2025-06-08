@@ -1,0 +1,1 @@
+Realizar ejemplo de vistas funcional para buzzer, micrófono, speaker y leds (red, green & rgb).
