@@ -38,17 +38,16 @@ screen_t* screen_init() {
     }
 
     // 1. Configuración del Bus SPI
-    // CORRECCIÓN: Usar el método de inicialización en dos pasos.
     spi_bus_config_t buscfg = {};
     buscfg.mosi_io_num = SPI_MOSI_PIN;
-    buscfg.miso_io_num = SPI_MISO_PIN;
+    buscfg.miso_io_num = SPI_MISO_PIN; // Esto ahora apunta a GPIO_NUM_NC, que es correcto.
     buscfg.sclk_io_num = SPI_SCLK_PIN;
     buscfg.quadwp_io_num = -1;
     buscfg.quadhd_io_num = -1;
     buscfg.max_transfer_sz = SCREEN_WIDTH * 40 * sizeof(lv_color_t);
     
     ESP_ERROR_CHECK(spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
-    ESP_LOGI(TAG, "SPI bus initialized");
+    ESP_LOGI(TAG, "SPI bus for LCD initialized");
 
     // 2. Configuración del panel IO (SPI)
     // CORRECCIÓN: Usar el método de inicialización en dos pasos.

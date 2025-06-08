@@ -9,70 +9,73 @@
 #include <sys/stat.h>
 #include <errno.h>
 
+// No es necesario incluir screen_manager.h si no se usa el mutex.
+
 static const char *TAG = "AUDIO_MGR";
 
-// --- Estructuras y variables de estado ---
+// Estructura del encabezado WAV
 typedef struct {
-    // RIFF Header
-    char riff_header[4]; // Contains "RIFF"
-    uint32_t wav_size;      // Size of the wav portion of the file
-    char wave_header[4]; // Contains "WAVE"
-    // Format Header
-    char fmt_header[4];  // Contains "fmt " (with space)
-    uint32_t fmt_chunk_size; // Should be 16 for PCM
-    uint16_t audio_format; // Should be 1 for PCM
+    char riff_header[4];
+    uint32_t wav_size;
+    char wave_header[4];
+    char fmt_header[4];
+    uint32_t fmt_chunk_size;
+    uint16_t audio_format;
     uint16_t num_channels;
     uint32_t sample_rate;
-    uint32_t byte_rate;     // Number of bytes per second
+    uint32_t byte_rate;
     uint16_t block_align;
     uint16_t bits_per_sample;
-    // Data Header
-    char data_header[4]; // Contains "data"
-    uint32_t data_size;  // Number of bytes in data
+    char data_header[4];
+    uint32_t data_size;
 } wav_header_t;
 
+// Variables de estado del reproductor
 static TaskHandle_t playback_task_handle = NULL;
 static volatile audio_player_state_t player_state = AUDIO_STATE_STOPPED;
 static char current_filepath[256];
 static i2s_chan_handle_t tx_chan;
-
-// --- NUEVO NOMBRE DE VARIABLE ---
-static wav_header_t wav_file_info; // Almacenamos la cabecera completa
+static wav_header_t wav_file_info;
 static volatile uint32_t total_bytes_played = 0;
 static volatile uint32_t song_duration_s = 0;
 
+// Variables de volumen
+#define VOLUME_STEP 5
+static volatile uint8_t current_volume_percentage = 80;
+static volatile float volume_factor = 0.8f;
 
-// --- Prototipo de la tarea de reproducción ---
+// Prototipos de funciones
 static void audio_playback_task(void *arg);
 
-// --- Implementación de funciones públicas ---
+static void audio_manager_set_volume(uint8_t percentage) {
+    if (percentage > 100) percentage = 100;
+    current_volume_percentage = percentage;
+    volume_factor = (float)current_volume_percentage / 100.0f;
+    ESP_LOGI(TAG, "Volumen ajustado a %u%% (factor: %.2f)", current_volume_percentage, volume_factor);
+}
+
+// --- Funciones públicas (sin cambios) ---
 
 void audio_manager_init(void) {
     ESP_LOGI(TAG, "Audio Manager Initialized.");
     player_state = AUDIO_STATE_STOPPED;
+    audio_manager_set_volume(current_volume_percentage);
 }
 
 bool audio_manager_play(const char *filepath) {
     if (player_state != AUDIO_STATE_STOPPED) {
         audio_manager_stop();
     }
-    
     strncpy(current_filepath, filepath, sizeof(current_filepath) - 1);
-
-    // Reiniciar contadores
     total_bytes_played = 0;
     song_duration_s = 0;
-    
     player_state = AUDIO_STATE_PLAYING;
-    
     BaseType_t result = xTaskCreate(audio_playback_task, "audio_playback", 4096, NULL, 5, &playback_task_handle);
-
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create audio playback task");
         player_state = AUDIO_STATE_STOPPED;
         return false;
     }
-
     return true;
 }
 
@@ -118,8 +121,26 @@ uint32_t audio_manager_get_progress_s(void) {
     return 0;
 }
 
+void audio_manager_volume_up(void) {
+    uint8_t new_volume = current_volume_percentage + VOLUME_STEP;
+    if (new_volume > 100) new_volume = 100;
+    audio_manager_set_volume(new_volume);
+}
 
-// --- Tarea de Reproducción de Audio (LÓGICA CORREGIDA) ---
+void audio_manager_volume_down(void) {
+    int temp_volume = (int)current_volume_percentage - VOLUME_STEP;
+    uint8_t new_volume;
+    if (temp_volume < 0) new_volume = 0;
+    else new_volume = (uint8_t)temp_volume;
+    audio_manager_set_volume(new_volume);
+}
+
+uint8_t audio_manager_get_volume(void) {
+    return current_volume_percentage;
+}
+
+
+// --- Tarea de Reproducción de Audio ---
 
 static void audio_playback_task(void *arg) {
     FILE *fp = fopen(current_filepath, "rb");
@@ -130,8 +151,7 @@ static void audio_playback_task(void *arg) {
         return;
     }
 
-    // --- LÓGICA DE PARSEO DE WAV ROBUSTA ---
-    // 1. Leer la cabecera RIFF inicial
+    // --- Lógica de parseo de WAV (sin cambios) ---
     if (fread(&wav_file_info, 1, 12, fp) != 12) {
         ESP_LOGE(TAG, "Failed to read RIFF header.");
         fclose(fp); player_state = AUDIO_STATE_STOPPED; vTaskDelete(NULL); return;
@@ -140,8 +160,6 @@ static void audio_playback_task(void *arg) {
         ESP_LOGE(TAG, "Invalid RIFF/WAVE header.");
         fclose(fp); player_state = AUDIO_STATE_STOPPED; vTaskDelete(NULL); return;
     }
-
-    // 2. Buscar el chunk "fmt "
     char chunk_id[4];
     uint32_t chunk_size;
     bool fmt_found = false;
@@ -151,33 +169,27 @@ static void audio_playback_task(void *arg) {
             fmt_found = true;
             break;
         }
-        fseek(fp, chunk_size, SEEK_CUR); // Saltar este chunk
+        fseek(fp, chunk_size, SEEK_CUR);
     }
     if (!fmt_found) {
         ESP_LOGE(TAG, "'fmt ' chunk not found.");
         fclose(fp); player_state = AUDIO_STATE_STOPPED; vTaskDelete(NULL); return;
     }
-    
-    // 3. Buscar el chunk "data"
     bool data_found = false;
     while(fread(wav_file_info.data_header, 1, 4, fp) == 4 && fread(&wav_file_info.data_size, 1, 4, fp) == 4) {
         if (strncmp(wav_file_info.data_header, "data", 4) == 0) {
             data_found = true;
             break;
         }
-        fseek(fp, wav_file_info.data_size, SEEK_CUR); // Saltar este chunk
+        fseek(fp, wav_file_info.data_size, SEEK_CUR);
     }
     if (!data_found) {
         ESP_LOGE(TAG, "'data' chunk not found.");
         fclose(fp); player_state = AUDIO_STATE_STOPPED; vTaskDelete(NULL); return;
     }
-    // --- FIN LÓGICA DE PARSEO ---
-
     ESP_LOGI(TAG, "WAV Info: SR=%lu, BPS=%u, CH=%u, Data Size=%lu", 
              wav_file_info.sample_rate, wav_file_info.bits_per_sample, 
              wav_file_info.num_channels, wav_file_info.data_size);
-    
-    // Calcular y almacenar duración
     if (wav_file_info.byte_rate > 0) {
         song_duration_s = wav_file_info.data_size / wav_file_info.byte_rate;
     }
@@ -186,23 +198,36 @@ static void audio_playback_task(void *arg) {
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_chan, NULL));
 
-    i2s_std_config_t std_cfg = {
-        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(wav_file_info.sample_rate),
-        .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)wav_file_info.bits_per_sample, 
-                                                    (wav_file_info.num_channels == 2) ? I2S_SLOT_MODE_STEREO : I2S_SLOT_MODE_MONO),
-        .gpio_cfg = {
-            .mclk = I2S_GPIO_UNUSED,
-            .bclk = I2S_BCLK_PIN,
-            .ws = I2S_WS_PIN,
-            .dout = I2S_DOUT_PIN,
-            .din = I2S_GPIO_UNUSED,
-            .invert_flags = {
-                .mclk_inv = false,
-                .bclk_inv = false,
-                .ws_inv = false,
-            },
-        },
-    };
+    // --- CORRECCIÓN PARA WARNINGS ---
+    // 1. Inicializar la estructura a ceros para evitar advertencias.
+    i2s_std_config_t std_cfg = {}; 
+
+    // 2. Configurar los miembros necesarios.
+    std_cfg.clk_cfg.sample_rate_hz = wav_file_info.sample_rate;
+    std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
+    std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+    
+    std_cfg.slot_cfg.data_bit_width = (i2s_data_bit_width_t)wav_file_info.bits_per_sample;
+    std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_AUTO;
+    std_cfg.slot_cfg.slot_mode = (wav_file_info.num_channels == 2) ? I2S_SLOT_MODE_STEREO : I2S_SLOT_MODE_MONO;
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
+    std_cfg.slot_cfg.ws_width = (i2s_data_bit_width_t)wav_file_info.bits_per_sample;
+    std_cfg.slot_cfg.ws_pol = false;
+    std_cfg.slot_cfg.bit_shift = false;
+    std_cfg.slot_cfg.left_align = true;
+    std_cfg.slot_cfg.big_endian = false;
+    std_cfg.slot_cfg.bit_order_lsb = false;
+
+    std_cfg.gpio_cfg.mclk = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.bclk = I2S_BCLK_PIN;
+    std_cfg.gpio_cfg.ws = I2S_WS_PIN;
+    std_cfg.gpio_cfg.dout = I2S_DOUT_PIN;
+    std_cfg.gpio_cfg.din = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.ws_inv = false;
+    // --- FIN DE LA CORRECCIÓN ---
+
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_chan, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(tx_chan));
 
@@ -211,7 +236,7 @@ static void audio_playback_task(void *arg) {
     uint8_t *buffer = (uint8_t*)malloc(buffer_size);
     size_t bytes_read, bytes_written;
 
-    ESP_LOGI(TAG, "Starting playback... Duration: %lu seconds.", song_duration_s);
+    ESP_LOGI(TAG, "Starting playback... Duration: %lu seconds. Volume: %u%%", song_duration_s, current_volume_percentage);
     total_bytes_played = 0;
 
     while (player_state != AUDIO_STATE_STOPPED && total_bytes_played < wav_file_info.data_size) {
@@ -221,7 +246,27 @@ static void audio_playback_task(void *arg) {
         }
 
         bytes_read = fread(buffer, 1, buffer_size, fp);
-        if (bytes_read == 0) break; // Fin de archivo
+        if (bytes_read == 0) break;
+
+        // Lógica de ajuste de volumen
+        if (volume_factor < 0.999f) {
+            if (wav_file_info.bits_per_sample == 16) {
+                int16_t *samples = (int16_t *)buffer;
+                size_t num_samples = bytes_read / sizeof(int16_t);
+                for (size_t i = 0; i < num_samples; i++) {
+                    samples[i] = (int16_t)((float)samples[i] * volume_factor);
+                }
+            } else if (wav_file_info.bits_per_sample == 8) {
+                uint8_t *samples = (uint8_t *)buffer;
+                for (size_t i = 0; i < bytes_read; i++) {
+                    int16_t sample_signed = (int16_t)samples[i] - 128;
+                    sample_signed = (int16_t)((float)sample_signed * volume_factor);
+                    if (sample_signed > 127) sample_signed = 127;
+                    else if (sample_signed < -128) sample_signed = -128;
+                    samples[i] = (uint8_t)(sample_signed + 128);
+                }
+            }
+        }
 
         i2s_channel_write(tx_chan, buffer, bytes_read, &bytes_written, portMAX_DELAY);
         total_bytes_played += bytes_written;

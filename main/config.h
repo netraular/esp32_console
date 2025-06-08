@@ -3,20 +3,23 @@
 
 #include <driver/gpio.h>
 
-// --- BUS SPI COMPARTIDO ---
-// Estos pines son compartidos por la pantalla y la tarjeta SD
+// --- BUS SPI PANTALLA (SPI2_HOST) ---
+// Estos pines son solo para la pantalla.
 #define SPI_SCLK_PIN    GPIO_NUM_14
 #define SPI_MOSI_PIN    GPIO_NUM_13
-#define SPI_MISO_PIN    GPIO_NUM_2  // Usado solo por la SD Card, la pantalla no lo necesita
+#define SPI_MISO_PIN    GPIO_NUM_NC // La pantalla no usa MISO, así que lo ponemos como No Conectado
+
+// --- BUS SPI TARJETA SD (NUEVO, DEDICADO - SPI3_HOST) ---
+#define SD_SPI_SCLK_PIN   GPIO_NUM_47 // Anteriormente RED_LED_PIN
+#define SD_SPI_MOSI_PIN   GPIO_NUM_21 // Anteriormente GREEN_LED_PIN
+#define SD_SPI_MISO_PIN   GPIO_NUM_2  // Este pin ya estaba dedicado a MISO
+#define SD_CS_PIN         GPIO_NUM_1  // Chip Select específico para la tarjeta SD (sin cambios)
 
 // --- PANTALLA ---
 #define TFT_RST   GPIO_NUM_12
 #define TFT_DC    GPIO_NUM_11
 #define TFT_CS    GPIO_NUM_10 // Chip Select específico para la pantalla
 #define TFT_BL    GPIO_NUM_9
-
-// --- TARJETA MICRO SD ---
-#define SD_CS_PIN GPIO_NUM_1 // Chip Select específico para la tarjeta SD
 
 // --- BOTONES ---
 #define BUTTON_ON_OFF_PIN  GPIO_NUM_8
@@ -27,9 +30,7 @@
 
 // --- LEDS ---
 // El pin del RGB LED (GPIO47) es el NeoPixel integrado en la placa
-#define RGB_LED_PIN      GPIO_NUM_47 
-#define RED_LED_PIN      GPIO_NUM_48
-#define GREEN_LED_PIN    GPIO_NUM_21
+#define RGB_LED_PIN      GPIO_NUM_48
 
 // --- AUDIO ---
 #define BUZZER_PIN   GPIO_NUM_18
@@ -43,7 +44,8 @@
 // --- CONFIGURACIÓN DE PANTALLA Y SPI ---
 #define SCREEN_WIDTH  240
 #define SCREEN_HEIGHT 240
-#define LCD_HOST      SPI2_HOST
+#define LCD_HOST      SPI2_HOST // Bus para la pantalla
+#define SD_HOST       SPI3_HOST // Bus dedicado para la tarjeta SD
 #define LCD_PIXEL_CLOCK_HZ (40 * 1000 * 1000) // 40 MHz
 #define LVGL_TICK_PERIOD_MS 10
 

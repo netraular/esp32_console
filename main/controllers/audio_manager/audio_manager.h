@@ -56,5 +56,21 @@ uint32_t audio_manager_get_duration_s(void);
  */
 uint32_t audio_manager_get_progress_s(void);
 
+/**
+ * @brief Sube el volumen en un paso predefinido.
+ */
+void audio_manager_volume_up(void);
+
+/**
+ * @brief Baja el volumen en un paso predefinido.
+ */
+void audio_manager_volume_down(void);
+
+/**
+ * @brief Obtiene el nivel de volumen actual.
+ * @return El volumen actual en un rango de 0 a 100.
+ */
+uint8_t audio_manager_get_volume(void);
+
 
 #endif // AUDIO_MANAGER_H
