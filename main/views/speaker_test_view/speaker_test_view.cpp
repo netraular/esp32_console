@@ -8,6 +8,7 @@
 #include <string.h>
 #include "components/audio_visualizer/audio_visualizer.h"
 #include "config.h"
+#include <math.h> // <-- [CAMBIO] AÑADIR ESTA LÍNEA
 
 static const char *TAG = "SPEAKER_TEST_VIEW";
 
@@ -130,8 +131,16 @@ static void update_volume_label_task(void *user_data) {
     if (volume_label_widget) {
         char vol_buf[16];
         uint8_t vol = audio_manager_get_volume();
-        uint8_t display_vol = (vol * 100) / MAX_VOLUME_PERCENTAGE;
-        const char * vol_icon = (vol == 0) ? LV_SYMBOL_MUTE : (vol < (MAX_VOLUME_PERCENTAGE / 2)) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
+
+        // --- [FIX] CALCULAR Y REDONDEAR EL VOLUMEN PARA MOSTRARLO ---
+        // 1. Convertir el volumen físico (0-35) a la escala de display (0-100)
+        uint8_t raw_display_vol = (vol * 100) / MAX_VOLUME_PERCENTAGE;
+        // 2. Redondear el resultado al múltiplo de 5 más cercano
+        const int volume_step = 5; // Podríamos usar la macro del audio_manager si fuera accesible
+        uint8_t display_vol = (uint8_t)(roundf((float)raw_display_vol / volume_step) * volume_step);
+        // --- [FIN DEL FIX] ---
+
+        const char * vol_icon = (display_vol == 0) ? LV_SYMBOL_MUTE : (vol < (MAX_VOLUME_PERCENTAGE / 2)) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
         
         snprintf(vol_buf, sizeof(vol_buf), "%s %u%%", vol_icon, display_vol);
         lv_label_set_text(volume_label_widget, vol_buf);
@@ -249,7 +258,6 @@ static void create_now_playing_view(const char *file_path) {
     lv_obj_set_style_text_align(volume_label_widget, LV_TEXT_ALIGN_RIGHT, 0);
 
     visualizer_widget = audio_visualizer_create(main_cont, VISUALIZER_BAR_COUNT);
-    // --- [CAMBIO] Establecemos el ancho al 100% para que coincida con el buffer del canvas (240px) ---
     lv_obj_set_size(visualizer_widget, lv_pct(100), lv_pct(40));
     
     lv_obj_t *progress_cont = lv_obj_create(main_cont);

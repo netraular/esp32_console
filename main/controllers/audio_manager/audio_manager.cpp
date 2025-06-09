@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include "freertos/queue.h"
-#include <math.h>
+#include <math.h> // <-- AÑADIR/ASEGURARSE DE QUE ESTÁ ESTA LÍNEA
 #include "freertos/semphr.h"
 
 static const char *TAG = "AUDIO_MGR";
@@ -153,37 +153,70 @@ uint32_t audio_manager_get_progress_s(void) {
     return 0;
 }
 
+// --- [FIX] LÓGICA DE VOLUMEN CORREGIDA Y ROBUSTA ---
 void audio_manager_volume_up(void) {
     ESP_LOGI(TAG, "[LOG] volume_up requested.");
-    uint8_t current_vol = 0;
+    uint8_t current_physical_vol = 0;
     if (volume_mutex && xSemaphoreTake(volume_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        current_vol = current_volume_percentage;
+        current_physical_vol = current_volume_percentage;
         xSemaphoreGive(volume_mutex);
     } else {
         ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in volume_up!");
         return;
     }
 
-    uint8_t new_volume = current_vol + VOLUME_STEP;
-    if (new_volume > MAX_VOLUME_PERCENTAGE) new_volume = MAX_VOLUME_PERCENTAGE;
-    audio_manager_set_volume(new_volume);
+    // 1. Convertir el valor físico (0-35) a la escala de display (0-100)
+    uint8_t raw_display_vol = (current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE;
+
+    // 2. Redondear al múltiplo de 5 más cercano para tener un punto de partida estable
+    uint8_t current_snapped_vol = (uint8_t)(roundf((float)raw_display_vol / VOLUME_STEP) * VOLUME_STEP);
+    
+    // 3. Calcular el siguiente paso hacia arriba desde el punto de partida estable
+    uint8_t new_display_vol = current_snapped_vol + VOLUME_STEP;
+
+    // 4. Limitar a 100
+    if (new_display_vol > 100) {
+        new_display_vol = 100;
+    }
+    
+    // 5. Convertir de vuelta a la escala física (0-35)
+    uint8_t new_physical_vol = (new_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
+
+    audio_manager_set_volume(new_physical_vol);
 }
 
 void audio_manager_volume_down(void) {
     ESP_LOGI(TAG, "[LOG] volume_down requested.");
-    uint8_t current_vol = 0;
+    uint8_t current_physical_vol = 0;
     if (volume_mutex && xSemaphoreTake(volume_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        current_vol = current_volume_percentage;
+        current_physical_vol = current_volume_percentage;
         xSemaphoreGive(volume_mutex);
     } else {
         ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in volume_down!");
         return;
     }
     
-    int temp_volume = (int)current_vol - VOLUME_STEP;
-    uint8_t new_volume = (temp_volume < 0) ? 0 : (uint8_t)temp_volume;
-    audio_manager_set_volume(new_volume);
+    // 1. Convertir el valor físico (0-35) a la escala de display (0-100)
+    uint8_t raw_display_vol = (current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE;
+
+    // 2. Redondear al múltiplo de 5 más cercano para tener un punto de partida estable
+    uint8_t current_snapped_vol = (uint8_t)(roundf((float)raw_display_vol / VOLUME_STEP) * VOLUME_STEP);
+
+    // 3. Calcular el siguiente paso hacia abajo
+    int temp_display_vol = (int)current_snapped_vol - VOLUME_STEP;
+
+    // 4. Limitar a 0
+    if (temp_display_vol < 0) {
+        temp_display_vol = 0;
+    }
+    uint8_t new_display_vol = (uint8_t)temp_display_vol;
+
+    // 5. Convertir de vuelta a la escala física (0-35)
+    uint8_t new_physical_vol = (new_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
+
+    audio_manager_set_volume(new_physical_vol);
 }
+// --- [FIN DEL FIX] ---
 
 uint8_t audio_manager_get_volume(void) {
     uint8_t vol = 0;
@@ -324,14 +357,11 @@ static void audio_playback_task(void *arg) {
                         float log_val = log10f((float)peak);
                         const float sensitivity_divisor = 6.0f;
                         
-                        // --- [CAMBIO] Lógica de asignación corregida ---
-                        // 1. Calcular la altura en una variable float, que puede exceder 255.
                         float calculated_height = (log_val / sensitivity_divisor) * 255.0f;
                         
-                        // 2. Limitar (clamp) el valor al rango de uint8_t (0-255).
                         if (calculated_height > 255.0f) {
                             viz_data.bar_values[i] = 255;
-                        } else if (calculated_height < 0.0f) { // Aunque poco probable, es una buena práctica
+                        } else if (calculated_height < 0.0f) { 
                             viz_data.bar_values[i] = 0;
                         } else {
                             viz_data.bar_values[i] = (uint8_t)calculated_height;
