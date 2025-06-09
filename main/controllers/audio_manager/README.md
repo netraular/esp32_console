@@ -6,11 +6,11 @@ This component manages audio playback of WAV files using the I2S peripheral. It 
 ## Features
 -   Plays `.wav` files from a filesystem (e.g., SD card).
 -   Supports basic playback controls: Play, Pause, Resume, and Stop.
--   Provides volume control (Up/Down/Set).
+-   Provides robust volume control, mapping a user-facing 0-100% scale to a safe physical limit.
 -   Exposes functions to get the current playback state, total duration, and progress.
 -   Handles I2S driver initialization and teardown automatically based on the WAV file's properties.
 -   Parses standard WAV headers to configure I2S parameters like sample rate and bit depth.
--   **Provides real-time audio data for a visualizer** via a FreeRTOS queue.
+-   **Provides real-time audio data for a visualizer**: Processes the audio stream and sends peak data for **32 frequency bars** to a FreeRTOS queue, allowing for a detailed spectrum display in the UI.
 
 ## How to Use
 
@@ -63,7 +63,7 @@ This component manages audio playback of WAV files using the I2S peripheral. It 
     audio_player_state_t state = audio_manager_get_state();
     uint32_t duration_sec = audio_manager_get_duration_s();
     uint32_t progress_sec = audio_manager_get_progress_s();
-    uint8_t volume_percent = audio_manager_get_volume();
+    uint8_t volume_percent = audio_manager_get_volume(); // This is the internal physical value
 
     // Update UI based on the values...
     ```
