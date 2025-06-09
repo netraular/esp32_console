@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 #include <stdint.h> // Necesario para uint32_t
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 
 // Estados del reproductor de audio
 typedef enum {
@@ -71,6 +73,21 @@ void audio_manager_volume_down(void);
  * @return El volumen actual en un rango de 0 a 100.
  */
 uint8_t audio_manager_get_volume(void);
+
+// --- NUEVAS FUNCIONES PARA EL VISUALIZADOR ---
+#define VISUALIZER_BAR_COUNT 8
+
+// Estructura para los datos del visualizador que se envían por la cola
+typedef struct {
+    uint8_t bar_values[VISUALIZER_BAR_COUNT];
+} visualizer_data_t;
+
+/**
+ * @brief Obtiene el handle de la cola del visualizador.
+ * La UI usará esta cola para recibir los datos de las barras.
+ * @return Handle a la cola, o NULL si no está inicializada.
+ */
+QueueHandle_t audio_manager_get_visualizer_queue(void);
 
 
 #endif // AUDIO_MANAGER_H

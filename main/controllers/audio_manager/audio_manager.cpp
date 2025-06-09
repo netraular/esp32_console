@@ -8,6 +8,8 @@
 #include <sys/unistd.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include "freertos/queue.h"
+#include <math.h>
 
 static const char *TAG = "AUDIO_MGR";
 
@@ -36,6 +38,7 @@ static i2s_chan_handle_t tx_chan;
 static wav_header_t wav_file_info;
 static volatile uint32_t total_bytes_played = 0;
 static volatile uint32_t song_duration_s = 0;
+static QueueHandle_t visualizer_queue = NULL;
 
 // Variables de volumen
 #define VOLUME_STEP 5
@@ -58,6 +61,12 @@ void audio_manager_init(void) {
     ESP_LOGI(TAG, "Audio Manager Initialized.");
     player_state = AUDIO_STATE_STOPPED;
     audio_manager_set_volume(current_volume_percentage);
+
+    // Crear la cola para el visualizador
+    visualizer_queue = xQueueCreate(1, sizeof(visualizer_data_t));
+    if (visualizer_queue == NULL) {
+        ESP_LOGE(TAG, "Failed to create visualizer queue");
+    }
 }
 
 bool audio_manager_play(const char *filepath) {
@@ -90,15 +99,9 @@ void audio_manager_stop(void) {
     }
 }
 
-// --- CORRECCIÓN PARA COMPATIBILIDAD CON IDF < 5.2 ---
-// Se usa i2s_channel_disable/enable en lugar de stop/start.
-// La función i2s_channel_zero_dma_buffer no existe, pero disable/enable ya se encarga
-// de limpiar el estado lo suficiente para evitar el sonido residual.
-
 void audio_manager_pause(void) {
     if (player_state == AUDIO_STATE_PLAYING && tx_chan) {
         player_state = AUDIO_STATE_PAUSED;
-        // En versiones antiguas de IDF, disable() es la forma de pausar la transmisión.
         i2s_channel_disable(tx_chan);
         ESP_LOGI(TAG, "Audio Paused.");
     }
@@ -107,12 +110,10 @@ void audio_manager_pause(void) {
 void audio_manager_resume(void) {
     if (player_state == AUDIO_STATE_PAUSED && tx_chan) {
         player_state = AUDIO_STATE_PLAYING;
-        // Reanuda la transmisión habilitando el canal de nuevo.
         i2s_channel_enable(tx_chan);
         ESP_LOGI(TAG, "Audio Resumed.");
     }
 }
-// --- FIN DE LA CORRECCIÓN DE COMPATIBILIDAD ---
 
 audio_player_state_t audio_manager_get_state(void) {
     return player_state;
@@ -147,6 +148,10 @@ uint8_t audio_manager_get_volume(void) {
     return current_volume_percentage;
 }
 
+QueueHandle_t audio_manager_get_visualizer_queue(void) {
+    return visualizer_queue;
+}
+
 
 // --- Tarea de Reproducción de Audio ---
 
@@ -159,7 +164,6 @@ static void audio_playback_task(void *arg) {
         return;
     }
 
-    // --- Lógica de parseo de WAV (sin cambios) ---
     if (fread(&wav_file_info, 1, 12, fp) != 12) {
         ESP_LOGE(TAG, "Failed to read RIFF header.");
         fclose(fp); player_state = AUDIO_STATE_STOPPED; vTaskDelete(NULL); return;
@@ -202,7 +206,6 @@ static void audio_playback_task(void *arg) {
         song_duration_s = wav_file_info.data_size / wav_file_info.byte_rate;
     }
     
-    // --- Configuración I2S ---
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_chan, NULL));
 
@@ -232,7 +235,6 @@ static void audio_playback_task(void *arg) {
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_chan, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(tx_chan));
 
-    // --- Bucle de reproducción ---
     int buffer_size = 2048;
     uint8_t *buffer = (uint8_t*)malloc(buffer_size);
     size_t bytes_read, bytes_written;
@@ -249,6 +251,39 @@ static void audio_playback_task(void *arg) {
         bytes_read = fread(buffer, 1, buffer_size, fp);
         if (bytes_read == 0) break;
 
+        // --- Procesamiento para el visualizador ---
+        if (visualizer_queue != NULL && wav_file_info.bits_per_sample == 16) {
+            visualizer_data_t viz_data;
+            int16_t* samples = (int16_t*)buffer;
+            size_t num_samples = bytes_read / sizeof(int16_t);
+            size_t samples_per_bar = num_samples / VISUALIZER_BAR_COUNT;
+
+            if (samples_per_bar > 0) {
+                for (int i = 0; i < VISUALIZER_BAR_COUNT; i++) {
+                    int32_t peak = 0;
+                    size_t start_sample = i * samples_per_bar;
+                    size_t end_sample = start_sample + samples_per_bar;
+                    for (size_t j = start_sample; j < end_sample; j++) {
+                        int16_t val = abs(samples[j]);
+                        if (val > peak) {
+                            peak = val;
+                        }
+                    }
+                    // Mapear el valor de pico (0-32767) a una escala de 0-255
+                    // Usamos una escala logarítmica para que se vea mejor
+                    if (peak > 0) {
+                        // El casteo a (uint8_t) ya se encarga de limitar el valor a 255,
+                        // por lo que la comprobación extra es innecesaria.
+                        viz_data.bar_values[i] = (uint8_t)(log10(peak) / 4.5f * 255.0f);
+                    } else {
+                        viz_data.bar_values[i] = 0;
+                    }
+                }
+                // Enviar a la cola sin bloquear (sobrescribe el valor anterior si la UI no lo ha leído)
+                xQueueOverwrite(visualizer_queue, &viz_data);
+            }
+        }
+        
         // Lógica de ajuste de volumen
         if (volume_factor < 0.999f) {
             if (wav_file_info.bits_per_sample == 16) {
@@ -278,7 +313,6 @@ cleanup:
     free(buffer);
     fclose(fp);
     if(tx_chan) {
-        // No es necesario llamar a stop() aquí, disable() es suficiente.
         i2s_channel_disable(tx_chan);
         i2s_del_channel(tx_chan);
         tx_chan = NULL;
