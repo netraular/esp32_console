@@ -8,7 +8,7 @@
 #include <string.h>
 #include "components/audio_visualizer/audio_visualizer.h"
 #include "config.h"
-#include <math.h> // <-- [CAMBIO] AÑADIR ESTA LÍNEA
+#include <math.h>
 
 static const char *TAG = "SPEAKER_TEST_VIEW";
 
@@ -260,23 +260,37 @@ static void create_now_playing_view(const char *file_path) {
     visualizer_widget = audio_visualizer_create(main_cont, VISUALIZER_BAR_COUNT);
     lv_obj_set_size(visualizer_widget, lv_pct(100), lv_pct(40));
     
+    // --- [CAMBIO] Contenedor de progreso rediseñado para una mejor disposición ---
     lv_obj_t *progress_cont = lv_obj_create(main_cont);
     lv_obj_remove_style_all(progress_cont);
-    lv_obj_set_width(progress_cont, lv_pct(95));
-    lv_obj_set_height(progress_cont, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(progress_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(progress_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_size(progress_cont, lv_pct(95), LV_SIZE_CONTENT);
+    lv_obj_clear_flag(progress_cont, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_pad_top(progress_cont, 10, 0); 
 
+    // 1. Slider de progreso
+    slider_widget = lv_slider_create(progress_cont);
+    lv_obj_remove_flag(slider_widget, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_width(slider_widget, lv_pct(100));
+    lv_obj_align(slider_widget, LV_ALIGN_TOP_MID, 0, 0);
+
+    // 2. Estilo del slider
+    lv_color_t indicator_color = lv_palette_main(LV_PALETTE_BLUE);
+    lv_obj_set_style_bg_color(slider_widget, indicator_color, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(slider_widget, lv_color_mix(indicator_color, lv_color_black(), LV_OPA_50), LV_PART_KNOB);
+
+    // --- [CAMBIO] Cambiar la forma del pomo a un rectángulo con bordes redondeados ---
+    lv_obj_set_style_radius(slider_widget, 4, LV_PART_KNOB);
+
+    // 3. Etiqueta de tiempo actual (debajo-izquierda del slider)
     time_current_label_widget = lv_label_create(progress_cont);
     lv_label_set_text(time_current_label_widget, "00:00");
-    
-    slider_widget = lv_slider_create(progress_cont);
-    lv_obj_set_style_flex_grow(slider_widget, 1, 0);
-    lv_obj_remove_flag(slider_widget, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_margin_hor(slider_widget, 10, 0);
+    lv_obj_align_to(time_current_label_widget, slider_widget, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
 
+    // 4. Etiqueta de tiempo total (debajo-derecha del slider)
     time_total_label_widget = lv_label_create(progress_cont);
     lv_label_set_text(time_total_label_widget, "??:??");
+    lv_obj_align_to(time_total_label_widget, slider_widget, LV_ALIGN_OUT_BOTTOM_RIGHT, 0, 5);
+
 
     lv_obj_t *play_pause_btn = lv_button_create(main_cont);
     play_pause_btn_label = lv_label_create(play_pause_btn);
