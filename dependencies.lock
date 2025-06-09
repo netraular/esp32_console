@@ -38,6 +38,6 @@ direct_dependencies:
 - espressif/button
 - idf
 - lvgl/lvgl
-manifest_hash: 92d99055690fe5ad2b848fe5690ed381fc0b02c18096a9557d6bc9b271f0d430
+manifest_hash: 84c11a1f6bae7ce1057c946d3282a199dea7dc7879b3ef849a0b71531018531c
 target: esp32s3
 version: 2.0.0

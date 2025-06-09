@@ -9,8 +9,6 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-// No es necesario incluir screen_manager.h si no se usa el mutex.
-
 static const char *TAG = "AUDIO_MGR";
 
 // Estructura del encabezado WAV
@@ -41,8 +39,8 @@ static volatile uint32_t song_duration_s = 0;
 
 // Variables de volumen
 #define VOLUME_STEP 5
-static volatile uint8_t current_volume_percentage = 80;
-static volatile float volume_factor = 0.8f;
+static volatile uint8_t current_volume_percentage = 30;
+static volatile float volume_factor = 0.3f;
 
 // Prototipos de funciones
 static void audio_playback_task(void *arg);
@@ -54,7 +52,7 @@ static void audio_manager_set_volume(uint8_t percentage) {
     ESP_LOGI(TAG, "Volumen ajustado a %u%% (factor: %.2f)", current_volume_percentage, volume_factor);
 }
 
-// --- Funciones públicas (sin cambios) ---
+// --- Funciones públicas ---
 
 void audio_manager_init(void) {
     ESP_LOGI(TAG, "Audio Manager Initialized.");
@@ -92,19 +90,29 @@ void audio_manager_stop(void) {
     }
 }
 
+// --- CORRECCIÓN PARA COMPATIBILIDAD CON IDF < 5.2 ---
+// Se usa i2s_channel_disable/enable en lugar de stop/start.
+// La función i2s_channel_zero_dma_buffer no existe, pero disable/enable ya se encarga
+// de limpiar el estado lo suficiente para evitar el sonido residual.
+
 void audio_manager_pause(void) {
-    if (player_state == AUDIO_STATE_PLAYING) {
+    if (player_state == AUDIO_STATE_PLAYING && tx_chan) {
         player_state = AUDIO_STATE_PAUSED;
+        // En versiones antiguas de IDF, disable() es la forma de pausar la transmisión.
+        i2s_channel_disable(tx_chan);
         ESP_LOGI(TAG, "Audio Paused.");
     }
 }
 
 void audio_manager_resume(void) {
-    if (player_state == AUDIO_STATE_PAUSED) {
+    if (player_state == AUDIO_STATE_PAUSED && tx_chan) {
         player_state = AUDIO_STATE_PLAYING;
+        // Reanuda la transmisión habilitando el canal de nuevo.
+        i2s_channel_enable(tx_chan);
         ESP_LOGI(TAG, "Audio Resumed.");
     }
 }
+// --- FIN DE LA CORRECCIÓN DE COMPATIBILIDAD ---
 
 audio_player_state_t audio_manager_get_state(void) {
     return player_state;
@@ -198,15 +206,10 @@ static void audio_playback_task(void *arg) {
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_chan, NULL));
 
-    // --- CORRECCIÓN PARA WARNINGS ---
-    // 1. Inicializar la estructura a ceros para evitar advertencias.
     i2s_std_config_t std_cfg = {}; 
-
-    // 2. Configurar los miembros necesarios.
     std_cfg.clk_cfg.sample_rate_hz = wav_file_info.sample_rate;
     std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-    
     std_cfg.slot_cfg.data_bit_width = (i2s_data_bit_width_t)wav_file_info.bits_per_sample;
     std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_AUTO;
     std_cfg.slot_cfg.slot_mode = (wav_file_info.num_channels == 2) ? I2S_SLOT_MODE_STEREO : I2S_SLOT_MODE_MONO;
@@ -217,7 +220,6 @@ static void audio_playback_task(void *arg) {
     std_cfg.slot_cfg.left_align = true;
     std_cfg.slot_cfg.big_endian = false;
     std_cfg.slot_cfg.bit_order_lsb = false;
-
     std_cfg.gpio_cfg.mclk = I2S_GPIO_UNUSED;
     std_cfg.gpio_cfg.bclk = I2S_BCLK_PIN;
     std_cfg.gpio_cfg.ws = I2S_WS_PIN;
@@ -226,7 +228,6 @@ static void audio_playback_task(void *arg) {
     std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.ws_inv = false;
-    // --- FIN DE LA CORRECCIÓN ---
 
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_chan, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(tx_chan));
@@ -277,6 +278,7 @@ cleanup:
     free(buffer);
     fclose(fp);
     if(tx_chan) {
+        // No es necesario llamar a stop() aquí, disable() es suficiente.
         i2s_channel_disable(tx_chan);
         i2s_del_channel(tx_chan);
         tx_chan = NULL;
