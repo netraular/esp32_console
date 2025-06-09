@@ -52,6 +52,6 @@
 #define LVGL_TICK_PERIOD_MS 10
 
 // --- [FIX] CONFIGURACIÓN DE AUDIO ---
-#define MAX_VOLUME_PERCENTAGE 50 // Límite de volumen (0-100) para proteger el altavoz
+#define MAX_VOLUME_PERCENTAGE 35 // Límite de volumen (0-100) para proteger el altavoz
 
 #endif // CONFIG_H

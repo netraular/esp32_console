@@ -64,15 +64,12 @@ static void format_time(char *buf, size_t buf_size, uint32_t time_s) {
 static void ui_update_timer_cb(lv_timer_t *timer) {
     audio_player_state_t state = audio_manager_get_state();
     
-    // Si el timer sigue corriendo pero el estado es STOPPED, hay que limpiarlo
     if (state == AUDIO_STATE_STOPPED) {
-        // [DEFENSA] Si el timer llega aquí por alguna razón, nos aseguramos de que se limpie.
-        // La lógica principal de borrado está ahora en los handlers de cancelación/salida.
         if (ui_update_timer) {
             lv_timer_delete(ui_update_timer);
             ui_update_timer = NULL;
         }
-        handle_play_pause_ui_update_task(NULL); // Actualiza el icono de play/pausa
+        handle_play_pause_ui_update_task(NULL);
         if (slider_widget) lv_slider_set_value(slider_widget, 0, LV_ANIM_OFF);
         if (time_current_label_widget) lv_label_set_text(time_current_label_widget, "00:00");
         
@@ -172,29 +169,20 @@ static void handle_ok_press_playing() {
     }
 }
 
-// ========================[ INICIO DE LA CORRECCIÓN ]========================
 static void handle_cancel_press_playing() {
-    // 1. Detener el temporizador de la UI. ¡ESTO ES LO MÁS IMPORTANTE!
     if (ui_update_timer) {
         lv_timer_delete(ui_update_timer);
         ui_update_timer = NULL;
     }
-    
-    // 2. Detener la reproducción de audio
     audio_manager_stop(); 
-
-    // 3. Poner a NULL TODOS los punteros a widgets para evitar accesos "dangling"
     play_pause_btn_label = NULL;
     volume_label_widget = NULL;
     visualizer_widget = NULL;
-    slider_widget = NULL;               // <-- [FIX] Añadido
-    time_current_label_widget = NULL;   // <-- [FIX] Añadido
-    time_total_label_widget = NULL;     // <-- [FIX] Añadido
-    
-    // 4. Mostrar la siguiente vista (que limpiará la pantalla actual)
+    slider_widget = NULL;
+    time_current_label_widget = NULL;
+    time_total_label_widget = NULL;
     show_file_explorer();
 }
-// =========================[ FIN DE LA CORRECCIÓN ]=========================
 
 static void handle_left_press_playing() {
     audio_manager_volume_down();
@@ -206,7 +194,7 @@ static void handle_right_press_playing() {
     lv_async_call(update_volume_label_task, NULL);
 }
 
-// --- Resto de funciones (sin cambios en su lógica interna) ---
+// --- Resto de funciones ---
 
 static void on_audio_file_selected(const char *path) {
     if (is_wav_file(path)) {
@@ -261,7 +249,8 @@ static void create_now_playing_view(const char *file_path) {
     lv_obj_set_style_text_align(volume_label_widget, LV_TEXT_ALIGN_RIGHT, 0);
 
     visualizer_widget = audio_visualizer_create(main_cont, VISUALIZER_BAR_COUNT);
-    lv_obj_set_size(visualizer_widget, lv_pct(85), lv_pct(40));
+    // --- [CAMBIO] Establecemos el ancho al 100% para que coincida con el buffer del canvas (240px) ---
+    lv_obj_set_size(visualizer_widget, lv_pct(100), lv_pct(40));
     
     lv_obj_t *progress_cont = lv_obj_create(main_cont);
     lv_obj_remove_style_all(progress_cont);
@@ -299,7 +288,6 @@ static void handle_ok_press_initial() {
 }
 
 static void handle_cancel_press_initial() {
-    // [DEFENSA] Nos aseguramos de que no quede un timer activo al salir de toda la vista de test
     if (ui_update_timer) {
         lv_timer_delete(ui_update_timer);
         ui_update_timer = NULL;

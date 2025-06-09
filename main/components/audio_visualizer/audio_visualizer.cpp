@@ -37,23 +37,38 @@ static void redraw_bars(audio_visualizer_t* viz) {
     lv_coord_t canvas_w = lv_obj_get_width(viz->canvas);
     lv_coord_t canvas_h = lv_obj_get_height(viz->canvas);
 
-    if (viz->bar_count > 1) { // Asegurarse de no dividir por cero para el degradado
-        // El ancho de la barra ahora es más preciso
-        lv_coord_t bar_w = canvas_w / (viz->bar_count * 2 - 1);
-        lv_coord_t space_w = bar_w;
+    if (viz->bar_count > 0) {
+        // --- [CAMBIO] Lógica de centrado global de las barras ---
+        
+        // 1. Definir el ancho de cada barra y el espacio entre ellas.
+        //    Ajustando estos valores se puede cambiar el "look" del visualizador.
+        //    Para 32 barras en 240px, 5px por barra y 2px de espacio es una buena combinación.
+        const lv_coord_t bar_w = 5;
+        const lv_coord_t space_w = 2;
+
+        // 2. Calcular el ancho total que ocupará el conjunto de barras.
+        //    (N barras) + (N-1 espacios)
+        lv_coord_t total_bars_width = (viz->bar_count * bar_w) + ((viz->bar_count - 1) * space_w);
+
+        // 3. Calcular el margen izquierdo inicial para centrar el bloque completo.
+        //    El espacio sobrante se divide a la mitad.
+        lv_coord_t start_x = (canvas_w - total_bars_width) / 2;
+        
+        // --- Fin del cambio de lógica ---
 
         for (int i = 0; i < viz->bar_count; i++) {
-            // Calcular el color de cada barra individualmente
-            // El ratio va de 0 (primera barra) a 255 (última barra)
+            // Calcular el color de cada barra individualmente para el degradado.
             uint8_t mix_ratio = (i * 255) / (viz->bar_count - 1);
             rect_dsc.bg_color = lv_color_mix(start_color, end_color, mix_ratio);
 
+            // Calcular la altura de la barra.
             lv_coord_t bar_h = (viz->values[i] * canvas_h) / 255;
-            if (bar_h < 3 && viz->values[i] > 0) bar_h = 3; // Altura mínima para que se vea bien el radio
+            if (bar_h < 3 && viz->values[i] > 0) bar_h = 3; // Altura mínima para que el radio se vea bien.
 
             if (bar_h > 0) {
                 lv_area_t bar_area;
-                bar_area.x1 = i * (bar_w + space_w);
+                // 4. Posicionar la barra usando el margen inicial y el ancho/espacio fijos.
+                bar_area.x1 = start_x + (i * (bar_w + space_w));
                 bar_area.x2 = bar_area.x1 + bar_w - 1;
                 bar_area.y2 = canvas_h - 1;
                 bar_area.y1 = bar_area.y2 - bar_h + 1;
@@ -63,7 +78,7 @@ static void redraw_bars(audio_visualizer_t* viz) {
         }
     }
     
-    // 4. Finalizar la capa para que se muestren los cambios
+    // 5. Finalizar la capa para que se muestren los cambios
     lv_canvas_finish_layer(viz->canvas, &layer);
 }
 
@@ -71,8 +86,6 @@ lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count) {
     #define CANVAS_WIDTH 240
     #define CANVAS_HEIGHT 100
 
-    // Usamos la macro original que sí compila.
-    // La advertencia sobre 'missing-field-initializers' es benigna y puede ser ignorada.
     LV_DRAW_BUF_DEFINE_STATIC(draw_buf, CANVAS_WIDTH, CANVAS_HEIGHT, LV_COLOR_FORMAT_NATIVE);
 
     if (bar_count > AUDIO_VISUALIZER_MAX_BARS) {
@@ -87,7 +100,6 @@ lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count) {
 
     // Dentro del contenedor, creamos el canvas
     lv_obj_t* canvas = lv_canvas_create(cont);
-    // Asignar el buffer al canvas.
     lv_canvas_set_draw_buf(canvas, &draw_buf);
     lv_obj_set_size(canvas, lv_pct(100), lv_pct(100));
     lv_obj_center(canvas);
@@ -106,7 +118,6 @@ lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count) {
     viz->bar_color = lv_theme_get_color_primary(cont);
     viz->bg_color = lv_color_hex(0x222222);
 
-    // [FIX] Corregido el error de tipeo
     lv_obj_set_user_data(cont, viz);
     
     redraw_bars(viz);

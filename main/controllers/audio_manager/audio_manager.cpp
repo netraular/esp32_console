@@ -321,7 +321,22 @@ static void audio_playback_task(void *arg) {
                         }
                     }
                     if (peak > 0) {
-                        viz_data.bar_values[i] = (uint8_t)(log10(peak) / 5.5f * 255.0f);
+                        float log_val = log10f((float)peak);
+                        const float sensitivity_divisor = 6.0f;
+                        
+                        // --- [CAMBIO] Lógica de asignación corregida ---
+                        // 1. Calcular la altura en una variable float, que puede exceder 255.
+                        float calculated_height = (log_val / sensitivity_divisor) * 255.0f;
+                        
+                        // 2. Limitar (clamp) el valor al rango de uint8_t (0-255).
+                        if (calculated_height > 255.0f) {
+                            viz_data.bar_values[i] = 255;
+                        } else if (calculated_height < 0.0f) { // Aunque poco probable, es una buena práctica
+                            viz_data.bar_values[i] = 0;
+                        } else {
+                            viz_data.bar_values[i] = (uint8_t)calculated_height;
+                        }
+
                     } else {
                         viz_data.bar_values[i] = 0;
                     }
@@ -330,8 +345,7 @@ static void audio_playback_task(void *arg) {
             }
         }
         
-        // --- [FIX] Lógica de ajuste de volumen protegida ---
-        float local_volume_factor = 0.0f; // <-- [FIX] Inicializar con un valor seguro
+        float local_volume_factor = 0.0f;
         
         if (volume_mutex && xSemaphoreTake(volume_mutex, portMAX_DELAY) == pdTRUE) {
             local_volume_factor = volume_factor;

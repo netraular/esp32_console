@@ -7,8 +7,8 @@
 extern "C" {
 #endif
 
-// Número máximo de barras que el visualizador puede mostrar
-#define AUDIO_VISUALIZER_MAX_BARS 16
+// --- [CAMBIO] Aumentamos el número máximo de barras a 32 ---
+#define AUDIO_VISUALIZER_MAX_BARS 32
 
 /**
  * @brief Crea un objeto de visualizador de audio.
