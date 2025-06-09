@@ -7,6 +7,7 @@
 #include "esp_log.h"
 #include <string.h>
 #include "components/audio_visualizer/audio_visualizer.h"
+#include "config.h" // <-- [FIX] Añadir include para MAX_VOLUME_PERCENTAGE
 
 static const char *TAG = "SPEAKER_TEST_VIEW";
 
@@ -25,7 +26,11 @@ static lv_obj_t *visualizer_widget = NULL;
 static visualizer_data_t current_viz_data;
 static bool viz_data_received = false;
 
-// --- Prototipos ---
+// --- Prototipos de funciones worker para lv_async_call ---
+static void update_volume_label_task(void *user_data);
+static void handle_play_pause_ui_update_task(void *user_data);
+
+// --- Prototipos del resto de funciones ---
 static void create_initial_speaker_view();
 static void show_file_explorer();
 static void create_now_playing_view(const char *file_path);
@@ -38,7 +43,7 @@ static void handle_cancel_press_initial();
 static void ui_update_timer_cb(lv_timer_t *timer);
 static void handle_left_press_playing();
 static void handle_right_press_playing();
-static void update_volume_label();
+
 
 // --- Funciones de utilidad ---
 static bool is_wav_file(const char *path) {
@@ -55,12 +60,12 @@ static void format_time(char *buf, size_t buf_size, uint32_t time_s) {
     snprintf(buf, buf_size, "%02lu:%02lu", time_s / 60, time_s % 60);
 }
 
-// --- Timer UI ---
+// --- Timer UI (ya se ejecuta en el contexto correcto) ---
 static void ui_update_timer_cb(lv_timer_t *timer) {
     audio_player_state_t state = audio_manager_get_state();
     
     if (state == AUDIO_STATE_STOPPED) {
-        if (play_pause_btn_label) lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PLAY);
+        handle_play_pause_ui_update_task(NULL); // Actualiza el icono de play/pausa
         if (slider_widget) lv_slider_set_value(slider_widget, 0, LV_ANIM_OFF);
         if (time_current_label_widget) lv_label_set_text(time_current_label_widget, "00:00");
         
@@ -79,22 +84,24 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
     uint32_t duration = audio_manager_get_duration_s();
     uint32_t progress = audio_manager_get_progress_s();
 
-    // CORRECCIÓN: Usar lv_slider_get_max_value
-    if (duration > 0 && lv_slider_get_max_value(slider_widget) != duration) {
+    if (slider_widget && duration > 0 && lv_slider_get_max_value(slider_widget) != duration) {
         char time_buf[8];
         format_time(time_buf, sizeof(time_buf), duration);
         lv_label_set_text(time_total_label_widget, time_buf);
         lv_slider_set_range(slider_widget, 0, duration);
     }
 
-    char time_buf[8];
-    format_time(time_buf, sizeof(time_buf), progress);
-    lv_label_set_text(time_current_label_widget, time_buf);
-    lv_slider_set_value(slider_widget, progress, LV_ANIM_OFF);
+    if (time_current_label_widget) {
+        char time_buf[8];
+        format_time(time_buf, sizeof(time_buf), progress);
+        lv_label_set_text(time_current_label_widget, time_buf);
+    }
+    if (slider_widget) {
+        lv_slider_set_value(slider_widget, progress, LV_ANIM_OFF);
+    }
 
-    QueueHandle_t queue = audio_manager_get_visualizer_queue();
+   QueueHandle_t queue = audio_manager_get_visualizer_queue();
     if (queue && visualizer_widget) {
-        // CORRECCIÓN: Usar ¤t_viz_data
         if (xQueueReceive(queue, &current_viz_data, 0) == pdPASS) {
             viz_data_received = true;
             audio_visualizer_set_values(visualizer_widget, current_viz_data.bar_values);
@@ -103,7 +110,8 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
                 bool changed = false;
                 for(int i = 0; i < VISUALIZER_BAR_COUNT; i++) {
                     if (current_viz_data.bar_values[i] > 0) {
-                        int new_val = (int)current_viz_data.bar_values[i] - 15;
+                        // [CAMBIO] Reducimos la "gravedad" para una caída más suave
+                        int new_val = (int)current_viz_data.bar_values[i] - 8; 
                         current_viz_data.bar_values[i] = (new_val < 0) ? 0 : (uint8_t)new_val;
                         changed = true;
                     }
@@ -118,39 +126,56 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
     }
 }
 
-static void update_volume_label() {
+
+// --- [FIX] Funciones "Worker" para lv_async_call ---
+// Esta es la función que realmente actualiza la UI del volumen.
+// Se llamará de forma segura desde el lv_timer_handler.
+static void update_volume_label_task(void *user_data) {
     if (volume_label_widget) {
         char vol_buf[16];
         uint8_t vol = audio_manager_get_volume();
-        const char * vol_icon = (vol == 0) ? LV_SYMBOL_MUTE : (vol < 50) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
-        snprintf(vol_buf, sizeof(vol_buf), "%s %u%%", vol_icon, vol);
+        // Muestra el porcentaje relativo al máximo permitido (0-100%)
+        uint8_t display_vol = (vol * 100) / MAX_VOLUME_PERCENTAGE;
+        const char * vol_icon = (vol == 0) ? LV_SYMBOL_MUTE : (vol < (MAX_VOLUME_PERCENTAGE / 2)) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
+        
+        snprintf(vol_buf, sizeof(vol_buf), "%s %u%%", vol_icon, display_vol);
         lv_label_set_text(volume_label_widget, vol_buf);
     }
 }
+
+// Esta función actualiza el icono de play/pausa
+static void handle_play_pause_ui_update_task(void *user_data) {
+    audio_player_state_t state = audio_manager_get_state();
+    if (play_pause_btn_label) {
+        if (state == AUDIO_STATE_PLAYING) {
+            lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PAUSE);
+        } else {
+            lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PLAY);
+        }
+    }
+}
+
+// --- Handlers de botones ---
 
 static void handle_ok_press_playing() {
     audio_player_state_t state = audio_manager_get_state();
     if (state == AUDIO_STATE_STOPPED) {
         if (audio_manager_play(current_song_path)) {
-            lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PAUSE);
+            lv_async_call(handle_play_pause_ui_update_task, NULL); // <-- [FIX] Llamada asíncrona
             if (ui_update_timer == NULL) {
                 ui_update_timer = lv_timer_create(ui_update_timer_cb, 50, NULL);
             }
         }
     } else if (state == AUDIO_STATE_PLAYING) {
         audio_manager_pause();
-        lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PLAY);
+        lv_async_call(handle_play_pause_ui_update_task, NULL); // <-- [FIX] Llamada asíncrona
     } else if (state == AUDIO_STATE_PAUSED) {
         audio_manager_resume();
-        lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PAUSE);
+        lv_async_call(handle_play_pause_ui_update_task, NULL); // <-- [FIX] Llamada asíncrona
     }
 }
 
 static void handle_cancel_press_playing() {
-    if (ui_update_timer) {
-        lv_timer_delete(ui_update_timer);
-        ui_update_timer = NULL;
-    }
     audio_manager_stop(); 
     play_pause_btn_label = NULL;
     volume_label_widget = NULL;
@@ -160,13 +185,15 @@ static void handle_cancel_press_playing() {
 
 static void handle_left_press_playing() {
     audio_manager_volume_down();
-    update_volume_label(); 
+    lv_async_call(update_volume_label_task, NULL); // <-- [FIX] Llamada asíncrona en lugar de directa
 }
 
 static void handle_right_press_playing() {
     audio_manager_volume_up();
-    update_volume_label();
+    lv_async_call(update_volume_label_task, NULL); // <-- [FIX] Llamada asíncrona en lugar de directa
 }
+
+// --- Resto de funciones (sin cambios en su lógica interna) ---
 
 static void on_audio_file_selected(const char *path) {
     if (is_wav_file(path)) {
@@ -216,7 +243,7 @@ static void create_now_playing_view(const char *file_path) {
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_LEFT, 0);
 
     volume_label_widget = lv_label_create(top_cont);
-    update_volume_label();
+    update_volume_label_task(NULL); // Llamada inicial segura
     lv_obj_set_style_text_font(volume_label_widget, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(volume_label_widget, LV_TEXT_ALIGN_RIGHT, 0);
 
@@ -234,7 +261,6 @@ static void create_now_playing_view(const char *file_path) {
     lv_label_set_text(time_current_label_widget, "00:00");
     
     slider_widget = lv_slider_create(progress_cont);
-    // CORRECCIÓN: Usar lv_obj_set_style_flex_grow
     lv_obj_set_style_flex_grow(slider_widget, 1, 0);
     lv_obj_remove_flag(slider_widget, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_margin_hor(slider_widget, 10, 0);
@@ -284,7 +310,6 @@ static void create_initial_speaker_view() {
 }
 
 void speaker_test_view_create(lv_obj_t *parent) {
-    // CORRECCIÓN: Usar el TAG para eliminar el warning
     ESP_LOGI(TAG, "Creating Speaker Test View");
     view_parent = parent;
     create_initial_speaker_view();

@@ -10,6 +10,7 @@
 #include <errno.h>
 #include "freertos/queue.h"
 #include <math.h>
+#include "freertos/semphr.h"
 
 static const char *TAG = "AUDIO_MGR";
 
@@ -40,29 +41,46 @@ static volatile uint32_t total_bytes_played = 0;
 static volatile uint32_t song_duration_s = 0;
 static QueueHandle_t visualizer_queue = NULL;
 
-// Variables de volumen
+// --- AJUSTES DE VOLUMEN ---
 #define VOLUME_STEP 5
 static volatile uint8_t current_volume_percentage = 30;
 static volatile float volume_factor = 0.3f;
+static SemaphoreHandle_t volume_mutex = NULL; 
 
 // Prototipos de funciones
 static void audio_playback_task(void *arg);
 
 static void audio_manager_set_volume(uint8_t percentage) {
-    if (percentage > 100) percentage = 100;
-    current_volume_percentage = percentage;
-    volume_factor = (float)current_volume_percentage / 100.0f;
-    ESP_LOGI(TAG, "Volumen ajustado a %u%% (factor: %.2f)", current_volume_percentage, volume_factor);
+    if (volume_mutex && xSemaphoreTake(volume_mutex, portMAX_DELAY) == pdTRUE) {
+        uint8_t old_percentage = current_volume_percentage;
+
+        if (percentage > MAX_VOLUME_PERCENTAGE) percentage = MAX_VOLUME_PERCENTAGE;
+        
+        current_volume_percentage = percentage;
+        volume_factor = (float)current_volume_percentage / 100.0f; 
+        
+        ESP_LOGI(TAG, "[LOG] Volume changed: %u%% -> %u%% (factor: %.2f)", old_percentage, current_volume_percentage, volume_factor);
+
+        xSemaphoreGive(volume_mutex);
+    } else {
+        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in set_volume!");
+    }
 }
 
 // --- Funciones públicas ---
 
 void audio_manager_init(void) {
+    volume_mutex = xSemaphoreCreateMutex();
+    if (volume_mutex == NULL) {
+        ESP_LOGE(TAG, "FAILED to create volume mutex!");
+    } else {
+        ESP_LOGI(TAG, "Volume mutex created successfully.");
+    }
+
     ESP_LOGI(TAG, "Audio Manager Initialized.");
     player_state = AUDIO_STATE_STOPPED;
     audio_manager_set_volume(current_volume_percentage);
 
-    // Crear la cola para el visualizador
     visualizer_queue = xQueueCreate(1, sizeof(visualizer_data_t));
     if (visualizer_queue == NULL) {
         ESP_LOGE(TAG, "Failed to create visualizer queue");
@@ -70,7 +88,9 @@ void audio_manager_init(void) {
 }
 
 bool audio_manager_play(const char *filepath) {
+    ESP_LOGI(TAG, "[LOG] audio_manager_play called for: %s", filepath);
     if (player_state != AUDIO_STATE_STOPPED) {
+        ESP_LOGI(TAG, "[LOG] Player is not stopped, stopping it first.");
         audio_manager_stop();
     }
     strncpy(current_filepath, filepath, sizeof(current_filepath) - 1);
@@ -83,16 +103,19 @@ bool audio_manager_play(const char *filepath) {
         player_state = AUDIO_STATE_STOPPED;
         return false;
     }
+    ESP_LOGI(TAG, "[LOG] Audio playback task created. Handle: %p", playback_task_handle);
     return true;
 }
 
 void audio_manager_stop(void) {
+    ESP_LOGI(TAG, "[LOG] audio_manager_stop called. Current state: %d", player_state);
     if (player_state != AUDIO_STATE_STOPPED) {
-        ESP_LOGI(TAG, "Stopping audio playback...");
         player_state = AUDIO_STATE_STOPPED;
         if (playback_task_handle != NULL) {
+             ESP_LOGI(TAG, "[LOG] Waiting for task (%p) to self-terminate...", playback_task_handle);
              vTaskDelay(pdMS_TO_TICKS(150)); 
              playback_task_handle = NULL;
+             ESP_LOGI(TAG, "[LOG] Playback task handle nulled by stop function.");
         }
         total_bytes_played = 0;
         song_duration_s = 0;
@@ -131,21 +154,47 @@ uint32_t audio_manager_get_progress_s(void) {
 }
 
 void audio_manager_volume_up(void) {
-    uint8_t new_volume = current_volume_percentage + VOLUME_STEP;
-    if (new_volume > 100) new_volume = 100;
+    ESP_LOGI(TAG, "[LOG] volume_up requested.");
+    uint8_t current_vol = 0;
+    if (volume_mutex && xSemaphoreTake(volume_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        current_vol = current_volume_percentage;
+        xSemaphoreGive(volume_mutex);
+    } else {
+        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in volume_up!");
+        return;
+    }
+
+    uint8_t new_volume = current_vol + VOLUME_STEP;
+    if (new_volume > MAX_VOLUME_PERCENTAGE) new_volume = MAX_VOLUME_PERCENTAGE;
     audio_manager_set_volume(new_volume);
 }
 
 void audio_manager_volume_down(void) {
-    int temp_volume = (int)current_volume_percentage - VOLUME_STEP;
-    uint8_t new_volume;
-    if (temp_volume < 0) new_volume = 0;
-    else new_volume = (uint8_t)temp_volume;
+    ESP_LOGI(TAG, "[LOG] volume_down requested.");
+    uint8_t current_vol = 0;
+    if (volume_mutex && xSemaphoreTake(volume_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        current_vol = current_volume_percentage;
+        xSemaphoreGive(volume_mutex);
+    } else {
+        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in volume_down!");
+        return;
+    }
+    
+    int temp_volume = (int)current_vol - VOLUME_STEP;
+    uint8_t new_volume = (temp_volume < 0) ? 0 : (uint8_t)temp_volume;
     audio_manager_set_volume(new_volume);
 }
 
 uint8_t audio_manager_get_volume(void) {
-    return current_volume_percentage;
+    uint8_t vol = 0;
+    if (volume_mutex && xSemaphoreTake(volume_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        vol = current_volume_percentage;
+        xSemaphoreGive(volume_mutex);
+    } else {
+        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in get_volume! Returning stale data.");
+        vol = current_volume_percentage;
+    }
+    return vol;
 }
 
 QueueHandle_t audio_manager_get_visualizer_queue(void) {
@@ -156,21 +205,24 @@ QueueHandle_t audio_manager_get_visualizer_queue(void) {
 // --- Tarea de Reproducción de Audio ---
 
 static void audio_playback_task(void *arg) {
+    ESP_LOGI(TAG, "[LOG] Playback task (%p) started execution.", playback_task_handle);
+
     FILE *fp = fopen(current_filepath, "rb");
     if (fp == NULL) {
         ESP_LOGE(TAG, "Failed to open file: %s, errno: %s", current_filepath, strerror(errno));
         player_state = AUDIO_STATE_STOPPED;
+        playback_task_handle = NULL;
         vTaskDelete(NULL);
         return;
     }
 
     if (fread(&wav_file_info, 1, 12, fp) != 12) {
         ESP_LOGE(TAG, "Failed to read RIFF header.");
-        fclose(fp); player_state = AUDIO_STATE_STOPPED; vTaskDelete(NULL); return;
+        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; vTaskDelete(NULL); return;
     }
     if (strncmp(wav_file_info.riff_header, "RIFF", 4) != 0 || strncmp(wav_file_info.wave_header, "WAVE", 4) != 0) {
         ESP_LOGE(TAG, "Invalid RIFF/WAVE header.");
-        fclose(fp); player_state = AUDIO_STATE_STOPPED; vTaskDelete(NULL); return;
+        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; vTaskDelete(NULL); return;
     }
     char chunk_id[4];
     uint32_t chunk_size;
@@ -185,7 +237,7 @@ static void audio_playback_task(void *arg) {
     }
     if (!fmt_found) {
         ESP_LOGE(TAG, "'fmt ' chunk not found.");
-        fclose(fp); player_state = AUDIO_STATE_STOPPED; vTaskDelete(NULL); return;
+        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; vTaskDelete(NULL); return;
     }
     bool data_found = false;
     while(fread(wav_file_info.data_header, 1, 4, fp) == 4 && fread(&wav_file_info.data_size, 1, 4, fp) == 4) {
@@ -197,7 +249,7 @@ static void audio_playback_task(void *arg) {
     }
     if (!data_found) {
         ESP_LOGE(TAG, "'data' chunk not found.");
-        fclose(fp); player_state = AUDIO_STATE_STOPPED; vTaskDelete(NULL); return;
+        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; vTaskDelete(NULL); return;
     }
     ESP_LOGI(TAG, "WAV Info: SR=%lu, BPS=%u, CH=%u, Data Size=%lu", 
              wav_file_info.sample_rate, wav_file_info.bits_per_sample, 
@@ -241,7 +293,7 @@ static void audio_playback_task(void *arg) {
 
     ESP_LOGI(TAG, "Starting playback... Duration: %lu seconds. Volume: %u%%", song_duration_s, current_volume_percentage);
     total_bytes_played = 0;
-
+    
     while (player_state != AUDIO_STATE_STOPPED && total_bytes_played < wav_file_info.data_size) {
         while (player_state == AUDIO_STATE_PAUSED) {
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -251,7 +303,6 @@ static void audio_playback_task(void *arg) {
         bytes_read = fread(buffer, 1, buffer_size, fp);
         if (bytes_read == 0) break;
 
-        // --- Procesamiento para el visualizador ---
         if (visualizer_queue != NULL && wav_file_info.bits_per_sample == 16) {
             visualizer_data_t viz_data;
             int16_t* samples = (int16_t*)buffer;
@@ -269,34 +320,38 @@ static void audio_playback_task(void *arg) {
                             peak = val;
                         }
                     }
-                    // Mapear el valor de pico (0-32767) a una escala de 0-255
-                    // Usamos una escala logarítmica para que se vea mejor
                     if (peak > 0) {
-                        // El casteo a (uint8_t) ya se encarga de limitar el valor a 255,
-                        // por lo que la comprobación extra es innecesaria.
-                        viz_data.bar_values[i] = (uint8_t)(log10(peak) / 4.5f * 255.0f);
+                        viz_data.bar_values[i] = (uint8_t)(log10(peak) / 5.5f * 255.0f);
                     } else {
                         viz_data.bar_values[i] = 0;
                     }
                 }
-                // Enviar a la cola sin bloquear (sobrescribe el valor anterior si la UI no lo ha leído)
                 xQueueOverwrite(visualizer_queue, &viz_data);
             }
         }
         
-        // Lógica de ajuste de volumen
-        if (volume_factor < 0.999f) {
+        // --- [FIX] Lógica de ajuste de volumen protegida ---
+        float local_volume_factor = 0.0f; // <-- [FIX] Inicializar con un valor seguro
+        
+        if (volume_mutex && xSemaphoreTake(volume_mutex, portMAX_DELAY) == pdTRUE) {
+            local_volume_factor = volume_factor;
+            xSemaphoreGive(volume_mutex);
+        } else {
+            ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in playback task! Using fallback factor 0.0.");
+        }
+
+        if (local_volume_factor < 0.999f) {
             if (wav_file_info.bits_per_sample == 16) {
                 int16_t *samples = (int16_t *)buffer;
                 size_t num_samples = bytes_read / sizeof(int16_t);
                 for (size_t i = 0; i < num_samples; i++) {
-                    samples[i] = (int16_t)((float)samples[i] * volume_factor);
+                    samples[i] = (int16_t)((float)samples[i] * local_volume_factor);
                 }
             } else if (wav_file_info.bits_per_sample == 8) {
                 uint8_t *samples = (uint8_t *)buffer;
                 for (size_t i = 0; i < bytes_read; i++) {
                     int16_t sample_signed = (int16_t)samples[i] - 128;
-                    sample_signed = (int16_t)((float)sample_signed * volume_factor);
+                    sample_signed = (int16_t)((float)sample_signed * local_volume_factor);
                     if (sample_signed > 127) sample_signed = 127;
                     else if (sample_signed < -128) sample_signed = -128;
                     samples[i] = (uint8_t)(sample_signed + 128);
@@ -309,7 +364,7 @@ static void audio_playback_task(void *arg) {
     }
 
 cleanup:
-    ESP_LOGI(TAG, "Playback finished or stopped. Cleaning up.");
+    ESP_LOGI(TAG, "[LOG] Playback task (%p) entering cleanup.", playback_task_handle);
     free(buffer);
     fclose(fp);
     if(tx_chan) {
@@ -320,5 +375,6 @@ cleanup:
     
     player_state = AUDIO_STATE_STOPPED;
     playback_task_handle = NULL;
+    ESP_LOGI(TAG, "[LOG] Playback task self-deleting.");
     vTaskDelete(NULL);
 }

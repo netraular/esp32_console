@@ -75,7 +75,7 @@ void audio_manager_volume_down(void);
 uint8_t audio_manager_get_volume(void);
 
 // --- NUEVAS FUNCIONES PARA EL VISUALIZADOR ---
-#define VISUALIZER_BAR_COUNT 8
+#define VISUALIZER_BAR_COUNT 16
 
 // Estructura para los datos del visualizador que se envían por la cola
 typedef struct {

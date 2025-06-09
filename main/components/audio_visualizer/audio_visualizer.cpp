@@ -9,8 +9,8 @@ typedef struct {
     lv_obj_t* canvas; // Puntero al objeto canvas
     uint8_t bar_count;
     uint8_t values[AUDIO_VISUALIZER_MAX_BARS];
-    lv_color_t bar_color;
-    lv_color_t bg_color;
+    lv_color_t bar_color; // Color base (no usado en modo degradado)
+    lv_color_t bg_color;  // Color de fondo
 } audio_visualizer_t;
 
 
@@ -27,26 +27,29 @@ static void redraw_bars(audio_visualizer_t* viz) {
 
     lv_draw_rect_dsc_t rect_dsc;
     lv_draw_rect_dsc_init(&rect_dsc);
-    rect_dsc.bg_color = viz->bar_color;
-    rect_dsc.radius = 2;
+    rect_dsc.radius = 2; // Bordes redondeados para las barras
+
+    // Colores para el degradado
+    lv_color_t start_color = lv_palette_main(LV_PALETTE_BLUE);
+    lv_color_t end_color = lv_palette_main(LV_PALETTE_RED);
 
     // 3. Calcular dimensiones y dibujar cada barra
     lv_coord_t canvas_w = lv_obj_get_width(viz->canvas);
     lv_coord_t canvas_h = lv_obj_get_height(viz->canvas);
 
-    if (viz->bar_count > 0) {
-        lv_coord_t total_bar_width_units = (viz->bar_count * 2 - 1);
-        if (total_bar_width_units == 0) {
-            lv_canvas_finish_layer(viz->canvas, &layer);
-            return;
-        }
-        
-        lv_coord_t bar_w = canvas_w / total_bar_width_units;
+    if (viz->bar_count > 1) { // Asegurarse de no dividir por cero para el degradado
+        // El ancho de la barra ahora es más preciso
+        lv_coord_t bar_w = canvas_w / (viz->bar_count * 2 - 1);
         lv_coord_t space_w = bar_w;
 
         for (int i = 0; i < viz->bar_count; i++) {
+            // Calcular el color de cada barra individualmente
+            // El ratio va de 0 (primera barra) a 255 (última barra)
+            uint8_t mix_ratio = (i * 255) / (viz->bar_count - 1);
+            rect_dsc.bg_color = lv_color_mix(start_color, end_color, mix_ratio);
+
             lv_coord_t bar_h = (viz->values[i] * canvas_h) / 255;
-            if (bar_h < 1 && viz->values[i] > 0) bar_h = 1;
+            if (bar_h < 3 && viz->values[i] > 0) bar_h = 3; // Altura mínima para que se vea bien el radio
 
             if (bar_h > 0) {
                 lv_area_t bar_area;
@@ -65,17 +68,12 @@ static void redraw_bars(audio_visualizer_t* viz) {
 }
 
 lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count) {
-    // --- CORRECCIÓN FINAL ---
-    // La macro ya incluye 'static', así que no lo repetimos.
-    // El buffer se declarará estáticamente aquí y persistirá.
     #define CANVAS_WIDTH 240
     #define CANVAS_HEIGHT 100
-    LV_DRAW_BUF_DEFINE_STATIC(draw_buf, CANVAS_WIDTH, CANVAS_HEIGHT, LV_COLOR_FORMAT_NATIVE);
-    
-    // Esta macro ahora se puede llamar sin problemas.
-    LV_DRAW_BUF_INIT_STATIC(draw_buf);
-    // --- FIN DE LA CORRECCIÓN ---
 
+    // Usamos la macro original que sí compila.
+    // La advertencia sobre 'missing-field-initializers' es benigna y puede ser ignorada.
+    LV_DRAW_BUF_DEFINE_STATIC(draw_buf, CANVAS_WIDTH, CANVAS_HEIGHT, LV_COLOR_FORMAT_NATIVE);
 
     if (bar_count > AUDIO_VISUALIZER_MAX_BARS) {
         ESP_LOGE(TAG, "Bar count %d exceeds max %d", bar_count, AUDIO_VISUALIZER_MAX_BARS);
@@ -89,6 +87,7 @@ lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count) {
 
     // Dentro del contenedor, creamos el canvas
     lv_obj_t* canvas = lv_canvas_create(cont);
+    // Asignar el buffer al canvas.
     lv_canvas_set_draw_buf(canvas, &draw_buf);
     lv_obj_set_size(canvas, lv_pct(100), lv_pct(100));
     lv_obj_center(canvas);
@@ -107,7 +106,7 @@ lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count) {
     viz->bar_color = lv_theme_get_color_primary(cont);
     viz->bg_color = lv_color_hex(0x222222);
 
-    // Guardamos el puntero a nuestros datos en el contenedor principal
+    // [FIX] Corregido el error de tipeo
     lv_obj_set_user_data(cont, viz);
     
     redraw_bars(viz);
