@@ -7,7 +7,7 @@
 #include "esp_log.h"
 #include <string.h>
 #include "components/audio_visualizer/audio_visualizer.h"
-#include "config.h" // <-- [FIX] Añadir include para MAX_VOLUME_PERCENTAGE
+#include "config.h"
 
 static const char *TAG = "SPEAKER_TEST_VIEW";
 
@@ -64,7 +64,14 @@ static void format_time(char *buf, size_t buf_size, uint32_t time_s) {
 static void ui_update_timer_cb(lv_timer_t *timer) {
     audio_player_state_t state = audio_manager_get_state();
     
+    // Si el timer sigue corriendo pero el estado es STOPPED, hay que limpiarlo
     if (state == AUDIO_STATE_STOPPED) {
+        // [DEFENSA] Si el timer llega aquí por alguna razón, nos aseguramos de que se limpie.
+        // La lógica principal de borrado está ahora en los handlers de cancelación/salida.
+        if (ui_update_timer) {
+            lv_timer_delete(ui_update_timer);
+            ui_update_timer = NULL;
+        }
         handle_play_pause_ui_update_task(NULL); // Actualiza el icono de play/pausa
         if (slider_widget) lv_slider_set_value(slider_widget, 0, LV_ANIM_OFF);
         if (time_current_label_widget) lv_label_set_text(time_current_label_widget, "00:00");
@@ -72,11 +79,6 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
         if (visualizer_widget) {
             uint8_t zero_values[VISUALIZER_BAR_COUNT] = {0};
             audio_visualizer_set_values(visualizer_widget, zero_values);
-        }
-
-        if (ui_update_timer) {
-            lv_timer_delete(ui_update_timer);
-            ui_update_timer = NULL;
         }
         return;
     }
@@ -110,7 +112,6 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
                 bool changed = false;
                 for(int i = 0; i < VISUALIZER_BAR_COUNT; i++) {
                     if (current_viz_data.bar_values[i] > 0) {
-                        // [CAMBIO] Reducimos la "gravedad" para una caída más suave
                         int new_val = (int)current_viz_data.bar_values[i] - 8; 
                         current_viz_data.bar_values[i] = (new_val < 0) ? 0 : (uint8_t)new_val;
                         changed = true;
@@ -127,14 +128,11 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
 }
 
 
-// --- [FIX] Funciones "Worker" para lv_async_call ---
-// Esta es la función que realmente actualiza la UI del volumen.
-// Se llamará de forma segura desde el lv_timer_handler.
+// --- Funciones "Worker" para lv_async_call ---
 static void update_volume_label_task(void *user_data) {
     if (volume_label_widget) {
         char vol_buf[16];
         uint8_t vol = audio_manager_get_volume();
-        // Muestra el porcentaje relativo al máximo permitido (0-100%)
         uint8_t display_vol = (vol * 100) / MAX_VOLUME_PERCENTAGE;
         const char * vol_icon = (vol == 0) ? LV_SYMBOL_MUTE : (vol < (MAX_VOLUME_PERCENTAGE / 2)) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
         
@@ -143,7 +141,6 @@ static void update_volume_label_task(void *user_data) {
     }
 }
 
-// Esta función actualiza el icono de play/pausa
 static void handle_play_pause_ui_update_task(void *user_data) {
     audio_player_state_t state = audio_manager_get_state();
     if (play_pause_btn_label) {
@@ -161,36 +158,52 @@ static void handle_ok_press_playing() {
     audio_player_state_t state = audio_manager_get_state();
     if (state == AUDIO_STATE_STOPPED) {
         if (audio_manager_play(current_song_path)) {
-            lv_async_call(handle_play_pause_ui_update_task, NULL); // <-- [FIX] Llamada asíncrona
+            lv_async_call(handle_play_pause_ui_update_task, NULL);
             if (ui_update_timer == NULL) {
                 ui_update_timer = lv_timer_create(ui_update_timer_cb, 50, NULL);
             }
         }
     } else if (state == AUDIO_STATE_PLAYING) {
         audio_manager_pause();
-        lv_async_call(handle_play_pause_ui_update_task, NULL); // <-- [FIX] Llamada asíncrona
+        lv_async_call(handle_play_pause_ui_update_task, NULL);
     } else if (state == AUDIO_STATE_PAUSED) {
         audio_manager_resume();
-        lv_async_call(handle_play_pause_ui_update_task, NULL); // <-- [FIX] Llamada asíncrona
+        lv_async_call(handle_play_pause_ui_update_task, NULL);
     }
 }
 
+// ========================[ INICIO DE LA CORRECCIÓN ]========================
 static void handle_cancel_press_playing() {
+    // 1. Detener el temporizador de la UI. ¡ESTO ES LO MÁS IMPORTANTE!
+    if (ui_update_timer) {
+        lv_timer_delete(ui_update_timer);
+        ui_update_timer = NULL;
+    }
+    
+    // 2. Detener la reproducción de audio
     audio_manager_stop(); 
+
+    // 3. Poner a NULL TODOS los punteros a widgets para evitar accesos "dangling"
     play_pause_btn_label = NULL;
     volume_label_widget = NULL;
     visualizer_widget = NULL;
+    slider_widget = NULL;               // <-- [FIX] Añadido
+    time_current_label_widget = NULL;   // <-- [FIX] Añadido
+    time_total_label_widget = NULL;     // <-- [FIX] Añadido
+    
+    // 4. Mostrar la siguiente vista (que limpiará la pantalla actual)
     show_file_explorer();
 }
+// =========================[ FIN DE LA CORRECCIÓN ]=========================
 
 static void handle_left_press_playing() {
     audio_manager_volume_down();
-    lv_async_call(update_volume_label_task, NULL); // <-- [FIX] Llamada asíncrona en lugar de directa
+    lv_async_call(update_volume_label_task, NULL);
 }
 
 static void handle_right_press_playing() {
     audio_manager_volume_up();
-    lv_async_call(update_volume_label_task, NULL); // <-- [FIX] Llamada asíncrona en lugar de directa
+    lv_async_call(update_volume_label_task, NULL);
 }
 
 // --- Resto de funciones (sin cambios en su lógica interna) ---
@@ -243,7 +256,7 @@ static void create_now_playing_view(const char *file_path) {
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_LEFT, 0);
 
     volume_label_widget = lv_label_create(top_cont);
-    update_volume_label_task(NULL); // Llamada inicial segura
+    update_volume_label_task(NULL);
     lv_obj_set_style_text_font(volume_label_widget, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(volume_label_widget, LV_TEXT_ALIGN_RIGHT, 0);
 
@@ -286,6 +299,7 @@ static void handle_ok_press_initial() {
 }
 
 static void handle_cancel_press_initial() {
+    // [DEFENSA] Nos aseguramos de que no quede un timer activo al salir de toda la vista de test
     if (ui_update_timer) {
         lv_timer_delete(ui_update_timer);
         ui_update_timer = NULL;
