@@ -1,20 +1,21 @@
 # Audio Manager
 
 ## Description
-This component manages audio playback of WAV files using the I2S peripheral. It is designed to run in a dedicated FreeRTOS task, allowing for non-blocking audio playback control.
+This component manages audio playback of WAV files using the I2S peripheral. It is designed to run in a dedicated FreeRTOS task, allowing for non-blocking audio playback control from the main application or UI.
 
 ## Features
--   Plays `.wav` files from the filesystem (e.g., SD card).
+-   Plays `.wav` files from a filesystem (e.g., SD card).
 -   Supports basic playback controls: Play, Pause, Resume, and Stop.
--   Provides volume control (Up/Down).
+-   Provides volume control (Up/Down/Set).
 -   Exposes functions to get the current playback state, total duration, and progress.
--   Handles I2S driver initialization and teardown automatically.
--   Parses basic WAV headers to configure I2S parameters like sample rate and bit depth.
+-   Handles I2S driver initialization and teardown automatically based on the WAV file's properties.
+-   Parses standard WAV headers to configure I2S parameters like sample rate and bit depth.
+-   **Provides real-time audio data for a visualizer** via a FreeRTOS queue.
 
 ## How to Use
 
 1.  **Initialize the Manager:**
-    Call this function once at application startup. It sets up initial state but does not configure hardware yet.
+    Call this function once at application startup. It sets up the initial state.
     ```cpp
     #include "controllers/audio_manager/audio_manager.h"
     
@@ -67,10 +68,32 @@ This component manages audio playback of WAV files using the I2S peripheral. It 
     // Update UI based on the values...
     ```
 
+6.  **Using the Audio Visualizer:**
+    The manager processes audio data and sends peak values to a queue, which can be read by the UI to draw a spectrum visualizer.
+    ```cpp
+    #include "controllers/audio_manager/audio_manager.h"
+
+    // In your UI update task or timer:
+    QueueHandle_t viz_queue = audio_manager_get_visualizer_queue();
+    visualizer_data_t viz_data;
+
+    if (viz_queue != NULL) {
+        // Try to receive new data without blocking. 
+        // xQueueReceive or xQueuePeek can be used.
+        if (xQueueReceive(viz_queue, &viz_data, 0) == pdPASS) {
+            // New data is available in viz_data.bar_values
+            // Update your LVGL visualizer widget here.
+            // for (int i = 0; i < VISUALIZER_BAR_COUNT; i++) {
+            //    update_bar(i, viz_data.bar_values[i]);
+            // }
+        }
+    }
+    ```
+
 ## Dependencies
 -   Requires an I2S-compatible audio codec/amplifier (e.g., MAX98357A) connected to the I2S pins defined in `config.h`.
 -   Depends on a mounted filesystem (like the `sd_card_manager`) to access audio files.
 
 ## Limitations
--   Currently supports only WAV file format.
--   The WAV parser is basic and may not support all sub-chunks or variations of the format. It expects standard `fmt` and `data` chunks.
+-   Currently supports only WAV file format (16-bit or 8-bit).
+-   The WAV parser is basic and expects standard `fmt` and `data` chunks. It may not support all variations of the format.
