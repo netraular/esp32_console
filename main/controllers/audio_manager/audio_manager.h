@@ -10,7 +10,8 @@
 typedef enum {
     AUDIO_STATE_STOPPED,
     AUDIO_STATE_PLAYING,
-    AUDIO_STATE_PAUSED
+    AUDIO_STATE_PAUSED,
+    AUDIO_STATE_ERROR // [NUEVO] Estado para manejar errores de lectura (ej. SD desconectada)
 } audio_player_state_t;
 
 /**

@@ -25,11 +25,11 @@ extern "C" void app_main(void) {
         return;
     }
 
-    // 1.1. Inicialización de la tarjeta SD (usa el bus SPI ya inicializado por la pantalla)
+    // 1.1. Inicialización del HARDWARE para la tarjeta SD. El montaje se hará bajo demanda.
     if (sd_manager_init()) {
-        ESP_LOGI(TAG, "SD Card manager inicializado correctamente.");
+        ESP_LOGI(TAG, "Hardware para SD Card manager inicializado correctamente.");
     } else {
-        ESP_LOGE(TAG, "Fallo al inicializar SD Card manager.");
+        ESP_LOGE(TAG, "Fallo al inicializar hardware para SD Card manager.");
     }
 
     // 2. Inicialización de los botones

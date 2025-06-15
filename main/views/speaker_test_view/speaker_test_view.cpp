@@ -16,6 +16,7 @@ static const char *TAG = "SPEAKER_TEST_VIEW";
 static lv_obj_t *view_parent = NULL;
 static lv_obj_t *play_pause_btn_label = NULL;
 static char current_song_path[256];
+static bool is_exiting = false;
 
 // --- Widgets de la UI ---
 static lv_obj_t *slider_widget = NULL;
@@ -24,12 +25,14 @@ static lv_obj_t *time_total_label_widget = NULL;
 static lv_timer_t *ui_update_timer = NULL;
 static lv_obj_t *volume_label_widget = NULL;
 static lv_obj_t *visualizer_widget = NULL;
+static lv_obj_t *info_label_widget = NULL;
 static visualizer_data_t current_viz_data;
 static bool viz_data_received = false;
 
-// --- Prototipos de funciones worker para lv_async_call ---
+// --- Prototipos de funciones worker ---
 static void update_volume_label_task(void *user_data);
 static void handle_play_pause_ui_update_task(void *user_data);
+static void stop_audio_task(void* user_data);
 
 // --- Prototipos del resto de funciones ---
 static void create_initial_speaker_view();
@@ -44,7 +47,7 @@ static void handle_cancel_press_initial();
 static void ui_update_timer_cb(lv_timer_t *timer);
 static void handle_left_press_playing();
 static void handle_right_press_playing();
-
+static void cleanup_player_and_return_to_initial_view();
 
 // --- Funciones de utilidad ---
 static bool is_wav_file(const char *path) {
@@ -61,15 +64,27 @@ static void format_time(char *buf, size_t buf_size, uint32_t time_s) {
     snprintf(buf, buf_size, "%02lu:%02lu", time_s / 60, time_s % 60);
 }
 
-// --- Timer UI (ya se ejecuta en el contexto correcto) ---
+// --- Timer UI ---
 static void ui_update_timer_cb(lv_timer_t *timer) {
     audio_player_state_t state = audio_manager_get_state();
     
-    if (state == AUDIO_STATE_STOPPED) {
-        if (ui_update_timer) {
-            lv_timer_delete(ui_update_timer);
-            ui_update_timer = NULL;
-        }
+    // Si se solicitó salir y el manager confirma que está parado, limpiamos la UI.
+    if (is_exiting && state == AUDIO_STATE_STOPPED) {
+        ESP_LOGI(TAG, "Audio manager confirmed STOPPED state. Cleaning up UI.");
+        cleanup_player_and_return_to_initial_view();
+        return; // Detenemos el procesamiento del timer para este ciclo.
+    }
+    
+    if (state == AUDIO_STATE_ERROR) {
+        ESP_LOGW(TAG, "Audio manager reported an error. Unmounting SD and returning to initial view.");
+        sd_manager_unmount(); 
+        cleanup_player_and_return_to_initial_view();
+        return;
+    }
+
+    // Si la canción termina por sí misma
+    if (!is_exiting && state == AUDIO_STATE_STOPPED) {
+        ESP_LOGI(TAG, "Song finished naturally. Resetting UI to initial playback state.");
         handle_play_pause_ui_update_task(NULL);
         if (slider_widget) lv_slider_set_value(slider_widget, 0, LV_ANIM_OFF);
         if (time_current_label_widget) lv_label_set_text(time_current_label_widget, "00:00");
@@ -77,6 +92,12 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
         if (visualizer_widget) {
             uint8_t zero_values[VISUALIZER_BAR_COUNT] = {0};
             audio_visualizer_set_values(visualizer_widget, zero_values);
+        }
+        
+        // Detenemos el timer para ahorrar CPU, se reactivará si se pulsa play.
+        if (ui_update_timer) {
+            lv_timer_delete(ui_update_timer);
+            ui_update_timer = NULL;
         }
         return;
     }
@@ -131,17 +152,10 @@ static void update_volume_label_task(void *user_data) {
     if (volume_label_widget) {
         char vol_buf[16];
         uint8_t vol = audio_manager_get_volume();
-
-        // --- [FIX] CALCULAR Y REDONDEAR EL VOLUMEN PARA MOSTRARLO ---
-        // 1. Convertir el volumen físico (0-35) a la escala de display (0-100)
         uint8_t raw_display_vol = (vol * 100) / MAX_VOLUME_PERCENTAGE;
-        // 2. Redondear el resultado al múltiplo de 5 más cercano
-        const int volume_step = 5; // Podríamos usar la macro del audio_manager si fuera accesible
+        const int volume_step = 5;
         uint8_t display_vol = (uint8_t)(roundf((float)raw_display_vol / volume_step) * volume_step);
-        // --- [FIN DEL FIX] ---
-
         const char * vol_icon = (display_vol == 0) ? LV_SYMBOL_MUTE : (vol < (MAX_VOLUME_PERCENTAGE / 2)) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
-        
         snprintf(vol_buf, sizeof(vol_buf), "%s %u%%", vol_icon, display_vol);
         lv_label_set_text(volume_label_widget, vol_buf);
     }
@@ -158,23 +172,27 @@ static void handle_play_pause_ui_update_task(void *user_data) {
     }
 }
 
+// Tarea asíncrona para detener el audio de forma segura
+static void stop_audio_task(void* user_data) {
+    // Esta llamada es ahora segura porque no se ejecuta en un callback crítico.
+    audio_manager_stop();
+}
+
 // --- Handlers de botones ---
 
 static void handle_ok_press_playing() {
     audio_player_state_t state = audio_manager_get_state();
     if (state == AUDIO_STATE_STOPPED) {
-        // --- [FIX] GESTIONAR EL FALLO AL INICIAR LA REPRODUCCIÓN ---
+        // Si estamos saliendo, no permitir iniciar una nueva reproducción
+        if (is_exiting) return;
         if (audio_manager_play(current_song_path)) {
-            // Éxito: actualizar UI y arrancar timer
             lv_async_call(handle_play_pause_ui_update_task, NULL);
             if (ui_update_timer == NULL) {
                 ui_update_timer = lv_timer_create(ui_update_timer_cb, 50, NULL);
             }
         } else {
-            // Fallo: El audio no pudo iniciarse (ej: error al abrir archivo)
-            // Volvemos a la pantalla anterior (explorador de archivos)
-            ESP_LOGE(TAG, "Failed to start audio playback. Returning to file explorer.");
-            handle_cancel_press_playing(); 
+            ESP_LOGE(TAG, "Failed to start audio playback. Returning to initial view.");
+            cleanup_player_and_return_to_initial_view();
         }
     } else if (state == AUDIO_STATE_PLAYING) {
         audio_manager_pause();
@@ -184,19 +202,16 @@ static void handle_ok_press_playing() {
         lv_async_call(handle_play_pause_ui_update_task, NULL);
     }
 }
+
 static void handle_cancel_press_playing() {
-    if (ui_update_timer) {
-        lv_timer_delete(ui_update_timer);
-        ui_update_timer = NULL;
-    }
-    audio_manager_stop(); 
-    play_pause_btn_label = NULL;
-    volume_label_widget = NULL;
-    visualizer_widget = NULL;
-    slider_widget = NULL;
-    time_current_label_widget = NULL;
-    time_total_label_widget = NULL;
-    show_file_explorer();
+    if (is_exiting) return; // Prevenir múltiples llamadas
+
+    ESP_LOGI(TAG, "Cancel pressed. Requesting audio stop asynchronously.");
+    is_exiting = true;
+    button_manager_unregister_view_handlers(); // Desactivar botones inmediatamente
+    
+    // Llamar a la parada de forma asíncrona para no bloquear el timer del botón
+    lv_async_call(stop_audio_task, NULL);
 }
 
 static void handle_left_press_playing() {
@@ -210,6 +225,24 @@ static void handle_right_press_playing() {
 }
 
 // --- Resto de funciones ---
+
+static void cleanup_player_and_return_to_initial_view() {
+    if (ui_update_timer) {
+        lv_timer_delete(ui_update_timer);
+        ui_update_timer = NULL;
+    }
+    // audio_manager_stop() ya se ha llamado de forma asíncrona.
+    
+    play_pause_btn_label = NULL;
+    volume_label_widget = NULL;
+    visualizer_widget = NULL;
+    slider_widget = NULL;
+    time_current_label_widget = NULL;
+    time_total_label_widget = NULL;
+    
+    lv_obj_clean(view_parent);
+    create_initial_speaker_view();
+}
 
 static void on_audio_file_selected(const char *path) {
     if (is_wav_file(path)) {
@@ -225,7 +258,6 @@ static void on_explorer_exit_speaker() {
 }
 
 static void show_file_explorer() {
-    if (!sd_manager_is_mounted()) return;
     lv_obj_clean(view_parent);
     lv_obj_t * explorer_container = lv_obj_create(view_parent);
     lv_obj_remove_style_all(explorer_container);
@@ -235,10 +267,12 @@ static void show_file_explorer() {
 }
 
 static void create_now_playing_view(const char *file_path) {
+    is_exiting = false; // Resetear el estado al crear la vista
     lv_obj_clean(view_parent);
     strncpy(current_song_path, file_path, sizeof(current_song_path) - 1);
     viz_data_received = false;
 
+    // ... (el resto del código de creación de la UI no cambia)
     lv_obj_t *main_cont = lv_obj_create(view_parent);
     lv_obj_remove_style_all(main_cont);
     lv_obj_set_size(main_cont, lv_pct(100), lv_pct(100));
@@ -266,33 +300,27 @@ static void create_now_playing_view(const char *file_path) {
     visualizer_widget = audio_visualizer_create(main_cont, VISUALIZER_BAR_COUNT);
     lv_obj_set_size(visualizer_widget, lv_pct(100), lv_pct(40));
     
-    // --- [CAMBIO] Contenedor de progreso rediseñado para una mejor disposición ---
     lv_obj_t *progress_cont = lv_obj_create(main_cont);
     lv_obj_remove_style_all(progress_cont);
     lv_obj_set_size(progress_cont, lv_pct(95), LV_SIZE_CONTENT);
     lv_obj_clear_flag(progress_cont, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_pad_top(progress_cont, 10, 0); 
 
-    // 1. Slider de progreso
     slider_widget = lv_slider_create(progress_cont);
     lv_obj_remove_flag(slider_widget, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_width(slider_widget, lv_pct(100));
     lv_obj_align(slider_widget, LV_ALIGN_TOP_MID, 0, 0);
 
-    // 2. Estilo del slider
     lv_color_t indicator_color = lv_palette_main(LV_PALETTE_BLUE);
     lv_obj_set_style_bg_color(slider_widget, indicator_color, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(slider_widget, lv_color_mix(indicator_color, lv_color_black(), LV_OPA_50), LV_PART_KNOB);
 
-    // --- [CAMBIO] Cambiar la forma del pomo a un rectángulo con bordes redondeados ---
     lv_obj_set_style_radius(slider_widget, 4, LV_PART_KNOB);
 
-    // 3. Etiqueta de tiempo actual (debajo-izquierda del slider)
     time_current_label_widget = lv_label_create(progress_cont);
     lv_label_set_text(time_current_label_widget, "00:00");
     lv_obj_align_to(time_current_label_widget, slider_widget, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
 
-    // 4. Etiqueta de tiempo total (debajo-derecha del slider)
     time_total_label_widget = lv_label_create(progress_cont);
     lv_label_set_text(time_total_label_widget, "??:??");
     lv_obj_align_to(time_total_label_widget, slider_widget, LV_ALIGN_OUT_BOTTOM_RIGHT, 0, 5);
@@ -312,7 +340,21 @@ static void create_now_playing_view(const char *file_path) {
 }
 
 static void handle_ok_press_initial() {
-    show_file_explorer();
+    ESP_LOGI(TAG, "Botón OK presionado. Forzando re-montaje de la SD...");
+    
+    sd_manager_unmount();
+
+    if (sd_manager_mount()) {
+        ESP_LOGI(TAG, "Re-montaje exitoso. Abriendo el explorador de archivos.");
+        show_file_explorer();
+    } else {
+        ESP_LOGW(TAG, "El re-montaje de la SD falló. Mostrando mensaje de error.");
+        if (info_label_widget) {
+            lv_label_set_text(info_label_widget, "Fallo al leer la SD.\n\n"
+                                                 "Revise la tarjeta y\n"
+                                                 "presione OK para reintentar.");
+        }
+    }
 }
 
 static void handle_cancel_press_initial() {
@@ -330,10 +372,11 @@ static void create_initial_speaker_view() {
     lv_label_set_text(label, "Test Speaker");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
 
-    lv_obj_t *info_label = lv_label_create(view_parent);
-    lv_label_set_text(info_label, "Presiona OK para\nseleccionar un archivo de audio");
-    lv_obj_set_style_text_align(info_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_center(info_label);
+    info_label_widget = lv_label_create(view_parent);
+    lv_obj_set_style_text_align(info_label_widget, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_center(info_label_widget);
+
+    lv_label_set_text(info_label_widget, "Presiona OK para\nseleccionar un archivo de audio");
 
     button_manager_register_view_handler(BUTTON_OK, handle_ok_press_initial);
     button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press_initial);

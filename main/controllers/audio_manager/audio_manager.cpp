@@ -43,9 +43,12 @@ static QueueHandle_t visualizer_queue = NULL;
 
 // --- AJUSTES DE VOLUMEN ---
 #define VOLUME_STEP 5
-static volatile uint8_t current_volume_percentage = 30;
-static volatile float volume_factor = 0.3f;
+static volatile uint8_t current_volume_percentage = 10;
+static volatile float volume_factor = 0.1f;
 static SemaphoreHandle_t volume_mutex = NULL; 
+
+// --- SEMÁFORO DE SINCRONIZACIÓN DE TAREAS ---
+static SemaphoreHandle_t playback_task_terminated_sem = NULL;
 
 // Prototipos de funciones
 static void audio_playback_task(void *arg);
@@ -79,6 +82,13 @@ void audio_manager_init(void) {
         ESP_LOGI(TAG, "Volume mutex created successfully.");
     }
 
+    playback_task_terminated_sem = xSemaphoreCreateBinary();
+    if (playback_task_terminated_sem == NULL) {
+        ESP_LOGE(TAG, "FAILED to create playback termination semaphore!");
+    } else {
+        xSemaphoreGive(playback_task_terminated_sem);
+    }
+
     ESP_LOGI(TAG, "Audio Manager Initialized.");
     player_state = AUDIO_STATE_STOPPED;
     audio_manager_set_volume(current_volume_percentage);
@@ -95,6 +105,12 @@ bool audio_manager_play(const char *filepath) {
         ESP_LOGI(TAG, "[LOG] Player is not stopped, stopping it first.");
         audio_manager_stop();
     }
+
+    if (xSemaphoreTake(playback_task_terminated_sem, pdMS_TO_TICKS(100)) == pdFALSE) {
+        ESP_LOGE(TAG, "Could not start new playback, previous task has not terminated yet.");
+        return false;
+    }
+
     strncpy(current_filepath, filepath, sizeof(current_filepath) - 1);
     total_bytes_played = 0;
     song_duration_s = 0;
@@ -102,6 +118,7 @@ bool audio_manager_play(const char *filepath) {
     BaseType_t result = xTaskCreate(audio_playback_task, "audio_playback", 4096, NULL, 5, &playback_task_handle);
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create audio playback task");
+        xSemaphoreGive(playback_task_terminated_sem);
         player_state = AUDIO_STATE_STOPPED;
         return false;
     }
@@ -111,11 +128,29 @@ bool audio_manager_play(const char *filepath) {
 
 void audio_manager_stop(void) {
     ESP_LOGI(TAG, "[LOG] audio_manager_stop called. Current state: %d", player_state);
-    if (player_state != AUDIO_STATE_STOPPED) {
+    
+    audio_player_state_t previous_state = player_state;
+
+    if (previous_state != AUDIO_STATE_STOPPED) {
         player_state = AUDIO_STATE_STOPPED;
+
+        if (previous_state == AUDIO_STATE_PAUSED && tx_chan) {
+            ESP_LOGI(TAG, "[LOG] Re-enabling I2S channel to unblock task...");
+            // [CORRECCIÓN] Usar la API antigua
+            i2s_channel_enable(tx_chan);
+        }
+
         if (playback_task_handle != NULL) {
-             ESP_LOGI(TAG, "[LOG] Waiting for task (%p) to self-terminate...", playback_task_handle);
-             vTaskDelay(pdMS_TO_TICKS(150)); 
+             ESP_LOGI(TAG, "[LOG] Waiting for task (%p) to confirm termination...", playback_task_handle);
+
+             if (xSemaphoreTake(playback_task_terminated_sem, pdMS_TO_TICKS(1000)) == pdTRUE) {
+                 ESP_LOGI(TAG, "[LOG] Task termination confirmed.");
+                 xSemaphoreGive(playback_task_terminated_sem);
+             } else {
+                 ESP_LOGE(TAG, "[LOG] Timed out waiting for playback task to terminate!");
+                 xSemaphoreGive(playback_task_terminated_sem);
+             }
+             
              playback_task_handle = NULL;
              ESP_LOGI(TAG, "[LOG] Playback task handle nulled by stop function.");
         }
@@ -126,17 +161,25 @@ void audio_manager_stop(void) {
 
 void audio_manager_pause(void) {
     if (player_state == AUDIO_STATE_PLAYING && tx_chan) {
-        player_state = AUDIO_STATE_PAUSED;
-        i2s_channel_disable(tx_chan);
-        ESP_LOGI(TAG, "Audio Paused.");
+        // [CORRECCIÓN] Usar la API antigua
+        if (i2s_channel_disable(tx_chan) == ESP_OK) {
+            player_state = AUDIO_STATE_PAUSED;
+            ESP_LOGI(TAG, "Audio Paused.");
+        } else {
+            ESP_LOGE(TAG, "Failed to disable I2S channel.");
+        }
     }
 }
 
 void audio_manager_resume(void) {
     if (player_state == AUDIO_STATE_PAUSED && tx_chan) {
-        player_state = AUDIO_STATE_PLAYING;
-        i2s_channel_enable(tx_chan);
-        ESP_LOGI(TAG, "Audio Resumed.");
+        // [CORRECCIÓN] Usar la API antigua
+        if (i2s_channel_enable(tx_chan) == ESP_OK) {
+            player_state = AUDIO_STATE_PLAYING;
+            ESP_LOGI(TAG, "Audio Resumed.");
+        } else {
+            ESP_LOGE(TAG, "Failed to enable I2S channel.");
+        }
     }
 }
 
@@ -227,17 +270,18 @@ static void audio_playback_task(void *arg) {
         ESP_LOGE(TAG, "Failed to open file: %s, errno: %s (%d)", current_filepath, strerror(errno), errno);
         player_state = AUDIO_STATE_STOPPED;
         playback_task_handle = NULL;
+        xSemaphoreGive(playback_task_terminated_sem);
         vTaskDelete(NULL);
         return;
     }
 
     if (fread(&wav_file_info, 1, 12, fp) != 12) {
         ESP_LOGE(TAG, "Failed to read RIFF header.");
-        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; vTaskDelete(NULL); return;
+        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; xSemaphoreGive(playback_task_terminated_sem); vTaskDelete(NULL); return;
     }
     if (strncmp(wav_file_info.riff_header, "RIFF", 4) != 0 || strncmp(wav_file_info.wave_header, "WAVE", 4) != 0) {
         ESP_LOGE(TAG, "Invalid RIFF/WAVE header.");
-        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; vTaskDelete(NULL); return;
+        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; xSemaphoreGive(playback_task_terminated_sem); vTaskDelete(NULL); return;
     }
     char chunk_id[4];
     uint32_t chunk_size;
@@ -252,7 +296,7 @@ static void audio_playback_task(void *arg) {
     }
     if (!fmt_found) {
         ESP_LOGE(TAG, "'fmt ' chunk not found.");
-        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; vTaskDelete(NULL); return;
+        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; xSemaphoreGive(playback_task_terminated_sem); vTaskDelete(NULL); return;
     }
     bool data_found = false;
     while(fread(wav_file_info.data_header, 1, 4, fp) == 4 && fread(&wav_file_info.data_size, 1, 4, fp) == 4) {
@@ -264,7 +308,7 @@ static void audio_playback_task(void *arg) {
     }
     if (!data_found) {
         ESP_LOGE(TAG, "'data' chunk not found.");
-        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; vTaskDelete(NULL); return;
+        fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; xSemaphoreGive(playback_task_terminated_sem); vTaskDelete(NULL); return;
     }
     ESP_LOGI(TAG, "WAV Info: SR=%lu, BPS=%u, CH=%u, Data Size=%lu", 
              wav_file_info.sample_rate, wav_file_info.bits_per_sample, 
@@ -309,27 +353,26 @@ static void audio_playback_task(void *arg) {
     ESP_LOGI(TAG, "Starting playback... Duration: %lu seconds. Initial Volume: %u%% (physical)", song_duration_s, audio_manager_get_volume());
     total_bytes_played = 0;
     
-    while (player_state != AUDIO_STATE_STOPPED && total_bytes_played < wav_file_info.data_size) {
-        while (player_state == AUDIO_STATE_PAUSED) {
-            vTaskDelay(pdMS_TO_TICKS(100));
-            if (player_state == AUDIO_STATE_STOPPED) goto cleanup;
+    while (total_bytes_played < wav_file_info.data_size) {
+        if (player_state == AUDIO_STATE_STOPPED) {
+            break;
         }
-
-        // --- LOGS DE DIAGNÓSTICO ALREDEDOR DE LA LECTURA ---
-        ESP_LOGD(TAG, "Attempting to read %d bytes from file...", buffer_size);
-        bytes_read = fread(buffer, 1, buffer_size, fp);
         
+        if (player_state == AUDIO_STATE_PAUSED) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+        
+        bytes_read = fread(buffer, 1, buffer_size, fp);
         if (bytes_read == 0) {
             if (feof(fp)) {
                 ESP_LOGI(TAG, "End of file reached.");
             } else if (ferror(fp)) {
-                // Este es el log más importante si la lectura falla
                 ESP_LOGE(TAG, "A read error occurred on the file stream. errno: %s (%d)", strerror(errno), errno);
+                player_state = AUDIO_STATE_ERROR;
             }
-            break; // Salir del bucle
+            break;
         }
-        ESP_LOGD(TAG, "Successfully read %d bytes.", bytes_read);
-        // --- FIN DE LOGS DE DIAGNÓSTICO ---
 
         if (visualizer_queue != NULL && wav_file_info.bits_per_sample == 16) {
             visualizer_data_t viz_data;
@@ -402,19 +445,26 @@ static void audio_playback_task(void *arg) {
         total_bytes_played += bytes_written;
     }
 
-cleanup:
     ESP_LOGI(TAG, "[LOG] Playback task (%p) entering cleanup.", playback_task_handle);
     free(buffer);
     fclose(fp);
     if(tx_chan) {
         ESP_LOGI(TAG, "Disabling and deleting I2S channel.");
+        // [CORRECCIÓN] No hay `i2s_channel_tx_resume` aquí.
+        // La propia función `i2s_channel_disable` debería ser suficiente
+        // para detener el flujo antes de borrar el canal.
         i2s_channel_disable(tx_chan);
         i2s_del_channel(tx_chan);
         tx_chan = NULL;
     }
     
-    player_state = AUDIO_STATE_STOPPED;
+    if (player_state != AUDIO_STATE_ERROR) {
+        player_state = AUDIO_STATE_STOPPED;
+    }
     playback_task_handle = NULL;
+    
+    xSemaphoreGive(playback_task_terminated_sem);
+
     ESP_LOGI(TAG, "[LOG] Playback task self-deleting.");
     vTaskDelete(NULL);
 }
