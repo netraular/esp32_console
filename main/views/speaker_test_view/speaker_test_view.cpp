@@ -75,10 +75,16 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
         return; // Detenemos el procesamiento del timer para este ciclo.
     }
     
-    if (state == AUDIO_STATE_ERROR) {
-        ESP_LOGW(TAG, "Audio manager reported an error. Unmounting SD and returning to initial view.");
-        sd_manager_unmount(); 
-        cleanup_player_and_return_to_initial_view();
+    // Si se detecta un error de audio (ej. SD extraída) y no estamos ya saliendo...
+    if (state == AUDIO_STATE_ERROR && !is_exiting) {
+        ESP_LOGW(TAG, "Audio manager reported an error. Initiating safe shutdown.");
+        is_exiting = true;                          // 1. Marcar que estamos en proceso de salida.
+        button_manager_unregister_view_handlers();  // 2. Desactivar botones para evitar más interacciones.
+        sd_manager_unmount();                       // 3. Desmontar la SD inmediatamente.
+        lv_async_call(stop_audio_task, NULL);       // 4. Pedir al audio manager que se detenga de forma segura.
+        
+        // El resto de la limpieza de la UI ocurrirá en el siguiente tick del timer,
+        // cuando se cumpla la condición `is_exiting && state == AUDIO_STATE_STOPPED`.
         return;
     }
 
