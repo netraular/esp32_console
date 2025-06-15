@@ -163,11 +163,18 @@ static void handle_play_pause_ui_update_task(void *user_data) {
 static void handle_ok_press_playing() {
     audio_player_state_t state = audio_manager_get_state();
     if (state == AUDIO_STATE_STOPPED) {
+        // --- [FIX] GESTIONAR EL FALLO AL INICIAR LA REPRODUCCIÓN ---
         if (audio_manager_play(current_song_path)) {
+            // Éxito: actualizar UI y arrancar timer
             lv_async_call(handle_play_pause_ui_update_task, NULL);
             if (ui_update_timer == NULL) {
                 ui_update_timer = lv_timer_create(ui_update_timer_cb, 50, NULL);
             }
+        } else {
+            // Fallo: El audio no pudo iniciarse (ej: error al abrir archivo)
+            // Volvemos a la pantalla anterior (explorador de archivos)
+            ESP_LOGE(TAG, "Failed to start audio playback. Returning to file explorer.");
+            handle_cancel_press_playing(); 
         }
     } else if (state == AUDIO_STATE_PLAYING) {
         audio_manager_pause();
@@ -177,7 +184,6 @@ static void handle_ok_press_playing() {
         lv_async_call(handle_play_pause_ui_update_task, NULL);
     }
 }
-
 static void handle_cancel_press_playing() {
     if (ui_update_timer) {
         lv_timer_delete(ui_update_timer);

@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include "freertos/queue.h"
-#include <math.h> // <-- AÑADIR/ASEGURARSE DE QUE ESTÁ ESTA LÍNEA
+#include <math.h> 
 #include "freertos/semphr.h"
 
 static const char *TAG = "AUDIO_MGR";
@@ -54,12 +54,14 @@ static void audio_manager_set_volume(uint8_t percentage) {
     if (volume_mutex && xSemaphoreTake(volume_mutex, portMAX_DELAY) == pdTRUE) {
         uint8_t old_percentage = current_volume_percentage;
 
-        if (percentage > MAX_VOLUME_PERCENTAGE) percentage = MAX_VOLUME_PERCENTAGE;
+        if (percentage > MAX_VOLUME_PERCENTAGE) {
+            percentage = MAX_VOLUME_PERCENTAGE;
+        }
         
         current_volume_percentage = percentage;
         volume_factor = (float)current_volume_percentage / 100.0f; 
         
-        ESP_LOGI(TAG, "[LOG] Volume changed: %u%% -> %u%% (factor: %.2f)", old_percentage, current_volume_percentage, volume_factor);
+        ESP_LOGI(TAG, "[LOG] Volume changed: %u%% -> %u%% (physical), factor: %.2f", old_percentage, current_volume_percentage, volume_factor);
 
         xSemaphoreGive(volume_mutex);
     } else {
@@ -153,70 +155,50 @@ uint32_t audio_manager_get_progress_s(void) {
     return 0;
 }
 
-// --- [FIX] LÓGICA DE VOLUMEN CORREGIDA Y ROBUSTA ---
 void audio_manager_volume_up(void) {
     ESP_LOGI(TAG, "[LOG] volume_up requested.");
     uint8_t current_physical_vol = 0;
+    
     if (volume_mutex && xSemaphoreTake(volume_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         current_physical_vol = current_volume_percentage;
         xSemaphoreGive(volume_mutex);
     } else {
-        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in volume_up!");
+        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in volume_up! Aborting.");
         return;
     }
 
-    // 1. Convertir el valor físico (0-35) a la escala de display (0-100)
     uint8_t raw_display_vol = (current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE;
-
-    // 2. Redondear al múltiplo de 5 más cercano para tener un punto de partida estable
     uint8_t current_snapped_vol = (uint8_t)(roundf((float)raw_display_vol / VOLUME_STEP) * VOLUME_STEP);
-    
-    // 3. Calcular el siguiente paso hacia arriba desde el punto de partida estable
     uint8_t new_display_vol = current_snapped_vol + VOLUME_STEP;
-
-    // 4. Limitar a 100
     if (new_display_vol > 100) {
         new_display_vol = 100;
     }
-    
-    // 5. Convertir de vuelta a la escala física (0-35)
     uint8_t new_physical_vol = (new_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
-
     audio_manager_set_volume(new_physical_vol);
 }
 
 void audio_manager_volume_down(void) {
     ESP_LOGI(TAG, "[LOG] volume_down requested.");
     uint8_t current_physical_vol = 0;
+
     if (volume_mutex && xSemaphoreTake(volume_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         current_physical_vol = current_volume_percentage;
         xSemaphoreGive(volume_mutex);
     } else {
-        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in volume_down!");
+        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in volume_down! Aborting.");
         return;
     }
     
-    // 1. Convertir el valor físico (0-35) a la escala de display (0-100)
     uint8_t raw_display_vol = (current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE;
-
-    // 2. Redondear al múltiplo de 5 más cercano para tener un punto de partida estable
     uint8_t current_snapped_vol = (uint8_t)(roundf((float)raw_display_vol / VOLUME_STEP) * VOLUME_STEP);
-
-    // 3. Calcular el siguiente paso hacia abajo
     int temp_display_vol = (int)current_snapped_vol - VOLUME_STEP;
-
-    // 4. Limitar a 0
     if (temp_display_vol < 0) {
         temp_display_vol = 0;
     }
     uint8_t new_display_vol = (uint8_t)temp_display_vol;
-
-    // 5. Convertir de vuelta a la escala física (0-35)
     uint8_t new_physical_vol = (new_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
-
     audio_manager_set_volume(new_physical_vol);
 }
-// --- [FIN DEL FIX] ---
 
 uint8_t audio_manager_get_volume(void) {
     uint8_t vol = 0;
@@ -224,7 +206,7 @@ uint8_t audio_manager_get_volume(void) {
         vol = current_volume_percentage;
         xSemaphoreGive(volume_mutex);
     } else {
-        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in get_volume! Returning stale data.");
+        ESP_LOGE(TAG, "[LOG] FAILED to take volume mutex in get_volume! Returning potentially stale data.");
         vol = current_volume_percentage;
     }
     return vol;
@@ -242,7 +224,7 @@ static void audio_playback_task(void *arg) {
 
     FILE *fp = fopen(current_filepath, "rb");
     if (fp == NULL) {
-        ESP_LOGE(TAG, "Failed to open file: %s, errno: %s", current_filepath, strerror(errno));
+        ESP_LOGE(TAG, "Failed to open file: %s, errno: %s (%d)", current_filepath, strerror(errno), errno);
         player_state = AUDIO_STATE_STOPPED;
         playback_task_handle = NULL;
         vTaskDelete(NULL);
@@ -324,7 +306,7 @@ static void audio_playback_task(void *arg) {
     uint8_t *buffer = (uint8_t*)malloc(buffer_size);
     size_t bytes_read, bytes_written;
 
-    ESP_LOGI(TAG, "Starting playback... Duration: %lu seconds. Volume: %u%%", song_duration_s, current_volume_percentage);
+    ESP_LOGI(TAG, "Starting playback... Duration: %lu seconds. Initial Volume: %u%% (physical)", song_duration_s, audio_manager_get_volume());
     total_bytes_played = 0;
     
     while (player_state != AUDIO_STATE_STOPPED && total_bytes_played < wav_file_info.data_size) {
@@ -333,8 +315,21 @@ static void audio_playback_task(void *arg) {
             if (player_state == AUDIO_STATE_STOPPED) goto cleanup;
         }
 
+        // --- LOGS DE DIAGNÓSTICO ALREDEDOR DE LA LECTURA ---
+        ESP_LOGD(TAG, "Attempting to read %d bytes from file...", buffer_size);
         bytes_read = fread(buffer, 1, buffer_size, fp);
-        if (bytes_read == 0) break;
+        
+        if (bytes_read == 0) {
+            if (feof(fp)) {
+                ESP_LOGI(TAG, "End of file reached.");
+            } else if (ferror(fp)) {
+                // Este es el log más importante si la lectura falla
+                ESP_LOGE(TAG, "A read error occurred on the file stream. errno: %s (%d)", strerror(errno), errno);
+            }
+            break; // Salir del bucle
+        }
+        ESP_LOGD(TAG, "Successfully read %d bytes.", bytes_read);
+        // --- FIN DE LOGS DE DIAGNÓSTICO ---
 
         if (visualizer_queue != NULL && wav_file_info.bits_per_sample == 16) {
             visualizer_data_t viz_data;
@@ -412,6 +407,7 @@ cleanup:
     free(buffer);
     fclose(fp);
     if(tx_chan) {
+        ESP_LOGI(TAG, "Disabling and deleting I2S channel.");
         i2s_channel_disable(tx_chan);
         i2s_del_channel(tx_chan);
         tx_chan = NULL;
