@@ -12,6 +12,9 @@ static lv_obj_t* list_widget = nullptr;
 static char current_path[256];
 static char mount_point[32];
 
+// [CAMBIO] Variable para gestionar el estado de error (SD no montada)
+static bool in_error_state = false;
+
 // Callbacks proporcionados por el usuario del componente
 static file_select_callback_t on_file_select_cb = NULL;
 static file_explorer_exit_callback_t on_exit_cb = NULL;
@@ -35,14 +38,34 @@ static void handle_ok_press();
 // --- Handlers y Callbacks ---
 
 static void handle_right_press() {
+    // [CAMBIO] No hacer nada si estamos en estado de error
+    if (in_error_state) return;
     if (explorer_group) lv_group_focus_next(explorer_group);
 }
 
 static void handle_left_press() {
+    // [CAMBIO] No hacer nada si estamos en estado de error
+    if (in_error_state) return;
     if (explorer_group) lv_group_focus_prev(explorer_group);
 }
 
 static void handle_ok_press() {
+    // [CAMBIO] Lógica de recuperación si estamos en estado de error
+    if (in_error_state) {
+        ESP_LOGI(TAG, "Reintentando montaje de la tarjeta SD...");
+        sd_manager_unmount(); // Forzar desmontaje por si acaso
+        if (sd_manager_mount()) {
+            ESP_LOGI(TAG, "Montaje exitoso. Recargando lista de archivos.");
+            in_error_state = false; // Salir del estado de error
+            schedule_repopulate_list();
+        } else {
+            ESP_LOGW(TAG, "El montaje falló de nuevo.");
+            // Mantenemos el mensaje de error en la pantalla
+        }
+        return;
+    }
+    
+    // Lógica original si no hay error
     lv_obj_t * focused_obj = lv_group_get_focused(explorer_group);
     if (!focused_obj) return;
 
@@ -71,8 +94,9 @@ static void handle_ok_press() {
 }
 
 static void handle_cancel_press() {
-    if (strcmp(current_path, mount_point) == 0) {
-        // Estamos en la raíz, notificar para salir
+    // [CAMBIO] La cancelación siempre debe funcionar para poder salir
+    if (in_error_state || strcmp(current_path, mount_point) == 0) {
+        // Estamos en la raíz o en estado de error, notificar para salir
         ESP_LOGI(TAG, "Saliendo del explorador.");
         if (on_exit_cb) {
             on_exit_cb();
@@ -120,10 +144,20 @@ static void repopulate_list_cb(lv_timer_t *timer) {
     clear_list_items(false);
 
     if (sd_manager_is_mounted()) {
+        in_error_state = false; // [CAMBIO] Asegurarse de que no estamos en estado de error
         add_file_context_t context = { .list = list_widget, .group = explorer_group };
         sd_manager_list_files(current_path, add_file_entry_to_list, &context);
     } else {
-        lv_list_add_text(list_widget, "Error: No se montó la SD");
+        in_error_state = true; // [CAMBIO] Entrar en estado de error
+        // [CAMBIO] Mostrar un mensaje de error más informativo
+        lv_obj_t* label = lv_label_create(list_widget);
+        lv_label_set_text(label, "Error: Tarjeta SD no encontrada.\n\n"
+                                 "Presione OK para reintentar.\n"
+                                 "Presione CANCEL para salir.");
+        lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(label, lv_pct(95));
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_center(label);
     }
 
     if (lv_group_get_obj_count(explorer_group) > 0) {
@@ -179,6 +213,7 @@ void file_explorer_destroy(void) {
     list_widget = nullptr;
     on_file_select_cb = NULL;
     on_exit_cb = NULL;
+    in_error_state = false; // [CAMBIO] Resetear estado al destruir
     ESP_LOGI(TAG, "File explorer destroyed.");
 }
 
@@ -191,6 +226,8 @@ void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_selec
     strncpy(current_path, initial_path, sizeof(current_path) - 1);
     strncpy(mount_point, initial_path, sizeof(mount_point) - 1);
     
+    in_error_state = false; // [CAMBIO] Inicializar estado
+
     // Configurar grupo de LVGL para navegación por botones
     explorer_group = lv_group_create();
     lv_group_set_wrap(explorer_group, true);
