@@ -6,7 +6,7 @@
 #include "esp_lcd_panel_ops.h"
 #include "lvgl.h"
 
-// La estructura se mantiene igual, es útil para pasar los handles
+// Contains the handles needed to manage the screen and LVGL
 typedef struct {
     esp_lcd_panel_io_handle_t io_handle;
     esp_lcd_panel_handle_t panel_handle;
@@ -17,16 +17,16 @@ typedef struct {
 
 
 /**
- * @brief Inicializa el hardware de la pantalla y LVGL.
+ * @brief Initializes the display hardware and LVGL.
  *
- * @return Puntero a la estructura screen_t con los handles necesarios, o NULL si falla.
+ * @return Pointer to the screen_t struct with the necessary handles, or NULL on failure.
  */
 screen_t* screen_init();
 
 /**
- * @brief Desinicializa la pantalla y libera recursos.
+ * @brief Deinitializes the display and releases resources.
  *
- * @param screen Puntero a la estructura screen_t a desinicializar.
+ * @param screen Pointer to the screen_t struct to deinitialize.
  */
 void screen_deinit(screen_t* screen);
 

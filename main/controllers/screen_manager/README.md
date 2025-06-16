@@ -1,35 +1,35 @@
-# Gestor de Pantalla (Screen Manager)
+# Screen Manager
 
-## Descripción
-Este componente se encarga de toda la inicialización de bajo nivel para la pantalla del dispositivo. Configura el bus SPI, el controlador de la pantalla (ST7789) y la librería gráfica LVGL, actuando como el puente fundamental entre el software de la interfaz de usuario y el hardware físico.
+## Description
+This component handles all low-level initialization for the device's display. It configures the SPI bus, the display controller (ST7789), and the LVGL graphics library, acting as the fundamental bridge between the UI software and the physical hardware.
 
-## Características
-- **Inicialización del Bus SPI:** Configura y arranca el bus `SPI2_HOST` dedicado para la comunicación con la pantalla.
-- **Controlador de Pantalla:** Inicializa el driver del panel LCD ST7789, incluyendo la configuración de pines (CS, DC, RST) y los parámetros de comunicación.
-- **Control de Backlight:** Gestiona el pin de la luz de fondo (`TFT_BL`) para encenderla durante la inicialización.
-- **Integración con LVGL:**
-    - Inicializa la librería LVGL.
-    - Crea y configura un `esp_timer` periódico para proveer el "tick" necesario para el funcionamiento de LVGL (`lv_tick_inc`).
-    - Asigna dos búferes de dibujado en memoria RAM apta para DMA, permitiendo un renderizado eficiente en modo parcial.
-    - Proporciona la función de callback `lvgl_flush_cb` que transfiere los datos renderizados por LVGL a la pantalla física.
+## Features
+- **SPI Bus Initialization:** Configures and starts the dedicated `SPI2_HOST` bus for communication with the display.
+- **Display Controller:** Initializes the ST7789 LCD panel driver, including pin configuration (CS, DC, RST) and communication parameters.
+- **Backlight Control:** Manages the backlight pin (`TFT_BL`) to turn it on during initialization.
+- **LVGL Integration:**
+    - Initializes the LVGL library.
+    - Creates and configures a periodic `esp_timer` to provide the necessary "tick" for LVGL's operation (`lv_tick_inc`).
+    - Allocates two drawing buffers in DMA-capable RAM, enabling efficient partial-mode rendering.
+    - Provides the `lvgl_flush_cb` callback function that transfers the data rendered by LVGL to the physical display.
 
-## Modo de Uso
+## How to Use
 
-1.  **Inicializar el Gestor:**
-    Llama a esta función una sola vez al inicio de la aplicación. Devuelve un puntero a una estructura `screen_t` que contiene los handles necesarios, o `nullptr` si falla.
+1.  **Initialize the Manager:**
+    Call this function once at application startup. It returns a pointer to a `screen_t` structure containing the necessary handles, or `nullptr` if it fails.
     ```cpp
     #include "controllers/screen_manager/screen_manager.h"
 
-    // En tu función app_main
+    // In your app_main function
     screen_t* screen = screen_init();
     if (!screen) {
-        ESP_LOGE(TAG, "Fallo al inicializar la pantalla, deteniendo.");
+        ESP_LOGE(TAG, "Failed to initialize screen, halting.");
         return;
     }
     ```
 
-2.  **Manejar el Bucle de LVGL:**
-    Después de la inicialización, el bucle principal de la aplicación debe llamar a `lv_timer_handler()` periódicamente para que LVGL procese sus tareas (como animaciones y eventos).
+2.  **Handle the LVGL Loop:**
+    After initialization, the application's main loop must call `lv_timer_handler()` periodically for LVGL to process its tasks (like animations and events).
     ```cpp
     while (true) {
         lv_timer_handler();
@@ -37,7 +37,7 @@ Este componente se encarga de toda la inicialización de bajo nivel para la pant
     }
     ```
 
-## Dependencias
--   **ESP-IDF:** Componentes `esp_lcd` y `driver/spi_master`.
--   **Librerías de Terceros:** `lvgl/lvgl`.
--   **Configuración Local:** Requiere que los pines de la pantalla (`SPI_SCLK_PIN`, `SPI_MOSI_PIN`, `TFT_CS`, `TFT_DC`, `TFT_RST`, `TFT_BL`) estén correctamente definidos en `config.h`.
+## Dependencies
+-   **ESP-IDF:** `esp_lcd` and `driver/spi_master` components.
+-   **Third-party Libraries:** `lvgl/lvgl`.
+-   **Local Configuration:** Requires that the display pins (`SPI_SCLK_PIN`, `SPI_MOSI_PIN`, `TFT_CS`, `TFT_DC`, `TFT_RST`, `TFT_BL`) are correctly defined in `config.h`.

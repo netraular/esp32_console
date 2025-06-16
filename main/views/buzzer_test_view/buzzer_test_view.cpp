@@ -11,5 +11,7 @@ void buzzer_test_view_create(lv_obj_t *parent) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
     lv_label_set_text(label, "Test Buzzer");
     lv_obj_center(label);
+
+    // Register button handler to return to menu
     button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press);
 }

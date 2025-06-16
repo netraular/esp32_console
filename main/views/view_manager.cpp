@@ -2,7 +2,6 @@
 #include "esp_log.h"
 #include "controllers/button_manager/button_manager.h"
 
-// Include headers for all views this manager can handle
 #include "menu_view/menu_view.h"
 #include "mic_test_view/mic_test_view.h"
 #include "speaker_test_view/speaker_test_view.h"

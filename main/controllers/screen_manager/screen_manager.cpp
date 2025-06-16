@@ -7,23 +7,22 @@
 
 static const char* TAG = "SCREEN_MGR";
 
-// Timer para el 'tick' de LVGL
+// Timer for the LVGL 'tick'
 static esp_timer_handle_t lv_tick_timer = nullptr;
 
-// Función de callback para el refresco de pantalla de LVGL
+// Callback function for LVGL screen refresh
 static void lvgl_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
     screen_t* s = (screen_t*)lv_display_get_user_data(disp);
     esp_lcd_panel_draw_bitmap(s->panel_handle, area->x1, area->y1, area->x2 + 1, area->y2 + 1, px_map);
     lv_display_flush_ready(disp);
 }
 
-// Inicializa el timer periódico para LVGL
+// Initializes the periodic timer for LVGL
 static void screen_init_lvgl_tick() {
-    // CORRECCIÓN: Usar el método de inicialización en dos pasos.
+    
     esp_timer_create_args_t lv_tick_timer_args = {};
     lv_tick_timer_args.callback = [](void* arg) { lv_tick_inc(LVGL_TICK_PERIOD_MS); };
     lv_tick_timer_args.name = "lv_tick";
-
     ESP_ERROR_CHECK(esp_timer_create(&lv_tick_timer_args, &lv_tick_timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(lv_tick_timer, LVGL_TICK_PERIOD_MS * 1000));
     ESP_LOGI(TAG, "LVGL tick timer initialized with %dms period", LVGL_TICK_PERIOD_MS);
@@ -37,7 +36,7 @@ screen_t* screen_init() {
         return nullptr;
     }
 
-    // 1. Configuración del Bus SPI
+    // 1. SPI Bus configuration
     spi_bus_config_t buscfg = {};
     buscfg.mosi_io_num = SPI_MOSI_PIN;
     buscfg.miso_io_num = SPI_MISO_PIN; // Esto ahora apunta a GPIO_NUM_NC, que es correcto.
@@ -45,12 +44,11 @@ screen_t* screen_init() {
     buscfg.quadwp_io_num = -1;
     buscfg.quadhd_io_num = -1;
     buscfg.max_transfer_sz = SCREEN_WIDTH * 40 * sizeof(lv_color_t);
-    
+
     ESP_ERROR_CHECK(spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
     ESP_LOGI(TAG, "SPI bus for LCD initialized");
 
-    // 2. Configuración del panel IO (SPI)
-    // CORRECCIÓN: Usar el método de inicialización en dos pasos.
+    // 2. LCD panel IO (SPI) configuration
     esp_lcd_panel_io_spi_config_t io_config = {};
     io_config.cs_gpio_num = TFT_CS;
     io_config.dc_gpio_num = TFT_DC;
@@ -63,9 +61,8 @@ screen_t* screen_init() {
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &io_config, &screen->io_handle));
     ESP_LOGI(TAG, "LCD panel IO initialized");
 
-    // 3. Configuración del driver del panel (ST7789)
-    // CORRECCIÓN: Usar el método de inicialización en dos pasos.
-      esp_lcd_panel_dev_config_t panel_config = {
+    // 3. Panel driver (ST7789) configuration
+    esp_lcd_panel_dev_config_t panel_config = {
         .reset_gpio_num = TFT_RST,
         .color_space = ESP_LCD_COLOR_SPACE_RGB,
         .data_endian = LCD_RGB_DATA_ENDIAN_LITTLE,
@@ -75,37 +72,35 @@ screen_t* screen_init() {
         },
         .vendor_config = nullptr,
     };
-    
     ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(screen->io_handle, &panel_config, &screen->panel_handle));
     ESP_LOGI(TAG, "ST7789 panel driver initialized");
 
-    // 4. Inicialización del panel
+    // 4. Panel initialization
     esp_lcd_panel_reset(screen->panel_handle);
     esp_lcd_panel_init(screen->panel_handle);
-    esp_lcd_panel_invert_color(screen->panel_handle, true); // Crucial para el color correcto en muchos ST7789
+    esp_lcd_panel_invert_color(screen->panel_handle, true); // Crucial for correct color on many ST7789 panels
     esp_lcd_panel_disp_on_off(screen->panel_handle, true);
 
-    // 5. Configuración del Backlight (Luz de fondo)
-    // CORRECCIÓN: Usar el método de inicialización en dos pasos.
+    // 5. Backlight configuration
     gpio_config_t bk_gpio_config = {};
     bk_gpio_config.pin_bit_mask = 1ULL << TFT_BL;
     bk_gpio_config.mode = GPIO_MODE_OUTPUT;
-
+    
     ESP_ERROR_CHECK(gpio_config(&bk_gpio_config));
-    gpio_set_level(TFT_BL, 1); // Encender backlight
+    gpio_set_level(TFT_BL, 1); // Turn backlight on
     ESP_LOGI(TAG, "Backlight enabled");
 
-    // 6. Inicialización de LVGL
+    // 6. LVGL initialization
     ESP_LOGI(TAG, "Initializing LVGL");
     lv_init();
     screen_init_lvgl_tick();
 
-    // Asignar buffers para LVGL
+    // Allocate draw buffers for LVGL in DMA-capable memory
     screen->lvgl_buf1 = (lv_color_t*)heap_caps_malloc(SCREEN_WIDTH * 40 * sizeof(lv_color_t), MALLOC_CAP_DMA);
     screen->lvgl_buf2 = (lv_color_t*)heap_caps_malloc(SCREEN_WIDTH * 40 * sizeof(lv_color_t), MALLOC_CAP_DMA);
     assert(screen->lvgl_buf1 && screen->lvgl_buf2);
 
-    // Crear y configurar el display de LVGL
+    // Create and configure the LVGL display
     screen->lvgl_disp = lv_display_create(SCREEN_WIDTH, SCREEN_HEIGHT);
     lv_display_set_buffers(screen->lvgl_disp, screen->lvgl_buf1, screen->lvgl_buf2,
                           SCREEN_WIDTH * 40 * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);

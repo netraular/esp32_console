@@ -4,7 +4,6 @@
 #include "esp_log.h"
 #include <string.h>
 
-// --- Component Static Variables ---
 static const char *TAG = "FILE_EXPLORER";
 static lv_group_t *explorer_group = nullptr;
 static lv_style_t style_focused;
@@ -21,7 +20,7 @@ static file_explorer_exit_callback_t on_exit_cb = NULL;
 typedef struct { bool is_dir; } list_item_data_t;
 typedef struct { lv_obj_t *list; lv_group_t *group; } add_file_context_t;
 
-// --- Internal Prototypes ---
+// Internal Prototypes
 static void repopulate_list_cb(lv_timer_t *timer);
 static void schedule_repopulate_list();
 static void clear_list_items(bool show_loading);
@@ -32,8 +31,6 @@ static void handle_right_press();
 static void handle_left_press();
 static void handle_cancel_press();
 static void handle_ok_press();
-
-// --- Button Handlers and Callbacks ---
 
 static void handle_right_press() {
     if (in_error_state) return; // Ignore navigation in error state

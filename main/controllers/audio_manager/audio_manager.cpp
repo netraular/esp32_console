@@ -41,14 +41,14 @@ static volatile uint32_t total_bytes_played = 0;
 static volatile uint32_t song_duration_s = 0;
 static QueueHandle_t visualizer_queue = NULL;
 
-// --- VOLUME CONTROL ---
-// The increment/decrement step for volume changes (in percentage of the display value).
+// Volume control variables
+// The increment/decrement step for the user-facing volume display (e.g., 0-100%).
 #define VOLUME_STEP 5
 static volatile uint8_t current_volume_percentage = 10;
 static volatile float volume_factor = 0.1f;
 static SemaphoreHandle_t volume_mutex = NULL; 
 
-// --- TASK SYNCHRONIZATION ---
+// Task synchronization
 static SemaphoreHandle_t playback_task_terminated_sem = NULL;
 
 // Function Prototypes
@@ -260,8 +260,7 @@ static void audio_playback_task(void *arg) {
         return;
     }
 
-    // --- WAV Header Parsing ---
-    // This basic parser looks for 'fmt ' and 'data' chunks.
+    // This basic WAV parser looks for 'fmt ' and 'data' chunks.
     if (fread(&wav_file_info, 1, 12, fp) != 12) {
         ESP_LOGE(TAG, "Failed to read RIFF header.");
         fclose(fp); player_state = AUDIO_STATE_STOPPED; playback_task_handle = NULL; xSemaphoreGive(playback_task_terminated_sem); vTaskDelete(NULL); return;
@@ -304,7 +303,7 @@ static void audio_playback_task(void *arg) {
         song_duration_s = wav_file_info.data_size / wav_file_info.byte_rate;
     }
     
-    // --- I2S Configuration & Initialization ---
+    // Configure and initialize I2S
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_chan, NULL));
 
@@ -341,7 +340,7 @@ static void audio_playback_task(void *arg) {
     ESP_LOGI(TAG, "Starting playback... Duration: %lu seconds. Initial Volume: %u%% (physical)", song_duration_s, audio_manager_get_volume());
     total_bytes_played = 0;
     
-    // --- Main Playback Loop ---
+    // Main playback loop
     while (total_bytes_played < wav_file_info.data_size) {
         if (player_state == AUDIO_STATE_STOPPED) {
             break;
@@ -363,7 +362,7 @@ static void audio_playback_task(void *arg) {
             break;
         }
 
-        // --- Audio Visualizer Data Processing ---
+        // Process audio data for the visualizer
         if (visualizer_queue != NULL && wav_file_info.bits_per_sample == 16) {
             visualizer_data_t viz_data;
             int16_t* samples = (int16_t*)buffer;
@@ -397,7 +396,7 @@ static void audio_playback_task(void *arg) {
             }
         }
         
-        // --- Volume Application ---
+        // Apply volume control
         float local_volume_factor = 0.0f;
         if (volume_mutex && xSemaphoreTake(volume_mutex, portMAX_DELAY) == pdTRUE) {
             local_volume_factor = volume_factor;
@@ -435,7 +434,6 @@ static void audio_playback_task(void *arg) {
     free(buffer);
     fclose(fp);
     if(tx_chan) {
-        // Disable and delete the I2S channel handle.
         i2s_channel_disable(tx_chan);
         i2s_del_channel(tx_chan);
         tx_chan = NULL;

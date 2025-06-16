@@ -1,11 +1,11 @@
 # Button Manager
 
-## Descripción
-Este componente gestiona los botones físicos del sistema utilizando la librería `espressif/button`. Proporciona una capa de abstracción para registrar eventos de pulsación simple y manejar callbacks de dos niveles: por defecto y específicos de una vista.
+## Description
+This component manages the system's physical buttons using the `espressif/button` library. It provides an abstraction layer to register single-click events and handle two-level callbacks: default and view-specific.
 
-## Uso
-1.  **Inicializar el gestor de botones:**
-    Llamar a esta función una vez al inicio de la aplicación.
+## Usage
+1.  **Initialize the Button Manager:**
+    Call this function once at application startup.
     ```cpp
     #include "controllers/button_manager/button_manager.h"
     
@@ -13,20 +13,20 @@ Este componente gestiona los botones físicos del sistema utilizando la librerí
     
     button_manager_init();
     ```
-    Esto configura los pines y asigna los handlers por defecto que simplemente imprimen un mensaje en el log.
+    This sets up the pins and assigns default handlers that simply print a log message.
 
-2.  **Registrar Handlers Específicos (Opcional):**
-    Si una pantalla o estado particular de la aplicación necesita que un botón haga algo diferente, se puede registrar un `view_handler`.
+2.  **Register Specific Handlers (Optional):**
+    If a particular screen or application state needs a button to do something different, a `view_handler` can be registered.
     ```cpp
     void my_custom_ok_action() {
-        // Hacer algo especial
+        // Do something special
     }
     
     button_manager_register_view_handler(BUTTON_OK, my_custom_ok_action);
     ```
 
-3.  **Restaurar Handlers por Defecto:**
-    Cuando se sale de esa pantalla o estado especial, se deben restaurar los comportamientos por defecto.
+3.  **Restore Default Handlers:**
+    When exiting that special screen or state, the default behaviors should be restored.
     ```cpp
     button_manager_unregister_view_handlers();
     ```

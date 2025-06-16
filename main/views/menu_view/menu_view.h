@@ -4,8 +4,8 @@
 #include "lvgl.h"
 
 /**
- * @brief Crea la interfaz de usuario de la vista del menú y registra sus handlers de botón.
- * @param parent El objeto padre sobre el que se creará la UI (normalmente, la pantalla activa).
+ * @brief Creates the menu view UI and registers its button handlers.
+ * @param parent The parent object on which the UI will be created (usually the active screen).
  */
 void menu_view_create(lv_obj_t *parent);
 

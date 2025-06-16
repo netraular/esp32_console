@@ -4,20 +4,20 @@
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
 #include "../file_explorer/file_explorer.h"
-#include "esp_log.h"
-#include <string.h>
 #include "components/audio_visualizer/audio_visualizer.h"
 #include "config.h"
+#include "esp_log.h"
+#include <string.h>
 #include <math.h>
 
 static const char *TAG = "SPEAKER_TEST_VIEW";
 
-// --- View State Variables ---
+// View State Variables
 static lv_obj_t *view_parent = NULL;
 static char current_song_path[256];
 static bool is_exiting = false; // Flag to manage a clean shutdown sequence.
 
-// --- UI Widgets ---
+// UI Widgets
 static lv_obj_t *play_pause_btn_label = NULL;
 static lv_obj_t *slider_widget = NULL;
 static lv_obj_t *time_current_label_widget = NULL;
@@ -29,12 +29,12 @@ static lv_obj_t *info_label_widget = NULL; // For initial/error screens.
 static visualizer_data_t current_viz_data;
 static bool viz_data_received = false; // Used for visualizer decay effect.
 
-// --- Worker Function Prototypes (for lv_async_call) ---
+// Worker Function Prototypes (for lv_async_call)
 static void update_volume_label_task(void *user_data);
 static void handle_play_pause_ui_update_task(void *user_data);
 static void stop_audio_task(void* user_data);
 
-// --- Other Function Prototypes ---
+// Other Function Prototypes
 static void create_initial_speaker_view();
 static void show_file_explorer();
 static void create_now_playing_view(const char *file_path);
@@ -67,7 +67,6 @@ static void format_time(char *buf, size_t buf_size, uint32_t time_s) {
     snprintf(buf, buf_size, "%02lu:%02lu", time_s / 60, time_s % 60);
 }
 
-// --- Main UI Update Timer ---
 // This timer is the heart of the "now playing" screen. It polls for state changes
 // and updates the UI accordingly.
 static void ui_update_timer_cb(lv_timer_t *timer) {
@@ -114,7 +113,7 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
         return;
     }
 
-    // --- Regular UI updates during playback ---
+    // Regular UI updates during playback
     uint32_t duration = audio_manager_get_duration_s();
     uint32_t progress = audio_manager_get_progress_s();
 
@@ -134,7 +133,7 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
         lv_slider_set_value(slider_widget, progress, LV_ANIM_OFF);
     }
 
-    // --- Visualizer Update Logic ---
+    // Visualizer Update Logic
     QueueHandle_t queue = audio_manager_get_visualizer_queue();
     if (queue && visualizer_widget) {
         // Check for new data from the audio manager.
@@ -246,15 +245,12 @@ static void handle_right_press_playing() {
 }
 
 
-// --- View Lifecycle and Navigation ---
-
 // Cleans up all resources of the "now playing" view and returns to the initial speaker test screen.
 static void cleanup_player_and_return_to_initial_view() {
     if (ui_update_timer) {
         lv_timer_delete(ui_update_timer);
         ui_update_timer = NULL;
     }
-    // audio_manager_stop() has already been called asynchronously.
     
     // Nullify all widget pointers to prevent use-after-free.
     play_pause_btn_label = NULL;
@@ -264,7 +260,6 @@ static void cleanup_player_and_return_to_initial_view() {
     time_current_label_widget = NULL;
     time_total_label_widget = NULL;
     
-    // Recreate the initial view.
     create_initial_speaker_view();
 }
 
@@ -274,7 +269,6 @@ static void on_audio_file_selected(const char *path) {
         file_explorer_destroy();
         create_now_playing_view(path);
     }
-    // Non-wav files are ignored.
 }
 
 // Callback for the file explorer: if the user exits, return to the initial speaker test screen.
@@ -366,7 +360,6 @@ static void create_now_playing_view(const char *file_path) {
     handle_ok_press_playing();
 }
 
-// --- Initial Speaker View Screen ---
 
 // "OK" button on initial screen: tries to mount SD and show file explorer.
 static void handle_ok_press_initial() {
@@ -416,8 +409,6 @@ static void create_initial_speaker_view() {
     button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press_initial);
 }
 
-
-// --- Main Public Function ---
 void speaker_test_view_create(lv_obj_t *parent) {
     ESP_LOGI(TAG, "Creating Speaker Test View");
     view_parent = parent;

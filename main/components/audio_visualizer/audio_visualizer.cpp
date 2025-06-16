@@ -14,14 +14,14 @@ typedef struct {
 } audio_visualizer_t;
 
 
-// --- Internal function to redraw the bars on the canvas ---
+// Internal function to redraw the bars on the canvas
 static void redraw_bars(audio_visualizer_t* viz) {
     if (!viz || !viz->canvas) return;
 
-    // 1. Clear the canvas with the background color.
+    // Clear the canvas with the background color.
     lv_canvas_fill_bg(viz->canvas, viz->bg_color, LV_OPA_COVER);
     
-    // 2. Prepare the drawing layer and descriptor for the bars.
+    // Prepare the drawing layer and descriptor for the bars.
     lv_layer_t layer;
     lv_canvas_init_layer(viz->canvas, &layer);
 
@@ -33,29 +33,22 @@ static void redraw_bars(audio_visualizer_t* viz) {
     lv_color_t start_color = lv_palette_main(LV_PALETTE_BLUE);
     lv_color_t end_color = lv_palette_main(LV_PALETTE_RED);
 
-    // 3. Calculate dimensions and draw each bar.
+    // Calculate dimensions and draw each bar.
     lv_coord_t canvas_w = lv_obj_get_width(viz->canvas);
     lv_coord_t canvas_h = lv_obj_get_height(viz->canvas);
 
     if (viz->bar_count > 0) {
         // --- Smart Centering Logic ---
-        
-        // 1. Define the width of each bar and the space between them.
-        //    Adjusting these values can change the visualizer's look.
-        //    For 32 bars on a 240px screen, 5px width and 2px space is a good fit.
+        // Define the width of each bar and the space between them.
         const lv_coord_t bar_w = 5;
         const lv_coord_t space_w = 2;
 
-        // 2. Calculate the total width required for all bars and spaces.
-        //    (N bars) + (N-1 spaces)
+        // Calculate the total width required for all bars and spaces.
         lv_coord_t total_bars_width = (viz->bar_count * bar_w) + ((viz->bar_count - 1) * space_w);
 
-        // 3. Calculate the initial left margin to center the entire block of bars.
-        //    The remaining space is divided by two.
+        // Calculate the initial left margin to center the entire block of bars.
         lv_coord_t start_x = (canvas_w - total_bars_width) / 2;
         
-        // --- End of Centering Logic ---
-
         for (int i = 0; i < viz->bar_count; i++) {
             // Calculate the color for each individual bar to create the gradient effect.
             uint8_t mix_ratio = (i * 255) / (viz->bar_count - 1);
@@ -67,7 +60,7 @@ static void redraw_bars(audio_visualizer_t* viz) {
 
             if (bar_h > 0) {
                 lv_area_t bar_area;
-                // 4. Position the bar using the calculated starting offset and fixed widths.
+                // Position the bar using the calculated starting offset and fixed widths.
                 bar_area.x1 = start_x + (i * (bar_w + space_w));
                 bar_area.x2 = bar_area.x1 + bar_w - 1;
                 bar_area.y2 = canvas_h - 1; // Bars are drawn from the bottom up.
@@ -78,11 +71,9 @@ static void redraw_bars(audio_visualizer_t* viz) {
         }
     }
     
-    // 5. Finalize the layer to apply the drawings to the canvas.
+    // Finalize the layer to apply the drawings to the canvas.
     lv_canvas_finish_layer(viz->canvas, &layer);
 }
-
-// --- Public Functions ---
 
 lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count) {
     #define CANVAS_WIDTH 240

@@ -7,7 +7,6 @@
 extern "C" {
 #endif
 
-// ... (funciones existentes sin cambios) ...
 bool sd_manager_init(void);
 bool sd_manager_mount(void);
 void sd_manager_unmount(void);
@@ -15,10 +14,10 @@ void sd_manager_deinit(void);
 bool sd_manager_is_mounted(void);
 
 /**
- * @brief Comprueba si la tarjeta SD está lista para ser usada.
- * Intenta montar la tarjeta si no lo está y verifica que sea legible.
- * Si la tarjeta está montada pero no responde, la desmontará para permitir un reintento limpio.
- * @return true si la tarjeta está montada y es legible, false en caso contrario.
+ * @brief Checks if the SD card is ready for use.
+ * This function attempts to mount the card if it isn't already and verifies that it is readable.
+ * If the card is mounted but not responsive, it will unmount it to allow for a clean retry.
+ * @return true if the card is mounted and readable, false otherwise.
  */
 bool sd_manager_check_ready(void);
 

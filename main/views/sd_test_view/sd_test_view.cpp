@@ -7,19 +7,16 @@
 
 static const char *TAG = "SD_TEST_VIEW";
 
-// --- Static UI object pointers ---
 static lv_obj_t *view_parent = NULL;
 static lv_obj_t *info_label_widget = NULL;
 
-// --- Function Prototypes ---
+// Function Prototypes
 static void create_initial_sd_view();
 static void show_file_explorer();
 static void handle_ok_press_initial();
 static void handle_cancel_press_initial();
 static void on_file_selected(const char *path);
 static void on_explorer_exit();
-
-// --- Callbacks for the File Explorer ---
 
 // Called when a file is selected inside the file explorer.
 static void on_file_selected(const char *path) {
@@ -37,12 +34,12 @@ static void on_explorer_exit() {
     create_initial_sd_view();
 }
 
-// --- Logic to launch the file explorer ---
+// Launches the file explorer.
 static void show_file_explorer() {
     // Clean the initial view (labels, etc.) before showing the explorer.
     lv_obj_clean(view_parent);
 
-    // 1. Create a main container and title.
+    // Create a main container and title.
     lv_obj_t * main_cont = lv_obj_create(view_parent);
     lv_obj_remove_style_all(main_cont);
     lv_obj_set_size(main_cont, lv_pct(100), lv_pct(100));
@@ -54,12 +51,12 @@ static void show_file_explorer() {
     lv_obj_set_style_text_font(title_label, lv_theme_get_font_large(title_label), 0);
     lv_obj_set_style_margin_bottom(title_label, 10, 0);
 
-    // 2. Create a container to hold the explorer.
+    // Create a container to hold the explorer.
     lv_obj_t * explorer_container = lv_obj_create(main_cont);
     lv_obj_remove_style_all(explorer_container);
     lv_obj_set_size(explorer_container, lv_pct(95), lv_pct(85));
 
-    // 3. Create the file explorer instance.
+    // Create the file explorer instance.
     file_explorer_create(
         explorer_container,
         sd_manager_get_mount_point(),
@@ -68,8 +65,6 @@ static void show_file_explorer() {
     );
 }
 
-
-// --- Button Handlers for the Initial View ---
 
 // "OK" button on the initial screen attempts to mount the SD and open the explorer.
 static void handle_ok_press_initial() {
@@ -97,7 +92,7 @@ static void handle_cancel_press_initial() {
     view_manager_load_view(VIEW_ID_MENU);
 }
 
-// --- UI Creation for the Initial View ---
+// Creates the UI for the initial SD test view.
 static void create_initial_sd_view() {
     lv_obj_clean(view_parent); // Clean up in case we are returning from the explorer.
 
@@ -116,8 +111,6 @@ static void create_initial_sd_view() {
     button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press_initial);
 }
 
-
-// --- Main Public Function ---
 void sd_test_view_create(lv_obj_t *parent) {
     ESP_LOGI(TAG, "Creating SD Test view (initial screen).");
     view_parent = parent; // Save the parent object.
