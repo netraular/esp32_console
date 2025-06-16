@@ -2,93 +2,93 @@
 #define AUDIO_MANAGER_H
 
 #include <stdbool.h>
-#include <stdint.h> // Necesario para uint32_t
+#include <stdint.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
-// Estados del reproductor de audio
+// Audio player states
 typedef enum {
-    AUDIO_STATE_STOPPED,
-    AUDIO_STATE_PLAYING,
-    AUDIO_STATE_PAUSED,
-    AUDIO_STATE_ERROR // [NUEVO] Estado para manejar errores de lectura (ej. SD desconectada)
+    AUDIO_STATE_STOPPED, // Playback is stopped or has finished.
+    AUDIO_STATE_PLAYING, // Playback is active.
+    AUDIO_STATE_PAUSED,  // Playback is paused.
+    AUDIO_STATE_ERROR    // An error occurred during playback (e.g., file not found, SD card removed).
 } audio_player_state_t;
 
 /**
- * @brief Inicializa el gestor de audio.
+ * @brief Initializes the audio manager.
  */
 void audio_manager_init(void);
 
 /**
- * @brief Inicia la reproducción de un archivo WAV en una nueva tarea.
- * @param filepath Ruta completa al archivo .wav a reproducir.
- * @return true si la tarea de reproducción se inició, false si hubo un error.
+ * @brief Starts playback of a WAV file in a new task.
+ * @param filepath Full path to the .wav file.
+ * @return true if the playback task was started, false on error.
  */
 bool audio_manager_play(const char *filepath);
 
 /**
- * @brief Pausa la reproducción de audio actual.
+ * @brief Pauses the current audio playback.
  */
 void audio_manager_pause(void);
 
 /**
- * @brief Reanuda la reproducción de audio si estaba en pausa.
+ * @brief Resumes audio playback if paused.
  */
 void audio_manager_resume(void);
 
 /**
- * @brief Detiene la reproducción de audio y libera los recursos.
+ * @brief Stops audio playback and releases resources.
  */
 void audio_manager_stop(void);
 
 /**
- * @brief Obtiene el estado actual del reproductor.
- * @return El estado actual.
+ * @brief Gets the current player state.
+ * @return The current audio_player_state_t.
  */
 audio_player_state_t audio_manager_get_state(void);
 
 /**
- * @brief Obtiene la duración total de la canción actual en segundos.
- * @return Duración en segundos, o 0 si no se está reproduciendo nada.
+ * @brief Gets the total duration of the current song in seconds.
+ * @return Duration in seconds, or 0 if nothing is playing.
  */
 uint32_t audio_manager_get_duration_s(void);
 
 /**
- * @brief Obtiene el progreso actual de la reproducción en segundos.
- * @return Progreso en segundos.
+ * @brief Gets the current playback progress in seconds.
+ * @return Progress in seconds.
  */
 uint32_t audio_manager_get_progress_s(void);
 
 /**
- * @brief Sube el volumen en un paso predefinido.
+ * @brief Increases volume by a predefined step.
  */
 void audio_manager_volume_up(void);
 
 /**
- * @brief Baja el volumen en un paso predefinido.
+ * @brief Decreases volume by a predefined step.
  */
 void audio_manager_volume_down(void);
 
 /**
- * @brief Obtiene el nivel de volumen actual.
- * @return El volumen actual en un rango de 0 a 100.
+ * @brief Gets the current physical volume level.
+ * @return The volume as a percentage of the configured maximum (e.g., 0-25).
  */
 uint8_t audio_manager_get_volume(void);
 
-// --- [CAMBIO] Aumentamos el número de barras a 32 ---
+
+// Number of bars for the audio visualizer
 #define VISUALIZER_BAR_COUNT 32
 
-// Estructura para los datos del visualizador que se envían por la cola
+// Data structure for visualizer data sent via queue
 typedef struct {
     uint8_t bar_values[VISUALIZER_BAR_COUNT];
 } visualizer_data_t;
 
 /**
- * @brief Obtiene el handle de la cola del visualizador.
- * La UI usará esta cola para recibir los datos de las barras.
- * @return Handle a la cola, o NULL si no está inicializada.
+ * @brief Gets the handle of the visualizer queue.
+ * The UI uses this queue to receive bar data for rendering.
+ * @return Handle to the queue, or NULL if not initialized.
  */
 QueueHandle_t audio_manager_get_visualizer_queue(void);
-
 
 #endif // AUDIO_MANAGER_H

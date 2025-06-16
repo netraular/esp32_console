@@ -1,6 +1,6 @@
 ## IDF Component Manager Manifest File for ESP32-S3 N16R8
 dependencies:
-  ## Required IDF version (Currently using idf v5.4)
+  ## Required IDF version
   idf:
     version: '>=5.4'
   lvgl/lvgl: ^9.2.2

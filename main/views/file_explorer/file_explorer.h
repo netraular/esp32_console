@@ -3,30 +3,30 @@
 
 #include "lvgl.h"
 
-// --- Tipos de Callback ---
+// --- Callback Types ---
 
 /**
- * @brief Callback que se ejecuta cuando el usuario selecciona un archivo.
- * @param file_path La ruta completa del archivo seleccionado.
+ * @brief Callback executed when the user selects a file.
+ * @param file_path The full path of the selected file.
  */
 typedef void (*file_select_callback_t)(const char *file_path);
 
 /**
- * @brief Callback que se ejecuta cuando el usuario sale del explorador 
- * (p.ej., presionando "Cancelar" en el directorio raíz).
+ * @brief Callback executed when the user exits the explorer 
+ * (e.g., by pressing "Cancel" in the root directory).
  */
 typedef void (*file_explorer_exit_callback_t)(void);
 
 
-// --- Funciones Públicas del Componente ---
+// --- Public Component Functions ---
 
 /**
- * @brief Crea la interfaz del explorador de archivos.
+ * @brief Creates the file explorer interface.
  * 
- * @param parent El objeto LVGL padre donde se creará el explorador.
- * @param initial_path La ruta inicial desde donde empezar a explorar (p.ej. "/sdcard").
- * @param on_select Callback para cuando se selecciona un archivo.
- * @param on_exit Callback para cuando se sale del explorador.
+ * @param parent The parent LVGL object where the explorer will be created.
+ * @param initial_path The initial path to start browsing from (e.g., "/sdcard").
+ * @param on_select Callback for when a file is selected.
+ * @param on_exit Callback for when the user exits the explorer.
  */
 void file_explorer_create(
     lv_obj_t *parent, 
@@ -36,8 +36,8 @@ void file_explorer_create(
 );
 
 /**
- * @brief Destruye el explorador de archivos y libera todos sus recursos.
- * Es crucial llamar a esta función para evitar fugas de memoria.
+ * @brief Destroys the file explorer and releases all its resources.
+ * It's crucial to call this function to prevent memory leaks and dangling pointers.
  */
 void file_explorer_destroy(void);
 

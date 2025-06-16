@@ -2,7 +2,7 @@
 #include "esp_log.h"
 #include "controllers/button_manager/button_manager.h"
 
-// Incluir las cabeceras de todas las vistas que este gestor puede manejar
+// Include headers for all views this manager can handle
 #include "menu_view/menu_view.h"
 #include "mic_test_view/mic_test_view.h"
 #include "speaker_test_view/speaker_test_view.h"
@@ -26,11 +26,14 @@ void view_manager_load_view(view_id_t view_id) {
 
     ESP_LOGI(TAG, "Loading view %d", view_id);
 
+    // Unregister all view-specific button handlers to restore default behavior.
     button_manager_unregister_view_handlers();
 
+    // Clean the current screen before drawing the new view.
     lv_obj_t *scr = lv_screen_active();
     lv_obj_clean(scr);
 
+    // Create the UI for the selected view.
     switch (view_id) {
         case VIEW_ID_MENU:
             menu_view_create(scr);

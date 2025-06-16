@@ -4,8 +4,8 @@
 #include "lvgl.h"
 
 /**
- * @brief Crea la interfaz de usuario de la vista de prueba de altavoz.
- * @param parent El objeto padre sobre el que se creará la UI.
+ * @brief Creates the user interface for the speaker test view.
+ * @param parent The parent object on which to create the UI.
  */
 void speaker_test_view_create(lv_obj_t *parent);
 

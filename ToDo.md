@@ -1,1 +1,2 @@
-Realizar ejemplo de vistas funcional para buzzer, micrófono, speaker y leds (red, green & rgb).
+Permitir reproducir otro tipo de archivos de audio (no solo wav)
+Realizar ejemplo de vistas funcional micrófono y led rgb.

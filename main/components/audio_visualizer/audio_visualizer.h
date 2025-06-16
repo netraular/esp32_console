@@ -7,33 +7,33 @@
 extern "C" {
 #endif
 
-// --- [CAMBIO] Aumentamos el número máximo de barras a 32 ---
+// The maximum number of bars the visualizer can display.
 #define AUDIO_VISUALIZER_MAX_BARS 32
 
 /**
- * @brief Crea un objeto de visualizador de audio.
+ * @brief Creates an audio visualizer widget.
  * 
- * @param parent El objeto padre sobre el que se creará el visualizador.
- * @param bar_count El número de barras a mostrar (debe ser <= AUDIO_VISUALIZER_MAX_BARS).
- * @return lv_obj_t* Puntero al objeto visualizador creado.
+ * @param parent The parent object on which to create the visualizer.
+ * @param bar_count The number of bars to display (must be <= AUDIO_VISUALIZER_MAX_BARS).
+ * @return lv_obj_t* Pointer to the created visualizer container object.
  */
 lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count);
 
 /**
- * @brief Actualiza los valores de las barras del visualizador.
+ * @brief Updates the height values of the visualizer bars.
  * 
- * @param visualizer Puntero al objeto visualizador.
- * @param values Un array de valores (0-255) para la altura de cada barra.
+ * @param visualizer_cont Pointer to the visualizer container object.
+ * @param values An array of values (0-255) for the height of each bar.
  */
-void audio_visualizer_set_values(lv_obj_t* visualizer, uint8_t* values);
+void audio_visualizer_set_values(lv_obj_t* visualizer_cont, uint8_t* values);
 
 /**
- * @brief Establece el color de las barras.
+ * @brief Sets a solid color for all bars, overriding the default gradient.
  *
- * @param visualizer Puntero al objeto visualizador.
- * @param color El color a usar para las barras.
+ * @param visualizer_cont Pointer to the visualizer container object.
+ * @param color The color to use for the bars.
  */
-void audio_visualizer_set_bar_color(lv_obj_t* visualizer, lv_color_t color);
+void audio_visualizer_set_bar_color(lv_obj_t* visualizer_cont, lv_color_t color);
 
 
 #ifdef __cplusplus
