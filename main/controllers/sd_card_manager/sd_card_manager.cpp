@@ -21,14 +21,15 @@ bool sd_manager_init(void) {
         return true;
     }
     ESP_LOGI(TAG, "Initializing SPI bus for SD card (SPI3_HOST)");
-    spi_bus_config_t bus_cfg = {
-        .mosi_io_num = SD_SPI_MOSI_PIN,
-        .miso_io_num = SD_SPI_MISO_PIN,
-        .sclk_io_num = SD_SPI_SCLK_PIN,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .max_transfer_sz = 4096
-    };
+    
+    spi_bus_config_t bus_cfg = {};
+    bus_cfg.mosi_io_num = SD_SPI_MOSI_PIN;
+    bus_cfg.miso_io_num = SD_SPI_MISO_PIN;
+    bus_cfg.sclk_io_num = SD_SPI_SCLK_PIN;
+    bus_cfg.quadwp_io_num = -1;
+    bus_cfg.quadhd_io_num = -1;
+    bus_cfg.max_transfer_sz = 4096;
+
     esp_err_t ret = spi_bus_initialize(SD_HOST, &bus_cfg, SDSPI_DEFAULT_DMA);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize SPI bus. Error: %s", esp_err_to_name(ret));
@@ -52,11 +53,12 @@ bool sd_manager_mount(void) {
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_config.gpio_cs = SD_CS_PIN;
     slot_config.host_id = SD_HOST;
-    esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = false,
-        .max_files = 5,
-        .allocation_unit_size = 16 * 1024
-    };
+    
+    esp_vfs_fat_sdmmc_mount_config_t mount_config = {};
+    mount_config.format_if_mount_failed = false;
+    mount_config.max_files = 10;
+    mount_config.allocation_unit_size = 16 * 1024;
+
     esp_err_t ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &s_card);
     if (ret != ESP_OK) {
         if (ret == ESP_FAIL) {
@@ -96,24 +98,19 @@ bool sd_manager_is_mounted(void) {
 }
 
 bool sd_manager_check_ready(void) {
-    // If not mounted, try to mount it. If it fails, the card is not ready.
     if (!s_is_mounted) {
         if (!sd_manager_mount()) {
             return false;
         }
     }
 
-    // If mounted, perform a read test to verify it's still responding.
     DIR* dir = opendir(MOUNT_POINT);
     if (dir) {
-        // Read test was successful. The card is ready.
         closedir(dir);
         return true;
     }
 
-    // Read test failed. The card might be connected but is not responding.
     ESP_LOGW(TAG, "Check ready failed: opendir could not read the root directory. Card may be disconnected.");
-    // Unmount to force a full re-initialization on the next attempt.
     sd_manager_unmount();
     return false;
 }

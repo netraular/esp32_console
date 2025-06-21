@@ -37,7 +37,7 @@
 #define I2S_BCLK_PIN   GPIO_NUM_16
 #define I2S_WS_PIN     GPIO_NUM_17
 #define I2S_DOUT_PIN   GPIO_NUM_15 // To Amplifier/Speaker
-#define I2S_DIN_PIN    GPIO_NUM_38 // From Microphone
+#define I2S_DIN_PIN    GPIO_NUM_38 // From Microphone inmp441
 
 // --- DISPLAY & SPI CONFIGURATION ---
 #define SCREEN_WIDTH  240
@@ -51,5 +51,10 @@
 // Sets a safety limit on the physical volume (0-100) to protect the speaker.
 // The UI will still show 0-100%, but it will be mapped to this physical range.
 #define MAX_VOLUME_PERCENTAGE 25 
+
+// --- RECORDING CONFIGURATION ---
+#define REC_SAMPLE_RATE 16000
+#define REC_BITS_PER_SAMPLE 16
+#define REC_NUM_CHANNELS 1
 
 #endif // CONFIG_H

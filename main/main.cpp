@@ -8,6 +8,7 @@
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
+#include "controllers/audio_recorder/audio_recorder.h"
 #include "views/view_manager.h"
 
 static const char *TAG = "main";
@@ -33,9 +34,11 @@ extern "C" void app_main(void) {
     button_manager_init();
     ESP_LOGI(TAG, "Button manager initialized.");
 
-    // Initialize audio manager
+    // Initialize audio managers
     audio_manager_init();
-    ESP_LOGI(TAG, "Audio manager initialized.");
+    ESP_LOGI(TAG, "Audio manager (playback) initialized.");
+    audio_recorder_init();
+    ESP_LOGI(TAG, "Audio recorder initialized.");
 
     // Initialize the view manager, which creates the main UI.
     view_manager_init();
