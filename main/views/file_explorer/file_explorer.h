@@ -39,4 +39,13 @@ void file_explorer_destroy(void);
  */
 void file_explorer_refresh(void);
 
+/**
+ * @brief Activa o desactiva el control de entrada para el explorador.
+ * Cuando se activa, registra sus propios manejadores de botones y establece su grupo como predeterminado.
+ * Útil para que una vista modal pueda tomar el control temporalmente.
+ * @param active true para activar, false para desactivar (liberando los botones para otro componente).
+ */
+void file_explorer_set_input_active(bool active);
+
+
 #endif // FILE_EXPLORER_H

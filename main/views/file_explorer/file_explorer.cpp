@@ -224,6 +224,25 @@ void file_explorer_destroy(void) {
     ESP_LOGI(TAG, "File explorer destroyed.");
 }
 
+void file_explorer_set_input_active(bool active) {
+    if (active) {
+        ESP_LOGD(TAG, "Re-activating file explorer input handlers.");
+        button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press);
+        button_manager_register_view_handler(BUTTON_OK, handle_ok_press);
+        button_manager_register_view_handler(BUTTON_RIGHT, handle_right_press);
+        button_manager_register_view_handler(BUTTON_LEFT, handle_left_press);
+        if (explorer_group) {
+            lv_group_set_default(explorer_group);
+        }
+    } else {
+        ESP_LOGD(TAG, "De-activating file explorer input handlers.");
+        button_manager_unregister_view_handlers();
+        if (explorer_group && lv_group_get_default() == explorer_group) {
+            lv_group_set_default(NULL);
+        }
+    }
+}
+
 void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_select_callback_t on_select, file_action_callback_t on_action, file_explorer_exit_callback_t on_exit) {
     ESP_LOGI(TAG, "Creating file explorer at path: %s", initial_path);
     
@@ -249,10 +268,8 @@ void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_selec
 
     schedule_repopulate_list();
 
-    button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press);
-    button_manager_register_view_handler(BUTTON_OK, handle_ok_press);
-    button_manager_register_view_handler(BUTTON_RIGHT, handle_right_press);
-    button_manager_register_view_handler(BUTTON_LEFT, handle_left_press);
+    // Activate input by default upon creation
+    file_explorer_set_input_active(true);
 }
 
 void file_explorer_refresh(void) {
