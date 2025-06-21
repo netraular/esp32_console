@@ -3,6 +3,10 @@
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "esp_log.h"
 #include <string.h>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <strings.h>
 
 static const char *TAG = "FILE_EXPLORER";
 static lv_group_t *explorer_group = nullptr;
@@ -12,22 +16,30 @@ static char current_path[256];
 static char mount_point[32];
 static bool in_error_state = false;
 
-// Callbacks proporcionados por el usuario
 static file_select_callback_t on_file_select_cb = NULL;
-static file_action_callback_t on_action_cb = NULL; // Nuevo callback
+static file_action_callback_t on_action_cb = NULL;
 static file_explorer_exit_callback_t on_exit_cb = NULL;
 
-// Estructuras de datos internas
-typedef struct { file_item_type_t type; } list_item_data_t;
-typedef struct { lv_obj_t *list; lv_group_t *group; } add_file_context_t;
+typedef struct {
+    std::string name;
+    bool is_dir;
+} file_entry_t;
 
-// Prototipos internos
+typedef struct {
+    file_item_type_t type;
+} list_item_data_t;
+
+typedef struct {
+    lv_obj_t *list;
+    lv_group_t *group;
+} add_file_context_t;
+
 static void repopulate_list_cb(lv_timer_t *timer);
 static void schedule_repopulate_list();
 static void clear_list_items(bool show_loading);
 static void list_item_delete_cb(lv_event_t * e);
 static void add_list_entry(add_file_context_t *context, const char *name, const char *icon, file_item_type_t type);
-static void add_fs_entry_to_list(const char *name, bool is_dir, void *user_data);
+static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data);
 static void focus_changed_cb(lv_group_t * group);
 static void handle_right_press();
 static void handle_left_press();
@@ -46,7 +58,6 @@ static void handle_left_press() {
 
 static void handle_ok_press() {
     if (in_error_state) {
-        // Lógica de reintento de montaje
         return;
     }
     
@@ -67,7 +78,7 @@ static void handle_ok_press() {
             break;
             
         case ITEM_TYPE_PARENT_DIR:
-            handle_cancel_press(); // OK en ".." es lo mismo que Cancel
+            handle_cancel_press();
             break;
 
         case ITEM_TYPE_FILE:
@@ -132,19 +143,29 @@ static void repopulate_list_cb(lv_timer_t *timer) {
         in_error_state = false;
         add_file_context_t context = { .list = list_widget, .group = explorer_group };
 
-        // Añadir acciones de creación
         add_list_entry(&context, "Crear Archivo", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FILE);
         add_list_entry(&context, "Crear Carpeta", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FOLDER);
 
-        // Añadir ".." para subir de nivel si no estamos en la raíz
         if (strcmp(current_path, mount_point) != 0) {
             add_list_entry(&context, "..", LV_SYMBOL_UP, ITEM_TYPE_PARENT_DIR);
         }
 
-        // Listar archivos y directorios reales
-        sd_manager_list_files(current_path, add_fs_entry_to_list, &context);
+        std::vector<file_entry_t> entries;
+        sd_manager_list_files(current_path, collect_fs_entries_cb, &entries);
+
+        std::sort(entries.begin(), entries.end(), [](const file_entry_t& a, const file_entry_t& b) {
+            if (a.is_dir && !b.is_dir) return true;
+            if (!a.is_dir && b.is_dir) return false;
+            return strcasecmp(a.name.c_str(), b.name.c_str()) < 0;
+        });
+
+        for (const auto& entry : entries) {
+            const char *icon = entry.is_dir ? LV_SYMBOL_DIRECTORY : LV_SYMBOL_FILE;
+            file_item_type_t type = entry.is_dir ? ITEM_TYPE_DIR : ITEM_TYPE_FILE;
+            add_list_entry(&context, entry.name.c_str(), icon, type);
+        }
+
     } else {
-        // Lógica de estado de error
         in_error_state = true;
     }
 
@@ -160,7 +181,6 @@ static void schedule_repopulate_list() {
     lv_timer_create(repopulate_list_cb, 10, NULL);
 }
 
-// Función helper para añadir cualquier tipo de entrada a la lista
 static void add_list_entry(add_file_context_t *context, const char *name, const char *icon, file_item_type_t type) {
     lv_obj_t *btn = lv_list_add_button(context->list, icon, name);
     
@@ -181,20 +201,13 @@ static void add_list_entry(add_file_context_t *context, const char *name, const 
     }
 }
 
-// Callback para sd_manager_list_files
-static void add_fs_entry_to_list(const char *name, bool is_dir, void *user_data) {
-    add_file_context_t *context = static_cast<add_file_context_t *>(user_data);
-    if (!context || !context->list || !context->group) return;
-
-    // Ignorar "." y ".." del sistema de archivos, ya que manejamos ".." manualmente
-    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) return;
-
-    const char *icon = is_dir ? LV_SYMBOL_DIRECTORY : LV_SYMBOL_FILE;
-    file_item_type_t type = is_dir ? ITEM_TYPE_DIR : ITEM_TYPE_FILE;
-    add_list_entry(context, name, icon, type);
+static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data) {
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+        return;
+    }
+    auto* entries_vector = static_cast<std::vector<file_entry_t>*>(user_data);
+    entries_vector->push_back({std::string(name), is_dir});
 }
-
-// --- Funciones Públicas ---
 
 void file_explorer_destroy(void) {
     button_manager_unregister_view_handlers();
@@ -222,7 +235,7 @@ void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_selec
     in_error_state = false;
 
     explorer_group = lv_group_create();
-    lv_group_set_wrap(explorer_group, false); // No hacer wrap para sentir el principio/fin
+    lv_group_set_wrap(explorer_group, false);
     lv_group_set_focus_cb(explorer_group, focus_changed_cb);
     lv_group_set_default(explorer_group);
 
