@@ -77,8 +77,8 @@ static void on_create_action(file_item_type_t action_type, const char *current_p
     localtime_r(&now, &timeinfo);
     
     char basename[32];
-    strftime(basename, sizeof(basename), "%Y-%m-%d_%H-%M-%S", &timeinfo);
-
+    strftime(basename, sizeof(basename), "%H%M%S", &timeinfo);
+    
     char full_path[256];
 
     if (action_type == ITEM_TYPE_ACTION_CREATE_FILE) {
