@@ -7,6 +7,8 @@
 #include <string.h>
 #include <sys/unistd.h>
 #include <sys/stat.h>
+#include <errno.h> 
+#include <stdio.h>  
 
 static const char* TAG = "SD_MGR";
 
@@ -15,6 +17,7 @@ static bool s_is_mounted = false;
 static sdmmc_card_t* s_card;
 static const char* MOUNT_POINT = "/sdcard";
 
+// --- Funciones existentes ---
 bool sd_manager_init(void) {
     if (s_bus_initialized) {
         ESP_LOGW(TAG, "SPI bus already initialized.");
@@ -134,5 +137,109 @@ bool sd_manager_list_files(const char* path, file_iterator_cb_t cb, void* user_d
         cb(entry->d_name, is_dir, user_data);
     }
     closedir(dir);
+    return true;
+}
+
+bool sd_manager_delete_item(const char* path) {
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        ESP_LOGE(TAG, "Cannot stat path: %s. Error: %s", path, strerror(errno));
+        return false;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
+        if (rmdir(path) == 0) {
+            ESP_LOGI(TAG, "Removed directory: %s", path);
+            return true;
+        }
+        ESP_LOGE(TAG, "Failed to remove directory: %s. Error: %s", path, strerror(errno));
+        return false;
+    } else {
+        if (unlink(path) == 0) {
+            ESP_LOGI(TAG, "Removed file: %s", path);
+            return true;
+        }
+        ESP_LOGE(TAG, "Failed to remove file: %s. Error: %s", path, strerror(errno));
+        return false;
+    }
+}
+
+bool sd_manager_rename_item(const char* old_path, const char* new_path) {
+    if (rename(old_path, new_path) == 0) {
+        ESP_LOGI(TAG, "Renamed/Moved '%s' to '%s'", old_path, new_path);
+        return true;
+    }
+    ESP_LOGE(TAG, "Failed to rename/move '%s' to '%s'. Error: %s", old_path, new_path, strerror(errno));
+    return false;
+}
+
+bool sd_manager_create_directory(const char* path) {
+    if (mkdir(path, 0777) == 0) {
+        ESP_LOGI(TAG, "Created directory: %s", path);
+        return true;
+    }
+    ESP_LOGE(TAG, "Failed to create directory: %s. Error: %s", path, strerror(errno));
+    return false;
+}
+
+bool sd_manager_create_file(const char* path) {
+    FILE* f = fopen(path, "w");
+    if (f) {
+        fclose(f);
+        ESP_LOGI(TAG, "Created file: %s", path);
+        return true;
+    }
+    ESP_LOGE(TAG, "Failed to create file: %s. Error: %s", path, strerror(errno));
+    return false;
+}
+
+bool sd_manager_read_file(const char* path, char** buffer, size_t* size) {
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open file for reading: %s. Error: %s", path, strerror(errno));
+        return false;
+    }
+
+    fseek(f, 0, SEEK_END);
+    *size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    *buffer = (char*)malloc(*size + 1);
+    if (!*buffer) {
+        ESP_LOGE(TAG, "Failed to allocate memory for file content");
+        fclose(f);
+        return false;
+    }
+
+    if (fread(*buffer, 1, *size, f) != *size) {
+        ESP_LOGE(TAG, "Failed to read full file content");
+        free(*buffer);
+        *buffer = NULL;
+        fclose(f);
+        return false;
+    }
+
+    (*buffer)[*size] = '\0';
+    fclose(f);
+    ESP_LOGI(TAG, "Read %zu bytes from %s", *size, path);
+    return true;
+}
+
+bool sd_manager_write_file(const char* path, const char* content) {
+    FILE* f = fopen(path, "w");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open file for writing: %s. Error: %s", path, strerror(errno));
+        return false;
+    }
+    
+    size_t content_len = strlen(content);
+    if (fwrite(content, 1, content_len, f) != content_len) {
+        ESP_LOGE(TAG, "Failed to write full content to file: %s", path);
+        fclose(f);
+        return false;
+    }
+
+    fclose(f);
+    ESP_LOGI(TAG, "Wrote %zu bytes to %s", content_len, path);
     return true;
 }

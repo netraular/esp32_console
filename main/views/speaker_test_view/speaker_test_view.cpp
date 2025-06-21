@@ -284,7 +284,17 @@ static void show_file_explorer() {
     lv_obj_remove_style_all(explorer_container);
     lv_obj_set_size(explorer_container, lv_pct(100), lv_pct(100));
     lv_obj_center(explorer_container);
-    file_explorer_create(explorer_container, sd_manager_get_mount_point(), on_audio_file_selected, on_explorer_exit_speaker);
+
+    // --- CORRECCIÓN AQUÍ ---
+    // Se añade NULL como cuarto argumento para el nuevo callback `on_action`,
+    // que no es necesario en esta vista.
+    file_explorer_create(
+        explorer_container,
+        sd_manager_get_mount_point(),
+        on_audio_file_selected,
+        NULL, // on_action_cb -> no necesitamos crear archivos aquí
+        on_explorer_exit_speaker
+    );
 }
 
 // Creates the main "now playing" UI.
