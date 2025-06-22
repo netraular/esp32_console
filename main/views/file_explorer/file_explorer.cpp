@@ -139,7 +139,7 @@ static void clear_list_items(bool show_loading) {
 static void repopulate_list_cb(lv_timer_t *timer) {
     clear_list_items(false);
 
-    if (sd_manager_is_mounted()) {
+    if (sd_manager_check_ready()) {
         in_error_state = false;
         add_file_context_t context = { .list = list_widget, .group = explorer_group };
 
@@ -156,6 +156,8 @@ static void repopulate_list_cb(lv_timer_t *timer) {
         std::sort(entries.begin(), entries.end(), [](const file_entry_t& a, const file_entry_t& b) {
             if (a.is_dir && !b.is_dir) return true;
             if (!a.is_dir && b.is_dir) return false;
+            // --- CORRECCIÓN AQUÍ ---
+            // Utilizar strcasecmp para una ordenación natural (insensible a mayúsculas/minúsculas).
             return strcasecmp(a.name.c_str(), b.name.c_str()) < 0;
         });
 
@@ -167,6 +169,7 @@ static void repopulate_list_cb(lv_timer_t *timer) {
 
     } else {
         in_error_state = true;
+        lv_list_add_text(list_widget, "Error: No se pudo leer la SD");
     }
 
     if (lv_group_get_obj_count(explorer_group) > 0) {

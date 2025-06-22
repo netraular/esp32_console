@@ -51,7 +51,6 @@ static void handle_action_menu_ok() {
     lv_obj_t* selected_btn = lv_group_get_focused(action_menu_group);
     if (!selected_btn) return;
     
-    // <<< CORRECCIÓN: Obtener la lista (padre del botón) y luego el texto del botón
     lv_obj_t* list = lv_obj_get_parent(selected_btn);
     const char* action_text = lv_list_get_button_text(list, selected_btn);
 
@@ -61,16 +60,23 @@ static void handle_action_menu_ok() {
 
     if (strcmp(action_text, "Leer") == 0) {
         on_file_selected(selected_item_path);
-        // El lector de texto se encargará de destruir el menú al limpiar la pantalla
         should_destroy_menu = false; 
     } 
     else if (strcmp(action_text, "Renombrar") == 0) {
+        // --- CORRECCIÓN AQUÍ: Construcción segura de la nueva ruta ---
         char new_path[256] = {0};
         const char* dir_end = strrchr(selected_item_path, '/');
+        size_t dir_len = 0;
         if (dir_end) {
-            strncpy(new_path, selected_item_path, dir_end - selected_item_path + 1);
+            dir_len = (dir_end - selected_item_path) + 1;
         }
 
+        // 1. Copiar de forma segura la parte del directorio
+        if (dir_len > 0) {
+           strncpy(new_path, selected_item_path, dir_len);
+        }
+
+        // 2. Generar el nuevo nombre de archivo basado en la hora
         time_t now = time(NULL);
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
@@ -80,8 +86,9 @@ static void handle_action_menu_ok() {
         const char* ext = strrchr(selected_item_path, '.');
         if (!ext) ext = "";
 
-        strncat(new_path, basename, sizeof(new_path) - strlen(new_path) - 1);
-        strncat(new_path, ext, sizeof(new_path) - strlen(new_path) - 1);
+        // 3. Concatenar de forma segura el nuevo nombre y la extensión
+        snprintf(new_path + dir_len, sizeof(new_path) - dir_len, "%s%s", basename, ext);
+        // --- FIN DE LA CORRECCIÓN ---
 
         ESP_LOGI(TAG, "Renombrando '%s' -> '%s'", selected_item_path, new_path);
         sd_manager_rename_item(selected_item_path, new_path);
@@ -95,43 +102,34 @@ static void handle_action_menu_ok() {
     }
 }
 
-/**
- * @brief Crea el menú emergente con las acciones para un archivo.
- * @param path La ruta completa del archivo seleccionado.
- */
 static void create_action_menu(const char* path) {
     if (action_menu_container) {
         return; 
     }
     strncpy(selected_item_path, path, sizeof(selected_item_path) - 1);
 
-    // Estilo para el feedback visual
     lv_style_init(&style_action_menu_focused);
     lv_style_set_bg_color(&style_action_menu_focused, lv_palette_main(LV_PALETTE_BLUE));
     lv_style_set_bg_opa(&style_action_menu_focused, LV_OPA_COVER);
     
-    // <<< Telón de fondo semitransparente. Ahora es el padre del contenedor del menú.
     action_menu_container = lv_obj_create(view_parent);
     lv_obj_remove_style_all(action_menu_container);
     lv_obj_set_size(action_menu_container, lv_pct(100), lv_pct(100));
     lv_obj_set_style_bg_color(action_menu_container, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(action_menu_container, LV_OPA_50, 0);
     
-    // <<< Contenedor para la lista, que simula una ventana modal.
     lv_obj_t* menu_box = lv_obj_create(action_menu_container);
-    lv_obj_set_width(menu_box, lv_pct(80));          // Ocupa el 80% del ancho
-    lv_obj_set_height(menu_box, LV_SIZE_CONTENT);   // Altura automática según contenido
-    lv_obj_center(menu_box);                        // Centrar el contenedor
+    lv_obj_set_width(menu_box, lv_pct(80));
+    lv_obj_set_height(menu_box, LV_SIZE_CONTENT);
+    lv_obj_center(menu_box);
     lv_obj_set_style_pad_all(menu_box, 10, 0);
 
-    // La lista ahora se crea dentro del 'menu_box'
     lv_obj_t* list = lv_list_create(menu_box);
     lv_obj_set_size(list, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_center(list);
 
     action_menu_group = lv_group_create();
 
-    // <<< CORRECCIÓN: Añadir cada botón al grupo individualmente
     lv_obj_t* btn;
     btn = lv_list_add_button(list, LV_SYMBOL_EYE_OPEN, "Leer");
     lv_obj_add_style(btn, &style_action_menu_focused, LV_STATE_FOCUSED);
@@ -145,20 +143,15 @@ static void create_action_menu(const char* path) {
     lv_obj_add_style(btn, &style_action_menu_focused, LV_STATE_FOCUSED);
     lv_group_add_obj(action_menu_group, btn);
 
-
     lv_group_set_default(action_menu_group);
-    lv_group_focus_obj(lv_obj_get_child(list, 0)); // Poner foco en el primer botón
+    lv_group_focus_obj(lv_obj_get_child(list, 0));
 
-    // Registrar manejadores de botones para el menú de acciones
     button_manager_register_view_handler(BUTTON_OK, handle_action_menu_ok);
     button_manager_register_view_handler(BUTTON_CANCEL, destroy_action_menu); 
     button_manager_register_view_handler(BUTTON_LEFT, handle_action_menu_left);
     button_manager_register_view_handler(BUTTON_RIGHT, handle_action_menu_right); 
 }
 
-/**
- * @brief Destruye el menú de acciones y restaura los handlers del explorador.
- */
 static void destroy_action_menu() {
     if (action_menu_container) {
         lv_group_del(action_menu_group);
@@ -166,16 +159,10 @@ static void destroy_action_menu() {
         lv_obj_del(action_menu_container);
         action_menu_container = NULL;
 
-        // Devuelve el control al explorador de archivos sin reconstruirlo
         file_explorer_set_input_active(true);
-        // Refresca la lista por si se ha borrado o renombrado algo
         file_explorer_refresh();
     }
 }
-
-// =================================================================
-// Implementación del Visor de Texto
-// =================================================================
 
 static void text_viewer_delete_cb(lv_event_t * e) {
     char* text_content = (char*)lv_event_get_user_data(e);
@@ -186,8 +173,6 @@ static void text_viewer_delete_cb(lv_event_t * e) {
 }
 
 static void create_text_viewer(const char* title, char* content) {
-    // Esta función limpia toda la pantalla, destruyendo el explorador.
-    // Es parte del flujo original, pero la vuelta atrás se mejora.
     button_manager_unregister_view_handlers();
     lv_obj_clean(view_parent);
 
@@ -216,14 +201,9 @@ static void create_text_viewer(const char* title, char* content) {
 }
 
 static void handle_cancel_from_viewer() {
-    // Al volver del visor, reconstruimos el explorador
     show_file_explorer();
 }
 
-
-// =================================================================
-// Lógica Principal de la Vista
-// =================================================================
 
 static void on_file_selected(const char *path) {
     char* file_content = NULL;
@@ -246,13 +226,10 @@ static void on_file_or_dir_selected(const char *path) {
     struct stat st;
     if (stat(path, &st) == 0) {
         if (!S_ISDIR(st.st_mode)) {
-            // Desactivar temporalmente el input del explorador para que no interfiera
             file_explorer_set_input_active(false);
             create_action_menu(path);
         } else {
             ESP_LOGI(TAG, "Directorio seleccionado, no se muestra menú: %s", path);
-            // Para entrar en un directorio, el explorador ya lo gestiona con el botón OK.
-            // Aquí solo nos interesan las acciones sobre archivos.
         }
     }
 }

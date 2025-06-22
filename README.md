@@ -6,4 +6,4 @@ SPI RAM config -> Mode (QUAD/OCT) of SPI RAM chip in use -> Octal Mode PSRAM
 SPI RAM config -> Set RAM clock speed -> 80MHz clock speed
 Flash size -> 16 MB
 CPU frequency -> 240 MHz
-
+FAT Filesystem suppor -> Long filename support with heap

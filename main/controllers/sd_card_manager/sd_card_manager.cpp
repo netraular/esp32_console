@@ -133,6 +133,9 @@ bool sd_manager_list_files(const char* path, file_iterator_cb_t cb, void* user_d
     }
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
+        // --- VUELVE A AÑADIR ESTE LOG ---
+        ESP_LOGI(TAG, "FATFS readdir() returned: '%s'", entry->d_name);
+        // --- FIN DEL LOG ---
         bool is_dir = (entry->d_type == DT_DIR);
         cb(entry->d_name, is_dir, user_data);
     }
