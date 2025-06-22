@@ -1,5 +1,3 @@
-// main/views/sd_test_view/sd_test_view.cpp
-
 #include "sd_test_view.h"
 #include "../view_manager.h"
 #include "../file_explorer/file_explorer.h"
@@ -30,10 +28,10 @@ static void on_file_or_dir_selected(const char *path);
 static void on_create_action(file_item_type_t action_type, const char *current_path);
 static void destroy_action_menu_internal(bool refresh_file_explorer_after);
 static void create_text_viewer(const char* title, char* content);
-static void handle_action_menu_ok_press();
+
 
 /***************************************************
- *  ACTION MENU BUTTON HANDLERS (Now direct-acting)
+ *  ACTION MENU BUTTON HANDLERS
  ***************************************************/
 static void handle_action_menu_left_press() {
     ESP_LOGD(TAG, "Action Menu Left Press");
@@ -147,7 +145,7 @@ static void create_action_menu(const char* path) {
 static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
     if (action_menu_container) {
         ESP_LOGI(TAG, "Destroying action menu. Refresh explorer: %s", refresh_file_explorer_after ? "yes" : "no");
-        button_manager_unregister_view_handlers();
+        // No need to unregister handlers, the file explorer will re-register its own.
 
         if(action_menu_group) {
              if (lv_group_get_default() == action_menu_group) {

@@ -48,10 +48,9 @@ static void list_item_delete_cb(lv_event_t * e);
 static void add_list_entry(add_file_context_t *context, const char *name, const char *icon, file_item_type_t type);
 static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data);
 static void focus_changed_cb(lv_group_t * group);
-static void handle_ok_press();
 static void handle_cancel_press();
 
-// --- BUTTON HANDLERS (Now direct-acting, safe due to QUEUED mode) ---
+// --- BUTTON HANDLERS (Now direct-acting, but safe due to QUEUED mode in button_manager) ---
 static void handle_right_press() {
     ESP_LOGD(TAG, "Right Press");
     if (in_error_state) return;
@@ -220,7 +219,7 @@ static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data
 // --- Public Functions ---
 
 void file_explorer_destroy(void) {
-    button_manager_unregister_view_handlers();
+    // No need to unregister handlers here, view_manager does it.
     if (explorer_group) {
         if (lv_group_get_default() == explorer_group) lv_group_set_default(NULL);
         lv_group_delete(explorer_group);
