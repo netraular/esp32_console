@@ -9,11 +9,10 @@
 #include <strings.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h"
 
 static const char *TAG = "FILE_EXPLORER";
 
-// --- Variables de estado de la UI ---
+// --- UI State Variables ---
 static lv_group_t *explorer_group = nullptr;
 static lv_style_t style_focused;
 static lv_obj_t* list_widget = nullptr;
@@ -21,26 +20,12 @@ static char current_path[256];
 static char mount_point[32];
 static bool in_error_state = false;
 
-// --- Callbacks externos ---
+// --- External Callbacks ---
 static file_select_callback_t on_file_select_cb = NULL;
 static file_action_callback_t on_action_cb = NULL;
 static file_explorer_exit_callback_t on_exit_cb = NULL;
 
-// --- ESTRUCTURA PARA MANEJO ASÍNCRONO DE ENTRADA ---
-typedef enum {
-    NAV_UP,
-    NAV_DOWN,
-    NAV_OK,
-    NAV_CANCEL
-} explorer_input_event_t;
-
-// Usamos una cola de FreeRTOS para comunicar los botones con el timer de LVGL
-static QueueHandle_t input_queue = NULL; 
-// Usamos un timer de LVGL para procesar la cola de forma segura
-static lv_timer_t* input_processor_timer = NULL;
-
-
-// --- Tipos de datos internos ---
+// --- Internal Data Types ---
 typedef struct {
     std::string name;
     bool is_dir;
@@ -55,8 +40,7 @@ typedef struct {
     lv_group_t *group;
 } add_file_context_t;
 
-
-// --- Prototipos de funciones internas ---
+// --- Forward Declarations ---
 static void repopulate_list_cb(lv_timer_t *timer);
 static void schedule_repopulate_list();
 static void clear_list_items(bool show_loading);
@@ -64,123 +48,81 @@ static void list_item_delete_cb(lv_event_t * e);
 static void add_list_entry(add_file_context_t *context, const char *name, const char *icon, file_item_type_t type);
 static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data);
 static void focus_changed_cb(lv_group_t * group);
-static void process_input_queue_cb(lv_timer_t* timer); // NUEVA FUNCIÓN
+static void handle_ok_press();
+static void handle_cancel_press();
 
-
-// --- MANEJADORES DE BOTONES ASÍNCRONOS ---
-// Estos siguen siendo igual de rápidos.
+// --- BUTTON HANDLERS (Now direct-acting, safe due to QUEUED mode) ---
 static void handle_right_press() {
-    ESP_LOGD(TAG, "Right Press -> Enviando NAV_DOWN a la cola.");
+    ESP_LOGD(TAG, "Right Press");
     if (in_error_state) return;
-    explorer_input_event_t event = NAV_DOWN;
-    if (input_queue) xQueueSend(input_queue, &event, 0);
+    if (explorer_group) lv_group_focus_next(explorer_group);
 }
 
 static void handle_left_press() {
-    ESP_LOGD(TAG, "Left Press -> Enviando NAV_UP a la cola.");
+    ESP_LOGD(TAG, "Left Press");
     if (in_error_state) return;
-    explorer_input_event_t event = NAV_UP;
-    if (input_queue) xQueueSend(input_queue, &event, 0);
+    if (explorer_group) lv_group_focus_prev(explorer_group);
 }
 
 static void handle_ok_press() {
-    ESP_LOGD(TAG, "OK Press -> Enviando NAV_OK a la cola.");
+    ESP_LOGD(TAG, "OK Press");
     if (in_error_state) return;
-    explorer_input_event_t event = NAV_OK;
-    if (input_queue) xQueueSend(input_queue, &event, 0);
+    
+    lv_obj_t * focused_obj = lv_group_get_focused(explorer_group);
+    if (!focused_obj) return;
+
+    list_item_data_t* item_data = static_cast<list_item_data_t*>(lv_obj_get_user_data(focused_obj));
+    if (!item_data) return;
+
+    const char* entry_name = lv_list_get_button_text(list_widget, focused_obj);
+
+    switch (item_data->type) {
+        case ITEM_TYPE_DIR:
+            ESP_LOGI(TAG, "Entering directory: %s", entry_name);
+            if (current_path[strlen(current_path) - 1] != '/') strcat(current_path, "/");
+            strcat(current_path, entry_name);
+            schedule_repopulate_list();
+            break;
+        case ITEM_TYPE_PARENT_DIR:
+            handle_cancel_press(); // Same action as going back
+            break;
+        case ITEM_TYPE_FILE:
+            ESP_LOGI(TAG, "File selected: %s", entry_name);
+            if (on_file_select_cb) {
+                char full_path[300];
+                snprintf(full_path, sizeof(full_path), "%s/%s", current_path, entry_name);
+                on_file_select_cb(full_path);
+            }
+            break;
+        case ITEM_TYPE_ACTION_CREATE_FILE:
+        case ITEM_TYPE_ACTION_CREATE_FOLDER:
+            ESP_LOGI(TAG, "Action selected: %d", item_data->type);
+            if (on_action_cb) {
+                on_action_cb(item_data->type, current_path);
+            }
+            break;
+    }
 }
 
 static void handle_cancel_press() {
-    ESP_LOGD(TAG, "Cancel Press -> Enviando NAV_CANCEL a la cola.");
-    explorer_input_event_t event = NAV_CANCEL;
-    if (input_queue) xQueueSend(input_queue, &event, 0);
-}
-
-
-// --- TEMPORIZADOR DE LVGL PARA PROCESAR LA ENTRADA ---
-// Esta función se ejecuta periódicamente desde lv_timer_handler, en el hilo correcto.
-static void process_input_queue_cb(lv_timer_t* timer) {
-    explorer_input_event_t event;
-
-    // Procesa un solo evento por llamada para no bloquear el renderizado
-    if (xQueueReceive(input_queue, &event, 0) == pdPASS) {
-        const char* event_name = "UNKNOWN";
-        switch(event) {
-            case NAV_UP: event_name = "NAV_UP"; break;
-            case NAV_DOWN: event_name = "NAV_DOWN"; break;
-            case NAV_OK: event_name = "NAV_OK"; break;
-            case NAV_CANCEL: event_name = "NAV_CANCEL"; break;
+    ESP_LOGD(TAG, "Cancel Press");
+    if (in_error_state || strcmp(current_path, mount_point) == 0) {
+        ESP_LOGI(TAG, "Exiting file explorer.");
+        if (on_exit_cb) on_exit_cb();
+    } else {
+        ESP_LOGI(TAG, "Navigating to parent directory from: %s", current_path);
+        char *last_slash = strrchr(current_path, '/');
+        if (last_slash && last_slash > current_path) {
+            *last_slash = '\0';
+        } else {
+            strcpy(current_path, mount_point);
         }
-        ESP_LOGD(TAG, "LVGL timer procesando evento: %s", event_name);
-
-        switch (event) {
-            case NAV_UP:
-                if (explorer_group) lv_group_focus_prev(explorer_group);
-                break;
-            case NAV_DOWN:
-                if (explorer_group) lv_group_focus_next(explorer_group);
-                break;
-            case NAV_OK: {
-                lv_obj_t * focused_obj = lv_group_get_focused(explorer_group);
-                if (!focused_obj) break;
-
-                list_item_data_t* item_data = static_cast<list_item_data_t*>(lv_obj_get_user_data(focused_obj));
-                if (!item_data) break;
-
-                const char* entry_name = lv_list_get_button_text(list_widget, focused_obj);
-
-                switch (item_data->type) {
-                    case ITEM_TYPE_DIR:
-                        ESP_LOGI(TAG, "Entrando al directorio: %s", entry_name);
-                        if (current_path[strlen(current_path) - 1] != '/') strcat(current_path, "/");
-                        strcat(current_path, entry_name);
-                        schedule_repopulate_list();
-                        break;
-                    case ITEM_TYPE_PARENT_DIR:
-                        if (input_queue) {
-                            explorer_input_event_t cancel_event = NAV_CANCEL;
-                            xQueueSend(input_queue, &cancel_event, 0);
-                        }
-                        break;
-                    case ITEM_TYPE_FILE:
-                        ESP_LOGI(TAG, "Archivo seleccionado: %s", entry_name);
-                        if (on_file_select_cb) {
-                            char full_path[300];
-                            snprintf(full_path, sizeof(full_path), "%s/%s", current_path, entry_name);
-                            on_file_select_cb(full_path);
-                        }
-                        break;
-                    case ITEM_TYPE_ACTION_CREATE_FILE:
-                    case ITEM_TYPE_ACTION_CREATE_FOLDER:
-                        ESP_LOGI(TAG, "Acción seleccionada: %d", item_data->type);
-                        if (on_action_cb) {
-                            on_action_cb(item_data->type, current_path);
-                        }
-                        break;
-                }
-                break;
-            }
-            case NAV_CANCEL:
-                if (in_error_state || strcmp(current_path, mount_point) == 0) {
-                    ESP_LOGI(TAG, "Saliendo del explorador de archivos.");
-                    if (on_exit_cb) on_exit_cb();
-                } else {
-                    ESP_LOGI(TAG, "Navegando al directorio padre desde: %s", current_path);
-                    char *last_slash = strrchr(current_path, '/');
-                    if (last_slash && last_slash > current_path) {
-                        *last_slash = '\0';
-                    } else {
-                        strcpy(current_path, mount_point);
-                    }
-                    schedule_repopulate_list();
-                }
-                break;
-        }
+        schedule_repopulate_list();
     }
 }
 
 
-// --- Lógica de la UI (la mayoría sin cambios) ---
+// --- UI Logic (mostly unchanged) ---
 
 static void focus_changed_cb(lv_group_t * group) {
     lv_obj_t * focused_obj = lv_group_get_focused(group);
@@ -275,7 +217,7 @@ static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data
     entries_vector->push_back({std::string(name), is_dir});
 }
 
-// --- FUNCIONES PÚBLICAS ---
+// --- Public Functions ---
 
 void file_explorer_destroy(void) {
     button_manager_unregister_view_handlers();
@@ -285,16 +227,6 @@ void file_explorer_destroy(void) {
         explorer_group = nullptr;
     }
     
-    // Detener y eliminar el timer y la cola
-    if (input_processor_timer) {
-        lv_timer_del(input_processor_timer);
-        input_processor_timer = NULL;
-    }
-    if (input_queue) {
-        vQueueDelete(input_queue);
-        input_queue = NULL;
-    }
-
     list_widget = nullptr;
     on_file_select_cb = NULL;
     on_action_cb = NULL;
@@ -306,6 +238,7 @@ void file_explorer_destroy(void) {
 void file_explorer_set_input_active(bool active) {
     if (active) {
         ESP_LOGD(TAG, "Re-activating file explorer input handlers.");
+        button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED); // Ensure correct mode
         button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press);
         button_manager_register_view_handler(BUTTON_OK, handle_ok_press);
         button_manager_register_view_handler(BUTTON_RIGHT, handle_right_press);
@@ -313,17 +246,11 @@ void file_explorer_set_input_active(bool active) {
         if (explorer_group) {
             lv_group_set_default(explorer_group);
         }
-        if (input_processor_timer) {
-            lv_timer_resume(input_processor_timer);
-        }
     } else {
         ESP_LOGD(TAG, "De-activating file explorer input handlers.");
         button_manager_unregister_view_handlers();
         if (explorer_group && lv_group_get_default() == explorer_group) {
             lv_group_set_default(NULL);
-        }
-        if (input_processor_timer) {
-            lv_timer_pause(input_processor_timer);
         }
     }
 }
@@ -337,10 +264,6 @@ void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_selec
     strncpy(current_path, initial_path, sizeof(current_path) - 1);
     strncpy(mount_point, initial_path, sizeof(mount_point) - 1);
     in_error_state = false;
-
-    // Crear la cola y el temporizador de LVGL para procesarla
-    input_queue = xQueueCreate(10, sizeof(explorer_input_event_t));
-    input_processor_timer = lv_timer_create(process_input_queue_cb, 20, NULL); // Se ejecuta cada 20ms
 
     explorer_group = lv_group_create();
     lv_group_set_wrap(explorer_group, false);

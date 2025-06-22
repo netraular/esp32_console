@@ -7,7 +7,7 @@
 #include "speaker_test_view/speaker_test_view.h"
 #include "sd_test_view/sd_test_view.h"
 #include "image_test_view/image_test_view.h"
-#include "buzzer_test_view/buzzer_test_view.h"
+#include "button_test_view/button_test_view.h"
 
 static const char *TAG = "VIEW_MGR";
 static view_id_t current_view_id;
@@ -49,8 +49,8 @@ void view_manager_load_view(view_id_t view_id) {
         case VIEW_ID_IMAGE_TEST:
             image_test_view_create(scr);
             break;
-        case VIEW_ID_BUZZER_TEST:
-            buzzer_test_view_create(scr);
+        case VIEW_ID_BUTTON_TEST:
+            button_test_view_create(scr);
             break;
         default:
             break;

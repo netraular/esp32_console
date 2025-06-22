@@ -31,7 +31,7 @@
 #define RGB_LED_PIN      GPIO_NUM_48
 
 // --- AUDIO PINS ---
-#define BUZZER_PIN   GPIO_NUM_18
+// #define BUZZER_PIN   GPIO_NUM_18
 
 // Unified I2S Pins for Audio In/Out
 #define I2S_BCLK_PIN   GPIO_NUM_16

@@ -4,6 +4,7 @@
 #include "iot_button.h"
 #include "button_gpio.h"
 #include "config.h"
+#include "lvgl.h" // Necesario para el temporizador interno
 
 // Enum to uniquely identify each button
 typedef enum {
@@ -14,6 +15,12 @@ typedef enum {
     BUTTON_ON_OFF,
     BUTTON_COUNT // Total number of buttons, useful for loops
 } button_id_t;
+
+//! Enum para el modo de despacho de eventos de botón
+typedef enum {
+    INPUT_DISPATCH_MODE_QUEUED,     //!< (Default) Los eventos se encolan y procesan vía un timer de LVGL. Seguro para la UI.
+    INPUT_DISPATCH_MODE_IMMEDIATE   //!< Los eventos ejecutan el callback instantáneamente. Para baja latencia (juegos).
+} input_dispatch_mode_t;
 
 // Function type for button event handlers (callbacks)
 typedef void (*button_handler_t)(void);
@@ -26,8 +33,16 @@ typedef struct {
 
 /**
  * @brief Initializes the button manager, configures GPIO pins, and registers default handlers.
+ * Por defecto, opera en modo QUEUED.
  */
 void button_manager_init();
+
+/**
+ * @brief Establece el modo de despacho de eventos de los botones.
+ *
+ * @param mode El modo a utilizar (QUEUED o IMMEDIATE).
+ */
+void button_manager_set_dispatch_mode(input_dispatch_mode_t mode);
 
 /**
  * @brief Registers a default handler for a specific button.
