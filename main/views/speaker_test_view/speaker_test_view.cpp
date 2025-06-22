@@ -15,7 +15,7 @@ static const char *TAG = "SPEAKER_TEST_VIEW";
 // View State Variables
 static lv_obj_t *view_parent = NULL;
 static char current_song_path[256];
-static bool is_exiting = false; // Flag to manage a clean shutdown sequence.
+static bool is_exiting = false;
 
 // UI Widgets
 static lv_obj_t *play_pause_btn_label = NULL;
@@ -25,15 +25,16 @@ static lv_obj_t *time_total_label_widget = NULL;
 static lv_timer_t *ui_update_timer = NULL;
 static lv_obj_t *volume_label_widget = NULL;
 static lv_obj_t *visualizer_widget = NULL;
-static lv_obj_t *info_label_widget = NULL; // For initial/error screens.
+static lv_obj_t *info_label_widget = NULL;
 static visualizer_data_t current_viz_data;
-static bool viz_data_received = false; // Used for visualizer decay effect.
+static bool viz_data_received = false;
 
-// Worker Function Prototypes (for lv_async_call)
+// Worker Function Prototypes
 static void update_volume_label_task(void *user_data);
 static void handle_play_pause_ui_update_task(void *user_data);
 static void stop_audio_task(void* user_data);
 static void play_audio_task(void* user_data);
+static void start_playback(); // --> AÑADIDO: Función dedicada para iniciar la reproducción
 
 // Other Function Prototypes
 static void create_initial_speaker_view();
@@ -53,7 +54,7 @@ static void handle_left_press_playing();
 static void handle_right_press_playing();
 
 
-// --- Utility Functions ---
+// --- Utility Functions (sin cambios) ---
 static bool is_wav_file(const char *path) {
     const char *ext = strrchr(path, '.');
     return ext && (strcasecmp(ext, ".wav") == 0);
@@ -68,6 +69,7 @@ static void format_time(char *buf, size_t buf_size, uint32_t time_s) {
     snprintf(buf, buf_size, "%02lu:%02lu", time_s / 60, time_s % 60);
 }
 
+// --- UI Update Timer (sin cambios) ---
 static void ui_update_timer_cb(lv_timer_t *timer) {
     audio_player_state_t state = audio_manager_get_state();
     
@@ -86,9 +88,9 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
         return;
     }
 
-    if (!is_exiting && state == AUDIO_STATE_STOPPED) {
-        ESP_LOGI(TAG, "Song finished naturally. Resetting UI to initial playback state.");
-        handle_play_pause_ui_update_task(NULL);
+    if (!is_exiting && (state == AUDIO_STATE_STOPPED || state == AUDIO_STATE_ERROR)) {
+        ESP_LOGI(TAG, "Song finished or error occurred. Resetting UI.");
+        lv_async_call(handle_play_pause_ui_update_task, NULL);
         if (slider_widget) lv_slider_set_value(slider_widget, 0, LV_ANIM_OFF);
         if (time_current_label_widget) lv_label_set_text(time_current_label_widget, "00:00");
         
@@ -148,7 +150,7 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
     }
 }
 
-// --- Worker Functions for lv_async_call (Best practice for long operations) ---
+// --- Worker Functions for lv_async_call (sin cambios) ---
 
 static void update_volume_label_task(void *user_data) {
     if (volume_label_widget) {
@@ -158,7 +160,7 @@ static void update_volume_label_task(void *user_data) {
         const int volume_step = 5;
         uint8_t display_vol = (uint8_t)(roundf((float)raw_display_vol / volume_step) * volume_step);
         
-        const char * vol_icon = (display_vol == 0) ? LV_SYMBOL_MUTE : (vol < (MAX_VOLUME_PERCENTAGE / 2)) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
+        const char * vol_icon = (display_vol == 0) ? LV_SYMBOL_MUTE : (display_vol < 50) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
         snprintf(vol_buf, sizeof(vol_buf), "%s %u%%", vol_icon, display_vol);
         lv_label_set_text(volume_label_widget, vol_buf);
     }
@@ -176,9 +178,8 @@ static void stop_audio_task(void* user_data) {
 }
 
 static void play_audio_task(void* user_data) {
-    // This task encapsulates the logic to start playback and handle UI updates.
     if (audio_manager_play(current_song_path)) {
-        handle_play_pause_ui_update_task(NULL);
+        lv_async_call(handle_play_pause_ui_update_task, NULL);
         if (ui_update_timer == NULL) { 
             ui_update_timer = lv_timer_create(ui_update_timer_cb, 50, NULL);
         }
@@ -188,31 +189,38 @@ static void play_audio_task(void* user_data) {
     }
 }
 
+// --- CORRECCIÓN: Nueva función para iniciar la reproducción ---
+static void start_playback() {
+    ESP_LOGI(TAG, "Initiating playback sequence.");
+    lv_async_call(play_audio_task, NULL);
+}
+
 // --- Button Handlers for "Now Playing" View ---
 
+// --- CORRECCIÓN: Lógica de Play/Pause simplificada ---
 static void handle_ok_press_playing() {
     audio_player_state_t state = audio_manager_get_state();
     switch (state) {
-        case AUDIO_STATE_STOPPED:
-            if (is_exiting) return; 
-            lv_async_call(play_audio_task, NULL);
-            break;
         case AUDIO_STATE_PLAYING:
             audio_manager_pause();
-            lv_async_call(handle_play_pause_ui_update_task, NULL);
             break;
         case AUDIO_STATE_PAUSED:
             audio_manager_resume();
-            lv_async_call(handle_play_pause_ui_update_task, NULL);
             break;
-        default: break;
+        case AUDIO_STATE_STOPPED:
+        case AUDIO_STATE_ERROR:
+             // Si la canción terminó o dio error, OK la reinicia
+            start_playback();
+            break;
+        default: 
+            break;
     }
+    // Siempre actualizamos el ícono después de una acción
+    lv_async_call(handle_play_pause_ui_update_task, NULL);
 }
 
 static void handle_cancel_press_playing() {
     if (is_exiting) return;
-
-    ESP_LOGI(TAG, "Cancel pressed. Requesting audio stop asynchronously.");
     is_exiting = true;
     button_manager_unregister_view_handlers();
     lv_async_call(stop_audio_task, NULL);
@@ -227,6 +235,8 @@ static void handle_right_press_playing() {
     audio_manager_volume_up();
     lv_async_call(update_volume_label_task, NULL);
 }
+
+// --- View Creation and Management ---
 
 static void cleanup_player_and_return_to_initial_view() {
     if (ui_update_timer) {
@@ -245,9 +255,15 @@ static void cleanup_player_and_return_to_initial_view() {
 }
 
 static void on_audio_file_selected(const char *path) {
+    // Es vital anular el registro aquí para limpiar la cola de eventos y evitar
+    // que eventos retardados (como SINGLE_CLICK) afecten a la nueva vista.
+    button_manager_unregister_view_handlers();
+
     if (is_wav_file(path)) {
-        file_explorer_destroy();
+        file_explorer_destroy(); 
         create_now_playing_view(path);
+    } else {
+        on_explorer_exit_speaker();
     }
 }
 
@@ -278,6 +294,7 @@ static void create_now_playing_view(const char *file_path) {
     lv_obj_clean(view_parent);
     strncpy(current_song_path, file_path, sizeof(current_song_path) - 1);
 
+    // ... (El código de creación de widgets es idéntico al tuyo) ...
     lv_obj_t *main_cont = lv_obj_create(view_parent);
     lv_obj_remove_style_all(main_cont);
     lv_obj_set_size(main_cont, lv_pct(100), lv_pct(100));
@@ -326,29 +343,26 @@ static void create_now_playing_view(const char *file_path) {
 
     lv_obj_t *play_pause_btn = lv_button_create(main_cont);
     play_pause_btn_label = lv_label_create(play_pause_btn);
-    lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PLAY);
+    lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PLAY); // Inicia como "Play"
     lv_obj_set_style_text_font(play_pause_btn_label, &lv_font_montserrat_28, 0);
     
-    // --- CORRECCIÓN AQUÍ ---
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press_playing, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press_playing, true);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, handle_left_press_playing, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, handle_right_press_playing, true);
-    // --- FIN DE LA CORRECCIÓN ---
-
-    handle_ok_press_playing();
+    // --- CORRECCIÓN: Usar TAP para consistencia y respuesta rápida ---
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press_playing, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_playing, true);
+    // Para el volumen, un clic simple con retardo es aceptable, o podemos usar TAP. Seamos consistentes.
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press_playing, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press_playing, true);
+    
+    // --- CORRECCIÓN: Iniciar la reproducción con la función dedicada ---
+    start_playback();
 }
 
 static void handle_ok_press_initial() {
     ESP_LOGI(TAG, "OK button pressed. Forcing SD card re-mount...");
-    
     sd_manager_unmount();
-
     if (sd_manager_mount()) {
-        ESP_LOGI(TAG, "Re-mount successful. Opening file explorer.");
         show_file_explorer();
     } else {
-        ESP_LOGW(TAG, "Re-mount failed. Showing error message.");
         if (info_label_widget) {
             lv_label_set_text(info_label_widget, "Failed to read SD card.\n\n"
                                                  "Check the card and\n"
@@ -367,6 +381,7 @@ static void handle_cancel_press_initial() {
 }
 
 static void create_initial_speaker_view() {
+    is_exiting = false;
     lv_obj_clean(view_parent);
 
     lv_obj_t *label = lv_label_create(view_parent);
@@ -380,10 +395,11 @@ static void create_initial_speaker_view() {
     lv_label_set_text(info_label_widget, "Press OK to\nselect an audio file");
 
     button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-    // --- CORRECCIÓN AQUÍ ---
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_SINGLE_CLICK, handle_ok_press_initial, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press_initial, true);
-    // --- FIN DE LA CORRECCIÓN ---
+    // Usamos TAP aquí también para una respuesta rápida y consistente
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press_initial, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_initial, true);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, NULL, true);
 }
 
 void speaker_test_view_create(lv_obj_t *parent) {

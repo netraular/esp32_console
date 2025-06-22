@@ -30,7 +30,7 @@ typedef enum {
     BUTTON_EVENT_DOUBLE_CLICK,
     BUTTON_EVENT_LONG_PRESS_START,
     BUTTON_EVENT_LONG_PRESS_HOLD,
-    BUTTON_EVENT_TAP, // --> AÑADIDO: Evento de clic rápido instantáneo
+    BUTTON_EVENT_TAP, // --> AÑADIDO: Evento de clic rápido que se dispara al soltar el botón.
     BUTTON_EVENT_COUNT // Total number of event types
 } button_event_type_t;
 
@@ -73,8 +73,8 @@ void button_manager_set_dispatch_mode(input_dispatch_mode_t mode);
 void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler);
 
 /**
- * @brief Unregisters all view-specific handlers across all buttons and events, restoring default behaviors.
- * Useful when changing screens in the UI.
+ * @brief Unregisters all view-specific handlers and clears any pending button events from the queue.
+ * Useful when changing screens in the UI to prevent stale events.
  */
 void button_manager_unregister_view_handlers();
 

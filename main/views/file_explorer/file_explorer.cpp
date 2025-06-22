@@ -78,7 +78,9 @@ static void handle_ok_press() {
     switch (item_data->type) {
         case ITEM_TYPE_DIR:
             ESP_LOGI(TAG, "Entering directory: %s", entry_name);
-            if (current_path[strlen(current_path) - 1] != '/') strcat(current_path, "/");
+            if (strlen(current_path) > 0 && current_path[strlen(current_path) - 1] != '/') {
+                 strcat(current_path, "/");
+            }
             strcat(current_path, entry_name);
             schedule_repopulate_list();
             break;
@@ -121,7 +123,7 @@ static void handle_cancel_press() {
 }
 
 
-// --- UI Logic (unchanged) ---
+// --- UI Logic ---
 
 static void focus_changed_cb(lv_group_t * group) {
     lv_obj_t * focused_obj = lv_group_get_focused(group);
@@ -149,8 +151,10 @@ static void repopulate_list_cb(lv_timer_t *timer) {
         in_error_state = false;
         add_file_context_t context = { .list = list_widget, .group = explorer_group };
 
-        add_list_entry(&context, "Crear Archivo", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FILE);
-        add_list_entry(&context, "Crear Carpeta", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FOLDER);
+        if (on_action_cb) {
+            add_list_entry(&context, "Crear Archivo", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FILE);
+            add_list_entry(&context, "Crear Carpeta", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FOLDER);
+        }
 
         if (strcmp(current_path, mount_point) != 0) {
             add_list_entry(&context, "..", LV_SYMBOL_UP, ITEM_TYPE_PARENT_DIR);
@@ -237,12 +241,12 @@ void file_explorer_set_input_active(bool active) {
     if (active) {
         ESP_LOGD(TAG, "Re-activating file explorer input handlers.");
         button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-        // --- CORRECCIÓN AQUÍ: Usar BUTTON_EVENT_TAP ---
+        // *** CAMBIO: Usar BUTTON_EVENT_TAP para una navegación rápida ***
         button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true);
         button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true);
         button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press, true);
         button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press, true);
-        // --- FIN DE LA CORRECCIÓN ---
+        // *** FIN DEL CAMBIO ***
         if (explorer_group) {
             lv_group_set_default(explorer_group);
         }
@@ -262,7 +266,9 @@ void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_selec
     on_action_cb = on_action;
     on_exit_cb = on_exit;
     strncpy(current_path, initial_path, sizeof(current_path) - 1);
+    current_path[sizeof(current_path) - 1] = '\0';
     strncpy(mount_point, initial_path, sizeof(mount_point) - 1);
+    mount_point[sizeof(mount_point) - 1] = '\0';
     in_error_state = false;
 
     explorer_group = lv_group_create();

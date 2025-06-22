@@ -19,6 +19,7 @@ static QueueHandle_t s_input_event_queue = NULL;
 static lv_timer_t* s_input_processor_timer = NULL;
 
 // --- State for Advanced Click Logic ---
+// Track long press state to suppress TAP and SINGLE_CLICK events correctly.
 static bool is_long_press_active[BUTTON_COUNT] = {false};
 
 // Maps the underlying library event to our custom, simplified enum
@@ -153,11 +154,15 @@ void button_manager_init() {
     for (int i = 0; i < BUTTON_COUNT; i++) {
         ESP_ERROR_CHECK(iot_button_new_gpio_device(&btn_config, &gpio_configs[i], &buttons[i]));
         assert(buttons[i]);
-
-        for (auto const& [raw_event, mapped_event] : event_map) {
-            button_cb_user_data_t* cb_data = new button_cb_user_data_t{ (button_id_t)i, raw_event };
-            iot_button_register_cb(buttons[i], raw_event, NULL, generic_button_event_cb, cb_data);
-        }
+        
+        // Register for all raw events needed for our custom logic.
+        // We now need to register for every event from the library.
+        iot_button_register_cb(buttons[i], BUTTON_PRESS_DOWN, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_PRESS_DOWN });
+        iot_button_register_cb(buttons[i], BUTTON_PRESS_UP, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_PRESS_UP });
+        iot_button_register_cb(buttons[i], BUTTON_SINGLE_CLICK, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_SINGLE_CLICK });
+        iot_button_register_cb(buttons[i], BUTTON_DOUBLE_CLICK, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_DOUBLE_CLICK });
+        iot_button_register_cb(buttons[i], BUTTON_LONG_PRESS_START, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_LONG_PRESS_START });
+        iot_button_register_cb(buttons[i], BUTTON_LONG_PRESS_HOLD, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_LONG_PRESS_HOLD });
     }
 
     ESP_LOGI(TAG, "Button manager initialized with: Double Click=%dms, Long Press=%dms", BUTTON_DOUBLE_CLICK_MS, BUTTON_LONG_PRESS_MS);
@@ -184,11 +189,17 @@ void button_manager_register_handler(button_id_t button, button_event_type_t eve
 }
 
 void button_manager_unregister_view_handlers() {
-    ESP_LOGI(TAG, "Unregistering all view-specific handlers.");
+    ESP_LOGI(TAG, "Unregistering view-handlers and clearing event queue.");
+    
+    // *** SOLUCIÓN PRINCIPAL: Limpiar la cola de eventos ***
+    if (s_input_event_queue) {
+        xQueueReset(s_input_event_queue);
+    }
+    
     for (int i = 0; i < BUTTON_COUNT; i++) {
         for (int j = 0; j < BUTTON_EVENT_COUNT; j++) {
             button_handlers[i].view_handlers.handlers[j] = nullptr;
         }
     }
-    ESP_LOGI(TAG, "Restored default button handlers.");
+    ESP_LOGI(TAG, "Event queue cleared and default button handlers restored.");
 }
