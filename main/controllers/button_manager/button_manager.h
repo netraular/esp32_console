@@ -30,6 +30,7 @@ typedef enum {
     BUTTON_EVENT_DOUBLE_CLICK,
     BUTTON_EVENT_LONG_PRESS_START,
     BUTTON_EVENT_LONG_PRESS_HOLD,
+    BUTTON_EVENT_TAP, // --> AÑADIDO: Evento de clic rápido instantáneo
     BUTTON_EVENT_COUNT // Total number of event types
 } button_event_type_t;
 

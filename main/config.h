@@ -57,4 +57,13 @@
 #define REC_BITS_PER_SAMPLE 16
 #define REC_NUM_CHANNELS 1
 
+// --- BUTTON CONFIGURATION ---
+// Time in milliseconds to wait for a second click. If exceeded, a SINGLE_CLICK is registered.
+#define BUTTON_DOUBLE_CLICK_MS      300
+// Time in milliseconds to hold a button to trigger a LONG_PRESS event.
+#define BUTTON_LONG_PRESS_MS        1000
+// Time in milliseconds that a SINGLE_CLICK waits before firing. Must be > DOUBLE_CLICK_MS.
+// This is handled by the iot_button library internally based on short_press_time.
+// For our logic, we just need to know the double click timeout.
+
 #endif // CONFIG_H
