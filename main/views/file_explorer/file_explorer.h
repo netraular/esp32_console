@@ -27,7 +27,7 @@ void file_explorer_create(
     lv_obj_t *parent, 
     const char *initial_path, 
     file_select_callback_t on_select,
-    file_action_callback_t on_action, // Nuevo callback para acciones
+    file_action_callback_t on_action, 
     file_explorer_exit_callback_t on_exit
 );
 

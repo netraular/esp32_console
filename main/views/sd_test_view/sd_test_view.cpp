@@ -27,7 +27,6 @@ static void on_explorer_exit();
 static void on_file_or_dir_selected(const char *path);
 static void on_create_action(file_item_type_t action_type, const char *current_path);
 static void destroy_action_menu();
-// --- CORRECCIÓN: AÑADIR PROTOTIPO FALTANTE ---
 static void create_text_viewer(const char* title, char* content);
 
 

@@ -10,6 +10,7 @@
   "idf.flashType": "UART",
   "files.associations": {
     "config.h": "c",
-    "lvgl.h": "c"
+    "lvgl.h": "c",
+    "single view": "c"
   }
 }
