@@ -11,7 +11,7 @@ static const char *view_options[] = {
     "Test Speaker",
     "Test SD",
     "Test Image",
-    "Test Buttons"
+    "Test Button Events" // --> CAMBIADO
 };
 static const int num_options = sizeof(view_options) / sizeof(view_options[0]);
 
@@ -21,7 +21,7 @@ static const view_id_t view_ids[] = {
     VIEW_ID_SPEAKER_TEST,
     VIEW_ID_SD_TEST,
     VIEW_ID_IMAGE_TEST,
-    VIEW_ID_BUTTON_TEST
+    VIEW_ID_MULTI_CLICK_TEST // --> CAMBIADO
 };
 
 static void update_menu_label() {
@@ -60,8 +60,10 @@ void menu_view_create(lv_obj_t *parent) {
     selected_view_index = 0; 
     update_menu_label();
 
-    // Register button handlers for this view
-    button_manager_register_view_handler(BUTTON_LEFT, handle_left_press);
-    button_manager_register_view_handler(BUTTON_RIGHT, handle_right_press);
-    button_manager_register_view_handler(BUTTON_OK, handle_ok_press);
+    // Register button handlers for this view using the new API
+    // The last parameter 'false' indicates these are default handlers, not view-specific
+    // but for the menu, we register them as 'view-specific' to ensure they are cleared when leaving.
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_SINGLE_CLICK, handle_left_press, true);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_SINGLE_CLICK, handle_right_press, true);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true);
 }

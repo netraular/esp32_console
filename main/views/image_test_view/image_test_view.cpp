@@ -4,7 +4,10 @@
 #include "lvgl.h"
 
 // External declaration for the image data
-extern "C" const lv_image_dsc_t icon_1;
+// It's good practice to wrap C declarations in extern "C" when in a .cpp file
+extern "C" {
+    extern const lv_image_dsc_t icon_1;
+}
 
 static void handle_cancel_press() {
     view_manager_load_view(VIEW_ID_MENU);
@@ -31,6 +34,5 @@ void image_test_view_create(lv_obj_t *parent) {
     lv_label_set_text(info_label, "Press Cancel to return");
     lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -20);
 
-    // Register the button handler to return to the menu
-    button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true);
 }

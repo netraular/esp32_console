@@ -7,7 +7,7 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <string.h> // <-- ¡CORRECCIÓN AQUÍ! Añadir esta línea.
+#include <string.h>
 
 static const char *TAG = "MIC_TEST_VIEW";
 
@@ -55,7 +55,7 @@ static void update_ui_for_state(audio_recorder_state_t state) {
 }
 
 static void ui_update_timer_cb(lv_timer_t* timer) {
-    static audio_recorder_state_t last_state = RECORDER_STATE_IDLE;
+    static audio_recorder_state_t last_state = (audio_recorder_state_t)-1; // Force update on first run
     audio_recorder_state_t current_state = audio_recorder_get_state();
 
     if (current_state != last_state) {
@@ -74,7 +74,7 @@ static void ui_update_timer_cb(lv_timer_t* timer) {
 static void handle_ok_press() {
     audio_recorder_state_t state = audio_recorder_get_state();
 
-    if (state == RECORDER_STATE_IDLE) {
+    if (state == RECORDER_STATE_IDLE || state == RECORDER_STATE_ERROR) {
         // --- Start Recording ---
         // 1. Check if SD card is ready
         if (!sd_manager_check_ready()) {
@@ -87,14 +87,14 @@ static void handle_ok_press() {
         char rec_dir[128];
         snprintf(rec_dir, sizeof(rec_dir), "%s/recordings", mount_point);
         
-        // 2. Create recordings directory if it doesn't exist, WITH ERROR CHECKING
+        // 2. Create recordings directory if it doesn't exist
         struct stat st;
         if (stat(rec_dir, &st) == -1) {
             ESP_LOGI(TAG, "Directory '%s' not found. Attempting to create...", rec_dir);
             if (mkdir(rec_dir, 0755) != 0) {
                 ESP_LOGE(TAG, "Failed to create directory '%s'. Error: %s", rec_dir, strerror(errno));
                 update_ui_for_state(RECORDER_STATE_ERROR);
-                return; // CRITICAL: Stop execution if mkdir fails
+                return;
             }
             ESP_LOGI(TAG, "Directory created successfully.");
         }
@@ -105,10 +105,8 @@ static void handle_ok_press() {
         char filename[64];
         strftime(filename, sizeof(filename), "rec_%Y%m%d_%H%M%S.wav", timeinfo);
 
-        // 4. Create the final, full path safely
         snprintf(current_filepath, sizeof(current_filepath), "%s/%s", rec_dir, filename);
 
-        // 5. Start the recorder
         ESP_LOGI(TAG, "Starting recording to file: %s", current_filepath);
         if (!audio_recorder_start(current_filepath)) {
             ESP_LOGE(TAG, "Failed to start audio recorder.");
@@ -163,12 +161,14 @@ void mic_test_view_create(lv_obj_t* parent) {
     lv_obj_set_style_text_font(status_label, &lv_font_montserrat_18, 0);
 
     // Set initial state
-    update_ui_for_state(RECORDER_STATE_IDLE);
+    update_ui_for_state(audio_recorder_get_state());
 
     // Create a timer to periodically update the UI
     ui_update_timer = lv_timer_create(ui_update_timer_cb, 250, NULL);
 
-    // Register button handlers
-    button_manager_register_view_handler(BUTTON_OK, handle_ok_press);
-    button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press);
+    // --- CORRECCIÓN AQUÍ ---
+    // Register button handlers using the new API for single click events.
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true);
+    // --- FIN DE LA CORRECCIÓN ---
 }

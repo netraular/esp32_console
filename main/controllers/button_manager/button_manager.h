@@ -4,66 +4,78 @@
 #include "iot_button.h"
 #include "button_gpio.h"
 #include "config.h"
-#include "lvgl.h" // Necesario para el temporizador interno
+#include "lvgl.h"
 
 // Enum to uniquely identify each button
 typedef enum {
     BUTTON_LEFT = 0,
-    BUTTON_CANCEL,    
+    BUTTON_CANCEL,
     BUTTON_OK,
     BUTTON_RIGHT,
     BUTTON_ON_OFF,
     BUTTON_COUNT // Total number of buttons, useful for loops
 } button_id_t;
 
-//! Enum para el modo de despacho de eventos de botón
+// Enum for the dispatch mode of button events
 typedef enum {
-    INPUT_DISPATCH_MODE_QUEUED,     //!< (Default) Los eventos se encolan y procesan vía un timer de LVGL. Seguro para la UI.
-    INPUT_DISPATCH_MODE_IMMEDIATE   //!< Los eventos ejecutan el callback instantáneamente. Para baja latencia (juegos).
+    INPUT_DISPATCH_MODE_QUEUED,     // (Default) Events are queued and processed via an LVGL timer. UI-safe.
+    INPUT_DISPATCH_MODE_IMMEDIATE   // Events execute the callback instantly. For low-latency needs (e.g., games).
 } input_dispatch_mode_t;
+
+// Enum for the specific event types we want to handle
+typedef enum {
+    BUTTON_EVENT_PRESS_DOWN,
+    BUTTON_EVENT_PRESS_UP,
+    BUTTON_EVENT_SINGLE_CLICK,
+    BUTTON_EVENT_DOUBLE_CLICK,
+    BUTTON_EVENT_LONG_PRESS_START,
+    BUTTON_EVENT_LONG_PRESS_HOLD,
+    BUTTON_EVENT_COUNT // Total number of event types
+} button_event_type_t;
 
 // Function type for button event handlers (callbacks)
 typedef void (*button_handler_t)(void);
 
-// Structure to manage default and view-specific handlers
+// Structure to hold handlers for all possible event types
 typedef struct {
-    button_handler_t default_handler;
-    button_handler_t view_handler;
+    button_handler_t handlers[BUTTON_EVENT_COUNT];
+} button_event_handlers_t;
+
+// Main structure to manage default and view-specific handlers for a single button
+typedef struct {
+    button_event_handlers_t default_handlers;
+    button_event_handlers_t view_handlers;
 } button_handlers_t;
 
+
 /**
- * @brief Initializes the button manager, configures GPIO pins, and registers default handlers.
- * Por defecto, opera en modo QUEUED.
+ * @brief Initializes the button manager, configures GPIO pins, and registers internal callbacks.
+ * By default, operates in QUEUED mode.
  */
 void button_manager_init();
 
 /**
- * @brief Establece el modo de despacho de eventos de los botones.
+ * @brief Sets the dispatch mode for button events.
  *
- * @param mode El modo a utilizar (QUEUED o IMMEDIATE).
+ * @param mode The mode to use (QUEUED or IMMEDIATE).
  */
 void button_manager_set_dispatch_mode(input_dispatch_mode_t mode);
 
 /**
- * @brief Registers a default handler for a specific button.
- * This handler is used when no specific view handler is active.
+ * @brief Registers a handler for a specific button and event type.
+ *
  * @param button The ID of the button.
+ * @param event The type of event to handle.
  * @param handler The callback function to execute.
+ * @param is_view_handler If true, this is a view-specific handler that takes priority. If false, it's a default handler.
  */
-void button_manager_register_default_handler(button_id_t button, button_handler_t handler);
+void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler);
 
 /**
- * @brief Registers a handler specific to a "view" or screen.
- * This handler takes priority over the default handler.
- * @param button The ID of the button.
- * @param handler The callback function to execute.
- */
-void button_manager_register_view_handler(button_id_t button, button_handler_t handler);
-
-/**
- * @brief Unregisters all view handlers and restores the default handlers.
+ * @brief Unregisters all view-specific handlers across all buttons and events, restoring default behaviors.
  * Useful when changing screens in the UI.
  */
 void button_manager_unregister_view_handlers();
+
 
 #endif // BUTTON_MANAGER_H

@@ -136,10 +136,12 @@ static void create_action_menu(const char* path) {
         lv_group_focus_obj(lv_obj_get_child(list, 0));
     }
 
-    button_manager_register_view_handler(BUTTON_OK, handle_action_menu_ok_press);
-    button_manager_register_view_handler(BUTTON_CANCEL, handle_action_menu_cancel_press);
-    button_manager_register_view_handler(BUTTON_LEFT, handle_action_menu_left_press);
-    button_manager_register_view_handler(BUTTON_RIGHT, handle_action_menu_right_press);
+    // --- CORRECCIÓN AQUÍ ---
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_action_menu_ok_press, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_action_menu_cancel_press, true);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, handle_action_menu_left_press, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, handle_action_menu_right_press, true);
+    // --- FIN DE LA CORRECCIÓN ---
 }
 
 static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
@@ -201,10 +203,12 @@ static void create_text_viewer(const char* title, char* content) {
     lv_textarea_set_text(text_area, content);
     lv_obj_add_event_cb(text_area, text_viewer_delete_cb, LV_EVENT_DELETE, content);
 
-    button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_from_viewer);
-    button_manager_register_view_handler(BUTTON_OK, NULL);
-    button_manager_register_view_handler(BUTTON_LEFT, NULL);
-    button_manager_register_view_handler(BUTTON_RIGHT, NULL);
+    // --- CORRECCIÓN AQUÍ ---
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_from_viewer, true);
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, NULL, true);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, NULL, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, NULL, true);
+    // --- FIN DE LA CORRECCIÓN ---
 }
 
 /********************************
@@ -308,10 +312,12 @@ static void create_initial_sd_view() {
     lv_label_set_text(info_label_widget, "Press OK to open\nthe file explorer");
 
     button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED); // Set mode for this view
-    button_manager_register_view_handler(BUTTON_OK, handle_initial_ok_press);
-    button_manager_register_view_handler(BUTTON_CANCEL, handle_initial_cancel_press);
-    button_manager_register_view_handler(BUTTON_LEFT, NULL);
-    button_manager_register_view_handler(BUTTON_RIGHT, NULL);
+    // --- CORRECCIÓN AQUÍ ---
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_initial_ok_press, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_initial_cancel_press, true);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, NULL, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, NULL, true);
+    // --- FIN DE LA CORRECCIÓN ---
 }
 
 void sd_test_view_create(lv_obj_t *parent) {

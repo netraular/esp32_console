@@ -329,10 +329,12 @@ static void create_now_playing_view(const char *file_path) {
     lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PLAY);
     lv_obj_set_style_text_font(play_pause_btn_label, &lv_font_montserrat_28, 0);
     
-    button_manager_register_view_handler(BUTTON_OK, handle_ok_press_playing);
-    button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press_playing);
-    button_manager_register_view_handler(BUTTON_LEFT, handle_left_press_playing);
-    button_manager_register_view_handler(BUTTON_RIGHT, handle_right_press_playing);
+    // --- CORRECCIÓN AQUÍ ---
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press_playing, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press_playing, true);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, handle_left_press_playing, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, handle_right_press_playing, true);
+    // --- FIN DE LA CORRECCIÓN ---
 
     handle_ok_press_playing();
 }
@@ -378,8 +380,10 @@ static void create_initial_speaker_view() {
     lv_label_set_text(info_label_widget, "Press OK to\nselect an audio file");
 
     button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-    button_manager_register_view_handler(BUTTON_OK, handle_ok_press_initial);
-    button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press_initial);
+    // --- CORRECCIÓN AQUÍ ---
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_SINGLE_CLICK, handle_ok_press_initial, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press_initial, true);
+    // --- FIN DE LA CORRECCIÓN ---
 }
 
 void speaker_test_view_create(lv_obj_t *parent) {

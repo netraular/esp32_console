@@ -14,6 +14,7 @@ idf_component_register(SRCS "main.cpp"
                            "./views/image_test_view/icon_1.c"
                            "./views/file_explorer/file_explorer.cpp"
                            "./views/button_test_view/button_test_view.cpp"
+                           "./views/multi_click_test_view/multi_click_test_view.cpp"
                    INCLUDE_DIRS "."
                    )
 

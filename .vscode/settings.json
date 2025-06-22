@@ -11,6 +11,8 @@
   "files.associations": {
     "config.h": "c",
     "lvgl.h": "c",
-    "single view": "c"
+    "single view": "c",
+    "random": "cpp",
+    "cstring": "cpp"
   }
 }

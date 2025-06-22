@@ -50,7 +50,7 @@ static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data
 static void focus_changed_cb(lv_group_t * group);
 static void handle_cancel_press();
 
-// --- BUTTON HANDLERS (Now direct-acting, but safe due to QUEUED mode in button_manager) ---
+// --- BUTTON HANDLERS (for single click events) ---
 static void handle_right_press() {
     ESP_LOGD(TAG, "Right Press");
     if (in_error_state) return;
@@ -238,10 +238,13 @@ void file_explorer_set_input_active(bool active) {
     if (active) {
         ESP_LOGD(TAG, "Re-activating file explorer input handlers.");
         button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED); // Ensure correct mode
-        button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press);
-        button_manager_register_view_handler(BUTTON_OK, handle_ok_press);
-        button_manager_register_view_handler(BUTTON_RIGHT, handle_right_press);
-        button_manager_register_view_handler(BUTTON_LEFT, handle_left_press);
+        // --- CORRECCIÓN AQUÍ ---
+        // Usar la nueva API de registro de manejadores.
+        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true);
+        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true);
+        button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, handle_right_press, true);
+        button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, handle_left_press, true);
+        // --- FIN DE LA CORRECCIÓN ---
         if (explorer_group) {
             lv_group_set_default(explorer_group);
         }

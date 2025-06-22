@@ -30,7 +30,6 @@ static void ui_update_timer_cb(lv_timer_t *timer);
 // Timer to safely update the UI from the LVGL thread
 static void ui_update_timer_cb(lv_timer_t *timer) {
     if (current_mode == INPUT_DISPATCH_MODE_IMMEDIATE) {
-        // CORRECCIÓN: Usar %lu para uint32_t
         lv_label_set_text_fmt(counter_label, "Immediate Count: %lu", immediate_press_counter);
     }
 }
@@ -39,14 +38,11 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
 static void handle_test_button_press(const char* btn_name) {
     if (current_mode == INPUT_DISPATCH_MODE_QUEUED) {
         // SAFE: We are in QUEUED mode, so this handler is called from the LVGL timer context.
-        // We can update the UI directly.
         ESP_LOGI(TAG, "Button '%s' press handled in QUEUED mode.", btn_name);
         lv_label_set_text_fmt(last_press_label, "Last Queued Press: %s", btn_name);
     } else {
         // UNSAFE to call LVGL here. This handler is called directly from the button task/ISR.
-        // We update a volatile variable, and the LVGL timer will handle the UI update.
         ESP_LOGI(TAG, "Button '%s' press handled in IMMEDIATE mode.", btn_name);
-        // CORRECCIÓN: Forma segura de incrementar una variable volatile.
         immediate_press_counter = immediate_press_counter + 1;
     }
 }
@@ -91,14 +87,13 @@ static void update_ui_labels() {
         lv_label_set_text(counter_label, "Immediate Count: N/A");
     } else {
         lv_label_set_text(last_press_label, "Last Queued Press: N/A");
-        // CORRECCIÓN: Usar %lu para uint32_t
         lv_label_set_text_fmt(counter_label, "Immediate Count: %lu", immediate_press_counter);
     }
 }
 
 // Main function to create the view
 void button_test_view_create(lv_obj_t *parent) {
-    ESP_LOGI(TAG, "Creating Button Test View");
+    ESP_LOGI(TAG, "Creating Button Dispatch Test View");
 
     // Start in a known state
     current_mode = INPUT_DISPATCH_MODE_QUEUED;
@@ -132,11 +127,14 @@ void button_test_view_create(lv_obj_t *parent) {
     update_ui_labels();
 
     // --- Register Button Handlers ---
-    button_manager_register_view_handler(BUTTON_OK, handle_ok_press);
-    button_manager_register_view_handler(BUTTON_CANCEL, handle_cancel_press);
-    button_manager_register_view_handler(BUTTON_LEFT, handle_test_button_left);
-    button_manager_register_view_handler(BUTTON_RIGHT, handle_test_button_right);
-    button_manager_register_view_handler(BUTTON_ON_OFF, handle_test_button_on_off);
+    // --- CORRECCIÓN AQUÍ ---
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true);
+    // For test buttons, we also use single click for a clear demonstration
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, handle_test_button_left, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, handle_test_button_right, true);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_SINGLE_CLICK, handle_test_button_on_off, true);
+    // --- FIN DE LA CORRECCIÓN ---
     
     // --- Start UI Update Timer ---
     ui_update_timer = lv_timer_create(ui_update_timer_cb, 50, NULL);

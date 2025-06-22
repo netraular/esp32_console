@@ -10,7 +10,8 @@ typedef enum {
     VIEW_ID_SPEAKER_TEST,
     VIEW_ID_SD_TEST,
     VIEW_ID_IMAGE_TEST,
-    VIEW_ID_BUTTON_TEST,
+    VIEW_ID_BUTTON_DISPATCH_TEST, // The old button test view
+    VIEW_ID_MULTI_CLICK_TEST,     // The new, more comprehensive button test view
     VIEW_ID_COUNT // Total number of views
 } view_id_t;
 
