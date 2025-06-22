@@ -50,21 +50,21 @@ static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data
 static void focus_changed_cb(lv_group_t * group);
 static void handle_cancel_press();
 
-// --- BUTTON HANDLERS (for single click events) ---
+// --- BUTTON HANDLERS (now using TAP for speed) ---
 static void handle_right_press() {
-    ESP_LOGD(TAG, "Right Press");
+    ESP_LOGD(TAG, "Right Press (Tap)");
     if (in_error_state) return;
     if (explorer_group) lv_group_focus_next(explorer_group);
 }
 
 static void handle_left_press() {
-    ESP_LOGD(TAG, "Left Press");
+    ESP_LOGD(TAG, "Left Press (Tap)");
     if (in_error_state) return;
     if (explorer_group) lv_group_focus_prev(explorer_group);
 }
 
 static void handle_ok_press() {
-    ESP_LOGD(TAG, "OK Press");
+    ESP_LOGD(TAG, "OK Press (Tap)");
     if (in_error_state) return;
     
     lv_obj_t * focused_obj = lv_group_get_focused(explorer_group);
@@ -104,7 +104,7 @@ static void handle_ok_press() {
 }
 
 static void handle_cancel_press() {
-    ESP_LOGD(TAG, "Cancel Press");
+    ESP_LOGD(TAG, "Cancel Press (Tap)");
     if (in_error_state || strcmp(current_path, mount_point) == 0) {
         ESP_LOGI(TAG, "Exiting file explorer.");
         if (on_exit_cb) on_exit_cb();
@@ -121,7 +121,7 @@ static void handle_cancel_press() {
 }
 
 
-// --- UI Logic (mostly unchanged) ---
+// --- UI Logic (unchanged) ---
 
 static void focus_changed_cb(lv_group_t * group) {
     lv_obj_t * focused_obj = lv_group_get_focused(group);
@@ -219,7 +219,6 @@ static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data
 // --- Public Functions ---
 
 void file_explorer_destroy(void) {
-    // No need to unregister handlers here, view_manager does it.
     if (explorer_group) {
         if (lv_group_get_default() == explorer_group) lv_group_set_default(NULL);
         lv_group_delete(explorer_group);
@@ -237,13 +236,12 @@ void file_explorer_destroy(void) {
 void file_explorer_set_input_active(bool active) {
     if (active) {
         ESP_LOGD(TAG, "Re-activating file explorer input handlers.");
-        button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED); // Ensure correct mode
-        // --- CORRECCIÓN AQUÍ ---
-        // Usar la nueva API de registro de manejadores.
-        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true);
-        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true);
-        button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, handle_right_press, true);
-        button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, handle_left_press, true);
+        button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
+        // --- CORRECCIÓN AQUÍ: Usar BUTTON_EVENT_TAP ---
+        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true);
+        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true);
+        button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press, true);
+        button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press, true);
         // --- FIN DE LA CORRECCIÓN ---
         if (explorer_group) {
             lv_group_set_default(explorer_group);

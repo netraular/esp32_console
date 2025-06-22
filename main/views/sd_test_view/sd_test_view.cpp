@@ -34,21 +34,21 @@ static void create_text_viewer(const char* title, char* content);
  *  ACTION MENU BUTTON HANDLERS
  ***************************************************/
 static void handle_action_menu_left_press() {
-    ESP_LOGD(TAG, "Action Menu Left Press");
+    ESP_LOGD(TAG, "Action Menu Left Press (Tap)");
     if (action_menu_group) lv_group_focus_prev(action_menu_group);
 }
 static void handle_action_menu_right_press() {
-    ESP_LOGD(TAG, "Action Menu Right Press");
+    ESP_LOGD(TAG, "Action Menu Right Press (Tap)");
     if (action_menu_group) lv_group_focus_next(action_menu_group);
 }
 
 static void handle_action_menu_cancel_press() {
-    ESP_LOGD(TAG, "Action Menu Cancel Press");
+    ESP_LOGD(TAG, "Action Menu Cancel Press (Tap)");
     destroy_action_menu_internal(true); // Refresh explorer after closing menu
 }
 
 static void handle_action_menu_ok_press() {
-    ESP_LOGD(TAG, "Action Menu OK Press");
+    ESP_LOGD(TAG, "Action Menu OK Press (Tap)");
     if (!action_menu_group) return;
 
     lv_obj_t* selected_btn = lv_group_get_focused(action_menu_group);
@@ -95,7 +95,6 @@ static void handle_action_menu_ok_press() {
  **********************/
 static void create_action_menu(const char* path) {
     if (action_menu_container) {
-        ESP_LOGW(TAG, "create_action_menu called but menu already exists. Destroying old one.");
         destroy_action_menu_internal(false);
     }
     ESP_LOGI(TAG, "Creating action menu for: %s", path);
@@ -136,19 +135,17 @@ static void create_action_menu(const char* path) {
         lv_group_focus_obj(lv_obj_get_child(list, 0));
     }
 
-    // --- CORRECCIÓN AQUÍ ---
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_action_menu_ok_press, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_action_menu_cancel_press, true);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, handle_action_menu_left_press, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, handle_action_menu_right_press, true);
+    // --- CORRECCIÓN AQUÍ: Usar BUTTON_EVENT_TAP ---
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_action_menu_ok_press, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_action_menu_cancel_press, true);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_action_menu_left_press, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_action_menu_right_press, true);
     // --- FIN DE LA CORRECCIÓN ---
 }
 
 static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
     if (action_menu_container) {
         ESP_LOGI(TAG, "Destroying action menu. Refresh explorer: %s", refresh_file_explorer_after ? "yes" : "no");
-        // No need to unregister handlers, the file explorer will re-register its own.
-
         if(action_menu_group) {
              if (lv_group_get_default() == action_menu_group) {
                 lv_group_set_default(NULL);
@@ -158,7 +155,6 @@ static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
         }
         lv_obj_del(action_menu_container);
         action_menu_container = NULL;
-
         file_explorer_set_input_active(true);
         if (refresh_file_explorer_after) {
             file_explorer_refresh();
@@ -171,9 +167,7 @@ static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
  *********************/
 static void text_viewer_delete_cb(lv_event_t * e) {
     char* text_content = (char*)lv_event_get_user_data(e);
-    if (text_content) {
-        free(text_content);
-    }
+    if (text_content) free(text_content);
 }
 
 static void handle_cancel_from_viewer() {
@@ -182,8 +176,6 @@ static void handle_cancel_from_viewer() {
 
 static void create_text_viewer(const char* title, char* content) {
     ESP_LOGI(TAG, "Creating text viewer for: %s", title);
-    
-    // Cleaning the parent will destroy the action menu and the file explorer UI
     lv_obj_clean(view_parent);
     action_menu_container = NULL;
     action_menu_group = NULL;
@@ -203,12 +195,10 @@ static void create_text_viewer(const char* title, char* content) {
     lv_textarea_set_text(text_area, content);
     lv_obj_add_event_cb(text_area, text_viewer_delete_cb, LV_EVENT_DELETE, content);
 
-    // --- CORRECCIÓN AQUÍ ---
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_from_viewer, true);
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, NULL, true);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, NULL, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, NULL, true);
-    // --- FIN DE LA CORRECCIÓN ---
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_from_viewer, true);
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, NULL, true);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, NULL, true);
 }
 
 /********************************
@@ -311,13 +301,12 @@ static void create_initial_sd_view() {
     lv_obj_center(info_label_widget);
     lv_label_set_text(info_label_widget, "Press OK to open\nthe file explorer");
 
-    button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED); // Set mode for this view
-    // --- CORRECCIÓN AQUÍ ---
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_initial_ok_press, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_initial_cancel_press, true);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, NULL, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, NULL, true);
-    // --- FIN DE LA CORRECCIÓN ---
+    button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
+    // Usamos TAP para abrir el explorador para una respuesta más rápida
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_initial_ok_press, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_initial_cancel_press, true);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, NULL, true);
 }
 
 void sd_test_view_create(lv_obj_t *parent) {
