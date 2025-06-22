@@ -7,6 +7,8 @@
 #include <string>
 #include <algorithm>
 #include <strings.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "FILE_EXPLORER";
 static lv_group_t *explorer_group = nullptr;
@@ -34,6 +36,7 @@ typedef struct {
     lv_group_t *group;
 } add_file_context_t;
 
+// --- Prototipos ---
 static void repopulate_list_cb(lv_timer_t *timer);
 static void schedule_repopulate_list();
 static void clear_list_items(bool show_loading);
@@ -46,14 +49,25 @@ static void handle_left_press();
 static void handle_cancel_press();
 static void handle_ok_press();
 
+
+// --- MANEJADORES DE BOTONES SÍNCRONOS (VERSIÓN ORIGINAL Y ESTABLE) ---
+
 static void handle_right_press() {
     if (in_error_state) return;
-    if (explorer_group) lv_group_focus_next(explorer_group);
+    if (explorer_group) {
+        lv_group_focus_next(explorer_group);
+        // --- PARCHE CLAVE: Ceder CPU para alimentar el watchdog ---
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
 }
 
 static void handle_left_press() {
     if (in_error_state) return;
-    if (explorer_group) lv_group_focus_prev(explorer_group);
+    if (explorer_group) {
+        lv_group_focus_prev(explorer_group);
+        // --- PARCHE CLAVE: Ceder CPU para alimentar el watchdog ---
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
 }
 
 static void handle_ok_press() {
@@ -156,8 +170,6 @@ static void repopulate_list_cb(lv_timer_t *timer) {
         std::sort(entries.begin(), entries.end(), [](const file_entry_t& a, const file_entry_t& b) {
             if (a.is_dir && !b.is_dir) return true;
             if (!a.is_dir && b.is_dir) return false;
-            // --- CORRECCIÓN AQUÍ ---
-            // Utilizar strcasecmp para una ordenación natural (insensible a mayúsculas/minúsculas).
             return strcasecmp(a.name.c_str(), b.name.c_str()) < 0;
         });
 
@@ -268,7 +280,7 @@ void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_selec
     list_widget = lv_list_create(parent);
     lv_obj_set_size(list_widget, lv_pct(100), lv_pct(100));
     lv_obj_center(list_widget);
-
+    
     schedule_repopulate_list();
 
     // Activate input by default upon creation

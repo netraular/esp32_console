@@ -23,16 +23,22 @@ static lv_style_t style_action_menu_focused;
 // --- Prototipos de funciones ---
 static void create_initial_sd_view();
 static void show_file_explorer();
-static void on_file_selected(const char *path);
 static void handle_cancel_from_viewer();
 static void destroy_action_menu();
 static void handle_action_menu_ok();
 static void handle_action_menu_left();
 static void handle_action_menu_right();
 
+// --- NUEVOS PROTOTIPOS RESTAURADOS ---
+static void on_file_selected(const char *path);
+static void on_file_or_dir_selected(const char *path);
+static void on_create_action(file_item_type_t action_type, const char *current_path);
+static void on_explorer_exit();
+static void create_text_viewer(const char* title, char* content);
+
 
 // =================================================================
-// Implementación del Menú de Acciones
+// Implementación del Menú de Acciones (Restaurado)
 // =================================================================
 
 static void handle_action_menu_left() {
@@ -63,7 +69,6 @@ static void handle_action_menu_ok() {
         should_destroy_menu = false; 
     } 
     else if (strcmp(action_text, "Renombrar") == 0) {
-        // --- CORRECCIÓN AQUÍ: Construcción segura de la nueva ruta ---
         char new_path[256] = {0};
         const char* dir_end = strrchr(selected_item_path, '/');
         size_t dir_len = 0;
@@ -71,12 +76,10 @@ static void handle_action_menu_ok() {
             dir_len = (dir_end - selected_item_path) + 1;
         }
 
-        // 1. Copiar de forma segura la parte del directorio
         if (dir_len > 0) {
            strncpy(new_path, selected_item_path, dir_len);
         }
 
-        // 2. Generar el nuevo nombre de archivo basado en la hora
         time_t now = time(NULL);
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
@@ -86,9 +89,7 @@ static void handle_action_menu_ok() {
         const char* ext = strrchr(selected_item_path, '.');
         if (!ext) ext = "";
 
-        // 3. Concatenar de forma segura el nuevo nombre y la extensión
         snprintf(new_path + dir_len, sizeof(new_path) - dir_len, "%s%s", basename, ext);
-        // --- FIN DE LA CORRECCIÓN ---
 
         ESP_LOGI(TAG, "Renombrando '%s' -> '%s'", selected_item_path, new_path);
         sd_manager_rename_item(selected_item_path, new_path);
@@ -164,6 +165,9 @@ static void destroy_action_menu() {
     }
 }
 
+
+// --- Lógica del Visor de Texto (Restaurada) ---
+
 static void text_viewer_delete_cb(lv_event_t * e) {
     char* text_content = (char*)lv_event_get_user_data(e);
     if (text_content) {
@@ -204,6 +208,8 @@ static void handle_cancel_from_viewer() {
     show_file_explorer();
 }
 
+
+// --- Callbacks del Explorador (Restaurados) ---
 
 static void on_file_selected(const char *path) {
     char* file_content = NULL;
@@ -262,6 +268,8 @@ static void on_explorer_exit() {
     create_initial_sd_view(); 
 }
 
+// --- Lógica de la Vista Principal ---
+
 static void show_file_explorer() {
     lv_obj_clean(view_parent);
 
@@ -280,12 +288,13 @@ static void show_file_explorer() {
     lv_obj_remove_style_all(explorer_container);
     lv_obj_set_size(explorer_container, lv_pct(95), lv_pct(85));
 
+    // --- CORRECCIÓN CLAVE: Pasar los callbacks correctos ---
     file_explorer_create(
         explorer_container,
         sd_manager_get_mount_point(),
-        on_file_or_dir_selected,
-        on_create_action,
-        on_explorer_exit
+        on_file_or_dir_selected, // Para seleccionar archivos/directorios
+        on_create_action,        // Para crear nuevos archivos/carpetas
+        on_explorer_exit         // Para salir del explorador
     );
 }
 
