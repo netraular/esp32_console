@@ -117,24 +117,29 @@ static void audio_recording_task(void *arg) {
     create_wav_header(&wav_header, REC_SAMPLE_RATE, REC_BITS_PER_SAMPLE, REC_NUM_CHANNELS, 0);
     fwrite(&wav_header, 1, sizeof(wav_header_t), fp);
 
-    // Configure and initialize I2S for microphone input
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+    // Configure and initialize I2S for microphone input on I2S_NUM_1
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, NULL, &rx_chan));
 
-    i2s_std_config_t std_cfg = {}; // Initialize to zeros
+    i2s_std_config_t std_cfg = {};
     
-    // Clock configuration (explicit)
     std_cfg.clk_cfg.sample_rate_hz = REC_SAMPLE_RATE;
     std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
 
-    // Slot configuration
-    std_cfg.slot_cfg.data_bit_width = (i2s_data_bit_width_t)REC_BITS_PER_SAMPLE;
-    std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_AUTO;
+    // --- CORRECCIÓN DEFINITIVA DE LA CONFIGURACIÓN DE SLOT ---
+    std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_32BIT;
+    std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
     std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
-    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT; 
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT; // Para un micrófono MONO, el driver captura el slot izquierdo.
+    std_cfg.slot_cfg.ws_width = I2S_SLOT_BIT_WIDTH_32BIT;
+    std_cfg.slot_cfg.ws_pol = false; // Polaridad normal
+    std_cfg.slot_cfg.bit_shift = false; // No se necesita desplazamiento de bits para INMP441
+    std_cfg.slot_cfg.left_align = true; // **ESTA ERA LA LÍNEA CLAVE QUE FALTABA**
+    std_cfg.slot_cfg.big_endian = false;
+    std_cfg.slot_cfg.bit_order_lsb = false;
+    // --- FIN DE LA CORRECCIÓN ---
     
-    // GPIO configuration
     std_cfg.gpio_cfg = {
         .mclk = I2S_GPIO_UNUSED,
         .bclk = I2S_MIC_BCLK_PIN,
@@ -147,18 +152,37 @@ static void audio_recording_task(void *arg) {
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_chan, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(rx_chan));
 
-    int buffer_size = 2048;
-    uint8_t *buffer = (uint8_t*)malloc(buffer_size);
+    // Búfer para procesar las muestras de audio
+    const int buffer_size = 2048;
+    // Búfer para leer los datos crudos de 32 bits de I2S
+    int32_t* i2s_read_buffer = (int32_t*)malloc(buffer_size);
+    // Búfer para almacenar los datos convertidos a 16 bits antes de escribir
+    int16_t* file_write_buffer = (int16_t*)malloc(buffer_size / 2);
+
     size_t bytes_read;
     uint32_t total_bytes_written = 0;
 
     ESP_LOGI(TAG, "Starting recording loop...");
 
     while (recorder_state == RECORDER_STATE_RECORDING) {
-        esp_err_t result = i2s_channel_read(rx_chan, buffer, buffer_size, &bytes_read, pdMS_TO_TICKS(1000));
+        // Leer datos crudos del canal I2S
+        esp_err_t result = i2s_channel_read(rx_chan, i2s_read_buffer, buffer_size, &bytes_read, pdMS_TO_TICKS(1000));
+        
         if (result == ESP_OK && bytes_read > 0) {
-            fwrite(buffer, 1, bytes_read, fp);
-            total_bytes_written += bytes_read;
+            // Convertir las muestras de 32 bits a 16 bits
+            int samples_read = bytes_read / sizeof(int32_t);
+            for (int i = 0; i < samples_read; i++) {
+                // Los datos del INMP441 están en los bits más significativos (justificados a la izquierda).
+                // Un desplazamiento a la derecha de 16 bits los mueve a la posición correcta
+                // para una muestra de 16 bits. Esto ahora funcionará porque `left_align` es true.
+                file_write_buffer[i] = (int16_t)(i2s_read_buffer[i] >> 16);
+            }
+            
+            // Escribir los datos procesados (16 bits) en el archivo
+            size_t bytes_to_write = samples_read * sizeof(int16_t);
+            fwrite(file_write_buffer, 1, bytes_to_write, fp);
+            total_bytes_written += bytes_to_write;
+
         } else {
             ESP_LOGE(TAG, "I2S read failed: %s", esp_err_to_name(result));
             recorder_state = RECORDER_STATE_ERROR;
@@ -169,7 +193,8 @@ static void audio_recording_task(void *arg) {
     ESP_LOGI(TAG, "Recording loop finished. Total bytes written: %lu", total_bytes_written);
 
     // --- Cleanup and Finalize ---
-    free(buffer);
+    free(i2s_read_buffer);
+    free(file_write_buffer);
     i2s_channel_disable(rx_chan);
     i2s_del_channel(rx_chan);
     rx_chan = NULL;

@@ -303,8 +303,9 @@ static void audio_playback_task(void *arg) {
         song_duration_s = wav_file_info.data_size / wav_file_info.byte_rate;
     }
     
-    // Configure and initialize I2S
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+    // --- CAMBIO: Asignación explícita de puerto I2S ---
+    // Configure and initialize I2S for speaker output on I2S_NUM_0
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_chan, NULL));
 
     i2s_std_config_t std_cfg = {}; 
