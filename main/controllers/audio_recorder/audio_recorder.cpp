@@ -121,31 +121,28 @@ static void audio_recording_task(void *arg) {
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, NULL, &rx_chan));
 
-    // --- CORRECCIÓN AQUÍ ---
-    // La configuración de I2S debe ser explícita para evitar warnings.
-    i2s_std_config_t std_cfg = {}; // Inicializar a ceros
+    i2s_std_config_t std_cfg = {}; // Initialize to zeros
     
-    // Configuración del reloj (explícita)
+    // Clock configuration (explicit)
     std_cfg.clk_cfg.sample_rate_hz = REC_SAMPLE_RATE;
     std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
 
-    // Configuración del slot
+    // Slot configuration
     std_cfg.slot_cfg.data_bit_width = (i2s_data_bit_width_t)REC_BITS_PER_SAMPLE;
     std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_AUTO;
     std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
     std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT; 
     
-    // Configuración de los GPIO
+    // GPIO configuration
     std_cfg.gpio_cfg = {
         .mclk = I2S_GPIO_UNUSED,
-        .bclk = I2S_BCLK_PIN,
-        .ws = I2S_WS_PIN,
+        .bclk = I2S_MIC_BCLK_PIN,
+        .ws = I2S_MIC_WS_PIN,
         .dout = I2S_GPIO_UNUSED,
-        .din = I2S_DIN_PIN,
+        .din = I2S_MIC_DIN_PIN,
         .invert_flags = { .mclk_inv = false, .bclk_inv = false, .ws_inv = false },
     };
-    // --- FIN DE LA CORRECCIÓN ---
 
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_chan, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(rx_chan));

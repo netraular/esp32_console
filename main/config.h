@@ -27,17 +27,23 @@
 #define BUTTON_OK_PIN      GPIO_NUM_5
 #define BUTTON_RIGHT_PIN   GPIO_NUM_4
 
-// --- LED PINS ---
+// --- RGB LED PINS ---
 #define RGB_LED_PIN      GPIO_NUM_48
 
-// --- AUDIO PINS ---
-// #define BUZZER_PIN   GPIO_NUM_18
+// --- I2S Pins for Audio Output (Speaker) ---
+#define I2S_SPEAKER_BCLK_PIN   GPIO_NUM_16
+#define I2S_SPEAKER_WS_PIN     GPIO_NUM_17
+#define I2S_SPEAKER_DOUT_PIN   GPIO_NUM_15 // To Amplifier/Speaker MAX98357A
 
-// Unified I2S Pins for Audio In/Out
-#define I2S_BCLK_PIN   GPIO_NUM_16
-#define I2S_WS_PIN     GPIO_NUM_17
-#define I2S_DOUT_PIN   GPIO_NUM_15 // To Amplifier/Speaker
-#define I2S_DIN_PIN    GPIO_NUM_38 // From Microphone inmp441
+// --- I2S Pins for Audio Input (Microphone) ---
+#define I2S_MIC_BCLK_PIN       GPIO_NUM_42 // Serial Clock (SCK/SCL)
+#define I2S_MIC_WS_PIN         GPIO_NUM_41 // Word Select (WS/LRCK)
+#define I2S_MIC_DIN_PIN        GPIO_NUM_40 // Serial Data (SD/DOUT)
+
+// --- FREE PINS ---
+// GPIO_NUM_18
+// GPIO_NUM_19 y GPIO_NUM_20 si no se usa USB nativo
+// GPIO_NUM_39 si no se usa JTAG
 
 // --- DISPLAY & SPI CONFIGURATION ---
 #define SCREEN_WIDTH  240

@@ -322,9 +322,9 @@ static void audio_playback_task(void *arg) {
     std_cfg.slot_cfg.big_endian = false;
     std_cfg.slot_cfg.bit_order_lsb = false;
     std_cfg.gpio_cfg.mclk = I2S_GPIO_UNUSED;
-    std_cfg.gpio_cfg.bclk = I2S_BCLK_PIN;
-    std_cfg.gpio_cfg.ws = I2S_WS_PIN;
-    std_cfg.gpio_cfg.dout = I2S_DOUT_PIN;
+    std_cfg.gpio_cfg.bclk = I2S_SPEAKER_BCLK_PIN;
+    std_cfg.gpio_cfg.ws = I2S_SPEAKER_WS_PIN;
+    std_cfg.gpio_cfg.dout = I2S_SPEAKER_DOUT_PIN;
     std_cfg.gpio_cfg.din = I2S_GPIO_UNUSED;
     std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
