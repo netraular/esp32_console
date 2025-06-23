@@ -30,12 +30,12 @@
 // --- RGB LED PINS ---
 #define RGB_LED_PIN      GPIO_NUM_48
 
-// --- I2S Pins for Audio Output (Speaker) ---
+// --- I2S Pins for Audio Output (MAX98357A Speaker) ---
 #define I2S_SPEAKER_BCLK_PIN   GPIO_NUM_41//16//41
 #define I2S_SPEAKER_WS_PIN     GPIO_NUM_40//17//40
 #define I2S_SPEAKER_DOUT_PIN   GPIO_NUM_42//15 //42// To Amplifier/Speaker MAX98357A
 
-// --- I2S Pins for Audio Input (Microphone) ---
+// --- I2S Pins for Audio Input (INMP441  Microphone) ---
 #define I2S_MIC_BCLK_PIN       GPIO_NUM_17//42 // Serial Clock (SCK/SCL)
 #define I2S_MIC_WS_PIN         GPIO_NUM_15//41 // Word Select (WS/LRCK)
 #define I2S_MIC_DIN_PIN        GPIO_NUM_16//40 // Serial Data (SD/DOUT)
