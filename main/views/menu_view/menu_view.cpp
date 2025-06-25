@@ -11,7 +11,8 @@ static const char *view_options[] = {
     "Test Speaker",
     "Test SD",
     "Test Image",
-    "Test Button Events" // --> CAMBIADO
+    "Test Button Events",
+    "WiFi Audio Stream" // --> AÑADIDO
 };
 static const int num_options = sizeof(view_options) / sizeof(view_options[0]);
 
@@ -21,7 +22,8 @@ static const view_id_t view_ids[] = {
     VIEW_ID_SPEAKER_TEST,
     VIEW_ID_SD_TEST,
     VIEW_ID_IMAGE_TEST,
-    VIEW_ID_MULTI_CLICK_TEST // --> CAMBIADO
+    VIEW_ID_MULTI_CLICK_TEST,
+    VIEW_ID_WIFI_STREAM_TEST // --> AÑADIDO
 };
 
 static void update_menu_label() {

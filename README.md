@@ -7,3 +7,5 @@ SPI RAM config -> Set RAM clock speed -> 80MHz clock speed
 Flash size -> 16 MB
 CPU frequency -> 240 MHz
 FAT Filesystem support -> Long filename support with heap
+Partition table -> Custom partition table
+Max WiFi TX power (dBm) -> 10

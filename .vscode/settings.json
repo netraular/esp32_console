@@ -13,6 +13,7 @@
     "lvgl.h": "c",
     "single view": "c",
     "random": "cpp",
-    "cstring": "cpp"
+    "cstring": "cpp",
+    "cstdlib": "cpp"
   }
 }
