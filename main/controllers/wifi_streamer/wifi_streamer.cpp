@@ -1,6 +1,6 @@
 #include "wifi_streamer.h"
 #include "config.h"
-#include "secret.h" // <-- AÑADIDO: para IP y puerto del servidor
+#include "secret.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -26,6 +26,7 @@ static char s_status_message[128] = "Idle";
 // --- Function Prototypes ---
 static void audio_stream_task(void *pvParameters);
 static void update_status_message(const char* format, ...);
+static esp_err_t setup_i2s_for_streaming(i2s_chan_handle_t *rx_handle);
 
 // --- Public API ---
 
@@ -81,20 +82,32 @@ static void update_status_message(const char* format, ...) {
     ESP_LOGI(TAG, "Status: %s", s_status_message);
 }
 
+// --- CORRECCIÓN: Configuración de I2S completa y robusta ---
 static esp_err_t setup_i2s_for_streaming(i2s_chan_handle_t *rx_handle) {
-    // This I2S setup must not conflict with other audio components.
-    // The mic is on I2S1, so we use I2S_NUM_1.
+    // El micrófono está en I2S_NUM_1 para no entrar en conflicto con el altavoz en I2S_NUM_0.
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
-    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, NULL, rx_handle));
+    esp_err_t ret = i2s_new_channel(&chan_cfg, NULL, rx_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "i2s_new_channel failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
+    // Configuración I2S Standard, basada en la que funciona en audio_recorder.cpp.
+    // Es crucial para micrófonos I2S MEMS como el INMP441.
     i2s_std_config_t std_cfg = {};
     std_cfg.clk_cfg.sample_rate_hz = I2S_SAMPLE_RATE;
     std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+
+    // Configuración de slot para datos alineados a la izquierda (MSB)
     std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_32BIT;
     std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
     std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
-    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT; // INMP441 es mono, usa el canal izquierdo
+    std_cfg.slot_cfg.ws_width = I2S_SLOT_BIT_WIDTH_32BIT;
+    std_cfg.slot_cfg.ws_pol = false;
+    std_cfg.slot_cfg.bit_shift = false;      // Sin bit shift para datos alineados a MSB
+    std_cfg.slot_cfg.left_align = true;      // Datos alineados a la izquierda (MSB)
     
     std_cfg.gpio_cfg = {
         .mclk = I2S_GPIO_UNUSED,
@@ -105,25 +118,41 @@ static esp_err_t setup_i2s_for_streaming(i2s_chan_handle_t *rx_handle) {
         .invert_flags = { .mclk_inv = false, .bclk_inv = false, .ws_inv = false },
     };
 
-    ESP_ERROR_CHECK(i2s_channel_init_std_mode(*rx_handle, &std_cfg));
-    ESP_ERROR_CHECK(i2s_channel_enable(*rx_handle));
+    ret = i2s_channel_init_std_mode(*rx_handle, &std_cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "i2s_channel_init_std_mode failed: %s", esp_err_to_name(ret));
+        i2s_del_channel(*rx_handle);
+        *rx_handle = NULL;
+        return ret;
+    }
+    
+    ret = i2s_channel_enable(*rx_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "i2s_channel_enable failed: %s", esp_err_to_name(ret));
+        // No es necesario llamar a disable si enable falló, solo borrar el canal
+        i2s_del_channel(*rx_handle);
+        *rx_handle = NULL;
+        return ret;
+    }
 
+    ESP_LOGI(TAG, "I2S driver for streaming configured and enabled successfully.");
     return ESP_OK;
 }
+
 static void audio_stream_task(void *pvParameters) {
     int sock = -1;
     i2s_chan_handle_t rx_handle = NULL;
     int32_t* i2s_raw_read_buffer = NULL;
     int16_t* i2s_processed_send_buffer = NULL;
 
-    // --- Wait for WiFi ---
+    // --- Esperar a WiFi ---
     update_status_message("Waiting for WiFi...");
     while (!wifi_manager_is_connected()) {
         if (s_streamer_state == WIFI_STREAM_STATE_STOPPING) goto cleanup;
         vTaskDelay(pdMS_TO_TICKS(100));
     }
     
-    // --- Allocate Buffers ---
+    // --- Reservar Buffers ---
     i2s_raw_read_buffer = (int32_t*)malloc(I2S_BUFFER_BYTES_READ);
     i2s_processed_send_buffer = (int16_t*)malloc(I2S_BUFFER_BYTES_SEND);
     if (!i2s_raw_read_buffer || !i2s_processed_send_buffer) {
@@ -132,16 +161,16 @@ static void audio_stream_task(void *pvParameters) {
         goto cleanup;
     }
     
-    // --- Setup I2S ---
+    // --- Configurar I2S ---
     if (setup_i2s_for_streaming(&rx_handle) != ESP_OK) {
         update_status_message("Error: I2S init failed");
         s_streamer_state = WIFI_STREAM_STATE_ERROR;
         goto cleanup;
     }
 
-    // --- Main Loop: Connect and Stream ---
+    // --- Bucle Principal: Conectar y Transmitir ---
     while (s_streamer_state != WIFI_STREAM_STATE_STOPPING) {
-        // --- TCP Connection ---
+        // --- Conexión TCP ---
         update_status_message("Connecting to %s:%d", STREAMING_SERVER_IP, STREAMING_SERVER_PORT);
         s_streamer_state = WIFI_STREAM_STATE_CONNECTING;
         
@@ -155,7 +184,7 @@ static void audio_stream_task(void *pvParameters) {
             update_status_message("Error: Failed to create socket");
             s_streamer_state = WIFI_STREAM_STATE_ERROR;
             vTaskDelay(pdMS_TO_TICKS(1000));
-            continue; // Retry connection
+            continue; // Reintentar conexión
         }
 
         if (connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) != 0) {
@@ -163,50 +192,50 @@ static void audio_stream_task(void *pvParameters) {
             close(sock);
             sock = -1;
             vTaskDelay(pdMS_TO_TICKS(1000));
-            continue; // Retry connection
+            continue; // Reintentar conexión
         }
         
         update_status_message("Streaming...");
         s_streamer_state = WIFI_STREAM_STATE_STREAMING;
         
-        // --- Streaming Loop ---
+        // --- Bucle de Transmisión ---
         while (s_streamer_state == WIFI_STREAM_STATE_STREAMING) {
             size_t bytes_read_from_i2s = 0;
             esp_err_t result = i2s_channel_read(rx_handle, (void*)i2s_raw_read_buffer,
                                                 I2S_BUFFER_BYTES_READ, &bytes_read_from_i2s, pdMS_TO_TICKS(100));
 
             if (result == ESP_ERR_TIMEOUT) {
-                continue; // Normal if no data, check for stop signal
+                continue; // Normal si no hay datos, comprueba la señal de parada
             }
             if (result != ESP_OK) {
                 update_status_message("Error: I2S read failed");
                 s_streamer_state = WIFI_STREAM_STATE_ERROR;
-                break; // Exit streaming loop
+                break; // Salir del bucle de transmisión
             }
 
-            // Convert 32-bit to 16-bit
+            // Convertir 32-bit a 16-bit. Con la config I2S correcta, esto funciona.
             int num_samples_read = bytes_read_from_i2s / sizeof(int32_t);
             for (int i = 0; i < num_samples_read; i++) {
-                // Shift to get the most significant 16 bits
+                // Desplazar para obtener los 16 bits más significativos
                 i2s_processed_send_buffer[i] = (int16_t)(i2s_raw_read_buffer[i] >> 16);
             }
 
-            // Send data
+            // Enviar datos
             int bytes_to_send = num_samples_read * sizeof(int16_t);
             if (send(sock, i2s_processed_send_buffer, bytes_to_send, 0) < 0) {
                 update_status_message("Error: Send failed. Disconnected.");
                 s_streamer_state = WIFI_STREAM_STATE_ERROR;
-                break; // Exit streaming loop
+                break; // Salir del bucle de transmisión
             }
         }
         
-        // --- Disconnect ---
+        // --- Desconectar ---
         if (sock >= 0) {
             close(sock);
             sock = -1;
         }
 
-        // If we exited the stream due to an error, wait before retrying
+        // Si salimos del streaming por un error, esperar antes de reintentar
         if (s_streamer_state == WIFI_STREAM_STATE_ERROR) {
             vTaskDelay(pdMS_TO_TICKS(2000));
         }

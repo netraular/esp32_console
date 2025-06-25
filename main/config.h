@@ -31,14 +31,14 @@
 #define RGB_LED_PIN      GPIO_NUM_48
 
 // --- I2S Pins for Audio Output (MAX98357A Speaker) ---
-#define I2S_SPEAKER_BCLK_PIN   GPIO_NUM_41//16//41
-#define I2S_SPEAKER_WS_PIN     GPIO_NUM_40//17//40
-#define I2S_SPEAKER_DOUT_PIN   GPIO_NUM_42//15 //42// To Amplifier/Speaker MAX98357A
+#define I2S_SPEAKER_BCLK_PIN   GPIO_NUM_41
+#define I2S_SPEAKER_WS_PIN     GPIO_NUM_40
+#define I2S_SPEAKER_DOUT_PIN   GPIO_NUM_42// To Amplifier/Speaker MAX98357A
 
 // --- I2S Pins for Audio Input (INMP441  Microphone) ---
-#define I2S_MIC_BCLK_PIN       GPIO_NUM_17//42 // Serial Clock (SCK/SCL)
-#define I2S_MIC_WS_PIN         GPIO_NUM_15//41 // Word Select (WS/LRCK)
-#define I2S_MIC_DIN_PIN        GPIO_NUM_16//40 // Serial Data (SD/DOUT)
+#define I2S_MIC_BCLK_PIN       GPIO_NUM_17 // Serial Clock (SCK/SCL)
+#define I2S_MIC_WS_PIN         GPIO_NUM_15 // Word Select (WS/LRCK)
+#define I2S_MIC_DIN_PIN        GPIO_NUM_16 // Serial Data (SD/DOUT)
 
 // --- FREE PINS ---
 // GPIO_NUM_18
@@ -56,7 +56,7 @@
 // --- AUDIO CONFIGURATION ---
 // Sets a safety limit on the physical volume (0-100) to protect the speaker.
 // The UI will still show 0-100%, but it will be mapped to this physical range.
-#define MAX_VOLUME_PERCENTAGE 25 
+#define MAX_VOLUME_PERCENTAGE 50 
 
 // --- RECORDING CONFIGURATION ---
 #define REC_SAMPLE_RATE 16000
