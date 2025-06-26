@@ -65,7 +65,8 @@ void menu_view_create(lv_obj_t *parent) {
     // Register button handlers for this view using the new API
     // The last parameter 'false' indicates these are default handlers, not view-specific
     // but for the menu, we register them as 'view-specific' to ensure they are cleared when leaving.
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_SINGLE_CLICK, handle_left_press, true);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_SINGLE_CLICK, handle_right_press, true);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true);
+    // --- CAMBIO: Se usa BUTTON_EVENT_TAP para una respuesta inmediata sin esperar al timeout del doble click. ---
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, handle_left_press, true);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, handle_right_press, true);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true);
 }
