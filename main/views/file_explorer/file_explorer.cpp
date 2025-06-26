@@ -272,7 +272,7 @@ void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_selec
     in_error_state = false;
 
     explorer_group = lv_group_create();
-    lv_group_set_wrap(explorer_group, false);
+    lv_group_set_wrap(explorer_group, true); // <-- MODIFICACIÓN: Habilitar navegación circular
     lv_group_set_focus_cb(explorer_group, focus_changed_cb);
 
     lv_style_init(&style_focused);
