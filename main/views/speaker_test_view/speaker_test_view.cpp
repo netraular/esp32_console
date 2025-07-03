@@ -3,7 +3,7 @@
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
-#include "../file_explorer/file_explorer.h"
+#include "components/file_explorer/file_explorer.h"
 #include "components/audio_visualizer/audio_visualizer.h"
 #include "config.h"
 #include "esp_log.h"
@@ -16,7 +16,7 @@ static const char *TAG = "SPEAKER_TEST_VIEW";
 static lv_obj_t *view_parent = NULL;
 static char current_song_path[256];
 static bool is_exiting = false;
-static bool is_playing_active = false; // <<< FIX: Added state flag
+static bool is_playing_active = false;
 
 // UI Widgets
 static lv_obj_t *play_pause_btn_label = NULL;

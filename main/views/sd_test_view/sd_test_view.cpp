@@ -1,6 +1,7 @@
 #include "sd_test_view.h"
 #include "../view_manager.h"
-#include "../file_explorer/file_explorer.h"
+#include "components/file_explorer/file_explorer.h"
+#include "components/text_viewer/text_viewer.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "esp_log.h"
@@ -10,45 +11,41 @@
 
 static const char *TAG = "SD_TEST_VIEW";
 
-// State variables for the view
+// --- State variables for the view ---
 static lv_obj_t *view_parent = NULL;
 static lv_obj_t *info_label_widget = NULL;
 
-// State variables for the file action menu (Read, Rename, Delete)
+// --- State variables for the file action menu (Read, Rename, Delete) ---
 static lv_obj_t *action_menu_container = NULL;
 static lv_group_t *action_menu_group = NULL;
 static char selected_item_path[256];
 static lv_style_t style_action_menu_focused;
 
-// --- Function Prototypes ---
+// --- Forward declarations for callbacks and view states ---
 static void create_initial_sd_view();
-static void show_file_explorer(bool refresh_explorer);
+static void show_file_explorer();
 static void on_explorer_exit();
 static void on_file_or_dir_selected(const char *path);
 static void on_create_action(file_item_type_t action_type, const char *current_path);
 static void destroy_action_menu_internal(bool refresh_file_explorer_after);
-static void create_text_viewer(const char* title, char* content);
+static void on_text_viewer_exit();
 
 
 /***************************************************
  *  ACTION MENU BUTTON HANDLERS
  ***************************************************/
 static void handle_action_menu_left_press() {
-    ESP_LOGD(TAG, "Action Menu Left Press (Tap)");
     if (action_menu_group) lv_group_focus_prev(action_menu_group);
 }
 static void handle_action_menu_right_press() {
-    ESP_LOGD(TAG, "Action Menu Right Press (Tap)");
     if (action_menu_group) lv_group_focus_next(action_menu_group);
 }
 
 static void handle_action_menu_cancel_press() {
-    ESP_LOGD(TAG, "Action Menu Cancel Press (Tap)");
-    destroy_action_menu_internal(true); // Refresh explorer after closing menu
+    destroy_action_menu_internal(true);
 }
 
 static void handle_action_menu_ok_press() {
-    ESP_LOGD(TAG, "Action Menu OK Press (Tap)");
     if (!action_menu_group) return;
 
     lv_obj_t* selected_btn = lv_group_get_focused(action_menu_group);
@@ -63,7 +60,9 @@ static void handle_action_menu_ok_press() {
         size_t file_size = 0;
         const char* filename = strrchr(selected_item_path, '/') ? strrchr(selected_item_path, '/') + 1 : selected_item_path;
         if (sd_manager_read_file(selected_item_path, &file_content, &file_size)) {
-            create_text_viewer(filename, file_content);
+            // Usar el nuevo componente text_viewer
+            destroy_action_menu_internal(false); // Destruir menú antes de mostrar el visor
+            text_viewer_create(view_parent, filename, file_content, on_text_viewer_exit);
         } else {
             if(file_content) free(file_content);
             ESP_LOGE(TAG, "Failed to read file for viewer.");
@@ -135,21 +134,17 @@ static void create_action_menu(const char* path) {
         lv_group_focus_obj(lv_obj_get_child(list, 0));
     }
 
-    // --- CORRECCIÓN AQUÍ: Usar BUTTON_EVENT_TAP ---
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_action_menu_ok_press, true);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_action_menu_cancel_press, true);
     button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_action_menu_left_press, true);
     button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_action_menu_right_press, true);
-    // --- FIN DE LA CORRECCIÓN ---
 }
 
 static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
     if (action_menu_container) {
         ESP_LOGI(TAG, "Destroying action menu. Refresh explorer: %s", refresh_file_explorer_after ? "yes" : "no");
         if(action_menu_group) {
-             if (lv_group_get_default() == action_menu_group) {
-                lv_group_set_default(NULL);
-             }
+             if (lv_group_get_default() == action_menu_group) lv_group_set_default(NULL);
              lv_group_del(action_menu_group);
              action_menu_group = NULL;
         }
@@ -162,48 +157,17 @@ static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
     }
 }
 
-/*********************
- *  TEXT VIEWER LOGIC
- *********************/
-static void text_viewer_delete_cb(lv_event_t * e) {
-    char* text_content = (char*)lv_event_get_user_data(e);
-    if (text_content) free(text_content);
-}
-
-static void handle_cancel_from_viewer() {
-    show_file_explorer(true);
-}
-
-static void create_text_viewer(const char* title, char* content) {
-    ESP_LOGI(TAG, "Creating text viewer for: %s", title);
-    lv_obj_clean(view_parent);
-    action_menu_container = NULL;
-    action_menu_group = NULL;
-
-    lv_obj_t* main_cont = lv_obj_create(view_parent);
-    lv_obj_remove_style_all(main_cont);
-    lv_obj_set_size(main_cont, lv_pct(100), lv_pct(100));
-    lv_obj_set_flex_flow(main_cont, LV_FLEX_FLOW_COLUMN);
-
-    lv_obj_t* title_label = lv_label_create(main_cont);
-    lv_label_set_text(title_label, title);
-    lv_obj_set_style_text_font(title_label, lv_theme_get_font_large(title_label), 0);
-    lv_obj_set_style_margin_bottom(title_label, 5, 0);
-
-    lv_obj_t* text_area = lv_textarea_create(main_cont);
-    lv_obj_set_size(text_area, lv_pct(95), lv_pct(85));
-    lv_textarea_set_text(text_area, content);
-    lv_obj_add_event_cb(text_area, text_viewer_delete_cb, LV_EVENT_DELETE, content);
-
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_from_viewer, true);
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, NULL, true);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, NULL, true);
-}
 
 /********************************
- *  FILE EXPLORER EVENT HANDLERS
+ *  COMPONENT EVENT HANDLERS
  ********************************/
+
+// Se llama cuando el usuario sale del visor de texto
+static void on_text_viewer_exit() {
+    show_file_explorer(); // Vuelve al explorador de archivos
+}
+
+// Se llama cuando se selecciona un item en el explorador de archivos
 static void on_file_or_dir_selected(const char *path) {
     struct stat st;
     if (stat(path, &st) == 0 && !S_ISDIR(st.st_mode)) {
@@ -211,6 +175,7 @@ static void on_file_or_dir_selected(const char *path) {
     }
 }
 
+// Se llama cuando se elige una acción "crear" en el explorador
 static void on_create_action(file_item_type_t action_type, const char *current_path_from_explorer) {
     char full_path[256];
     char basename[32];
@@ -236,10 +201,15 @@ static void on_create_action(file_item_type_t action_type, const char *current_p
     file_explorer_refresh();
 }
 
+// Se llama cuando el usuario sale del explorador de archivos
+static void on_explorer_exit() {
+    create_initial_sd_view();
+}
+
 /***********************
  *  MAIN VIEW LOGIC
  ***********************/
-static void show_file_explorer(bool refresh_explorer) {
+static void show_file_explorer() {
     if (action_menu_container) {
         destroy_action_menu_internal(false);
     }
@@ -260,6 +230,7 @@ static void show_file_explorer(bool refresh_explorer) {
     lv_obj_set_size(explorer_container, lv_pct(95), lv_pct(85));
     lv_obj_clear_flag(explorer_container, LV_OBJ_FLAG_SCROLLABLE);
 
+    // Usar el componente file_explorer
     file_explorer_create(
         explorer_container,
         sd_manager_get_mount_point(),
@@ -269,14 +240,10 @@ static void show_file_explorer(bool refresh_explorer) {
     );
 }
 
-static void on_explorer_exit() {
-    create_initial_sd_view();
-}
-
 static void handle_initial_ok_press() {
     sd_manager_unmount();
     if (sd_manager_mount()) {
-        show_file_explorer(false);
+        show_file_explorer();
     } else if (info_label_widget) {
         lv_label_set_text(info_label_widget, "Error mounting SD card.\n\nCheck card and press OK\nto retry.");
     }
@@ -302,7 +269,6 @@ static void create_initial_sd_view() {
     lv_label_set_text(info_label_widget, "Press OK to open\nthe file explorer");
 
     button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-    // Usamos TAP para abrir el explorador para una respuesta más rápida
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_initial_ok_press, true);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_initial_cancel_press, true);
     button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true);
