@@ -48,22 +48,22 @@ static void list_item_delete_cb(lv_event_t * e);
 static void add_list_entry(add_file_context_t *context, const char *name, const char *icon, file_item_type_t type);
 static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data);
 static void focus_changed_cb(lv_group_t * group);
-static void handle_cancel_press();
+static void handle_cancel_press(void* user_data);
 
-// --- BUTTON HANDLERS (now using TAP for speed) ---
-static void handle_right_press() {
+// --- BUTTON HANDLERS (MODIFIED: with new signature) ---
+static void handle_right_press(void* user_data) {
     ESP_LOGD(TAG, "Right Press (Tap)");
     if (in_error_state) return;
     if (explorer_group) lv_group_focus_next(explorer_group);
 }
 
-static void handle_left_press() {
+static void handle_left_press(void* user_data) {
     ESP_LOGD(TAG, "Left Press (Tap)");
     if (in_error_state) return;
     if (explorer_group) lv_group_focus_prev(explorer_group);
 }
 
-static void handle_ok_press() {
+static void handle_ok_press(void* user_data) {
     ESP_LOGD(TAG, "OK Press (Tap)");
     if (in_error_state) return;
     
@@ -85,7 +85,7 @@ static void handle_ok_press() {
             schedule_repopulate_list();
             break;
         case ITEM_TYPE_PARENT_DIR:
-            handle_cancel_press(); // Same action as going back
+            handle_cancel_press(nullptr); // Same action as going back
             break;
         case ITEM_TYPE_FILE:
             ESP_LOGI(TAG, "File selected: %s", entry_name);
@@ -105,7 +105,7 @@ static void handle_ok_press() {
     }
 }
 
-static void handle_cancel_press() {
+static void handle_cancel_press(void* user_data) {
     ESP_LOGD(TAG, "Cancel Press (Tap)");
     if (in_error_state || strcmp(current_path, mount_point) == 0) {
         ESP_LOGI(TAG, "Exiting file explorer.");
@@ -241,10 +241,11 @@ void file_explorer_set_input_active(bool active) {
     if (active) {
         ESP_LOGD(TAG, "Re-activating file explorer input handlers.");
         button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true);
-        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true);
-        button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press, true);
-        button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press, true);
+        // MODIFIED: Passing nullptr as user_data
+        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
+        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true, nullptr);
+        button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press, true, nullptr);
+        button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press, true, nullptr);
         if (explorer_group) {
             lv_group_set_default(explorer_group);
         }

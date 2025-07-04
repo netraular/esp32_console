@@ -11,7 +11,7 @@ static const char* button_names[BUTTON_COUNT] = { "Left", "Cancel", "OK", "Right
 
 // --- Private Function Prototypes ---
 static void handle_event(button_id_t button, const char* event_name);
-static void handle_cancel_press();
+static void handle_cancel_press(void* user_data);
 
 // --- Generic Event Handler ---
 static void handle_event(button_id_t button, const char* event_name) {
@@ -24,46 +24,46 @@ static void handle_event(button_id_t button, const char* event_name) {
 // --- Handler Implementations ---
 
 // Button LEFT
-static void h_left_down() { handle_event(BUTTON_LEFT, "Press Down"); }
-static void h_left_up() { handle_event(BUTTON_LEFT, "Press Up"); }
-static void h_left_tap() { handle_event(BUTTON_LEFT, "Tap (Fast)"); } // Tap handler
-static void h_left_single() { handle_event(BUTTON_LEFT, "Single Click"); }
-static void h_left_double() { handle_event(BUTTON_LEFT, "Double Click"); }
-static void h_left_long_start() { handle_event(BUTTON_LEFT, "Long Press Start"); }
-static void h_left_long_hold() { handle_event(BUTTON_LEFT, "Long Press Hold"); }
+static void h_left_down(void* user_data) { handle_event(BUTTON_LEFT, "Press Down"); }
+static void h_left_up(void* user_data) { handle_event(BUTTON_LEFT, "Press Up"); }
+static void h_left_tap(void* user_data) { handle_event(BUTTON_LEFT, "Tap (Fast)"); } // Tap handler
+static void h_left_single(void* user_data) { handle_event(BUTTON_LEFT, "Single Click"); }
+static void h_left_double(void* user_data) { handle_event(BUTTON_LEFT, "Double Click"); }
+static void h_left_long_start(void* user_data) { handle_event(BUTTON_LEFT, "Long Press Start"); }
+static void h_left_long_hold(void* user_data) { handle_event(BUTTON_LEFT, "Long Press Hold"); }
 
 // Button CANCEL (used to exit)
-static void handle_cancel_press() {
+static void handle_cancel_press(void* user_data) {
     ESP_LOGI(TAG, "Exiting view.");
     view_manager_load_view(VIEW_ID_MENU);
 }
 
 // Button OK
-static void h_ok_down() { handle_event(BUTTON_OK, "Press Down"); }
-static void h_ok_up() { handle_event(BUTTON_OK, "Press Up"); }
-static void h_ok_tap() { handle_event(BUTTON_OK, "Tap (Fast)"); } // Tap handler
-static void h_ok_single() { handle_event(BUTTON_OK, "Single Click"); }
-static void h_ok_double() { handle_event(BUTTON_OK, "Double Click"); }
-static void h_ok_long_start() { handle_event(BUTTON_OK, "Long Press Start"); }
-static void h_ok_long_hold() { handle_event(BUTTON_OK, "Long Press Hold"); }
+static void h_ok_down(void* user_data) { handle_event(BUTTON_OK, "Press Down"); }
+static void h_ok_up(void* user_data) { handle_event(BUTTON_OK, "Press Up"); }
+static void h_ok_tap(void* user_data) { handle_event(BUTTON_OK, "Tap (Fast)"); } // Tap handler
+static void h_ok_single(void* user_data) { handle_event(BUTTON_OK, "Single Click"); }
+static void h_ok_double(void* user_data) { handle_event(BUTTON_OK, "Double Click"); }
+static void h_ok_long_start(void* user_data) { handle_event(BUTTON_OK, "Long Press Start"); }
+static void h_ok_long_hold(void* user_data) { handle_event(BUTTON_OK, "Long Press Hold"); }
 
 // Button RIGHT
-static void h_right_down() { handle_event(BUTTON_RIGHT, "Press Down"); }
-static void h_right_up() { handle_event(BUTTON_RIGHT, "Press Up"); }
-static void h_right_tap() { handle_event(BUTTON_RIGHT, "Tap (Fast)"); } // Tap handler
-static void h_right_single() { handle_event(BUTTON_RIGHT, "Single Click"); }
-static void h_right_double() { handle_event(BUTTON_RIGHT, "Double Click"); }
-static void h_right_long_start() { handle_event(BUTTON_RIGHT, "Long Press Start"); }
-static void h_right_long_hold() { handle_event(BUTTON_RIGHT, "Long Press Hold"); }
+static void h_right_down(void* user_data) { handle_event(BUTTON_RIGHT, "Press Down"); }
+static void h_right_up(void* user_data) { handle_event(BUTTON_RIGHT, "Press Up"); }
+static void h_right_tap(void* user_data) { handle_event(BUTTON_RIGHT, "Tap (Fast)"); } // Tap handler
+static void h_right_single(void* user_data) { handle_event(BUTTON_RIGHT, "Single Click"); }
+static void h_right_double(void* user_data) { handle_event(BUTTON_RIGHT, "Double Click"); }
+static void h_right_long_start(void* user_data) { handle_event(BUTTON_RIGHT, "Long Press Start"); }
+static void h_right_long_hold(void* user_data) { handle_event(BUTTON_RIGHT, "Long Press Hold"); }
 
 // Button ON/OFF
-static void h_onoff_down() { handle_event(BUTTON_ON_OFF, "Press Down"); }
-static void h_onoff_up() { handle_event(BUTTON_ON_OFF, "Press Up"); }
-static void h_onoff_tap() { handle_event(BUTTON_ON_OFF, "Tap (Fast)"); } // Tap handler
-static void h_onoff_single() { handle_event(BUTTON_ON_OFF, "Single Click"); }
-static void h_onoff_double() { handle_event(BUTTON_ON_OFF, "Double Click"); }
-static void h_onoff_long_start() { handle_event(BUTTON_ON_OFF, "Long Press Start"); }
-static void h_onoff_long_hold() { handle_event(BUTTON_ON_OFF, "Long Press Hold"); }
+static void h_onoff_down(void* user_data) { handle_event(BUTTON_ON_OFF, "Press Down"); }
+static void h_onoff_up(void* user_data) { handle_event(BUTTON_ON_OFF, "Press Up"); }
+static void h_onoff_tap(void* user_data) { handle_event(BUTTON_ON_OFF, "Tap (Fast)"); } // Tap handler
+static void h_onoff_single(void* user_data) { handle_event(BUTTON_ON_OFF, "Single Click"); }
+static void h_onoff_double(void* user_data) { handle_event(BUTTON_ON_OFF, "Double Click"); }
+static void h_onoff_long_start(void* user_data) { handle_event(BUTTON_ON_OFF, "Long Press Start"); }
+static void h_onoff_long_hold(void* user_data) { handle_event(BUTTON_ON_OFF, "Long Press Hold"); }
 
 
 // --- Main View Creation Function ---
@@ -112,41 +112,41 @@ void multi_click_test_view_create(lv_obj_t *parent) {
     // --- Register Button Handlers ---
     
     // LEFT
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_PRESS_DOWN, h_left_down, true);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_PRESS_UP, h_left_up, true);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, h_left_tap, true);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_SINGLE_CLICK, h_left_single, true);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_DOUBLE_CLICK, h_left_double, true);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_LONG_PRESS_START, h_left_long_start, true);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_LONG_PRESS_HOLD, h_left_long_hold, true);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_PRESS_DOWN, h_left_down, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_PRESS_UP, h_left_up, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, h_left_tap, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_SINGLE_CLICK, h_left_single, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_DOUBLE_CLICK, h_left_double, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_LONG_PRESS_START, h_left_long_start, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_LONG_PRESS_HOLD, h_left_long_hold, true, nullptr);
     
     // CANCEL
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
 
     // OK
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_PRESS_DOWN, h_ok_down, true);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_PRESS_UP, h_ok_up, true);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, h_ok_tap, true);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_SINGLE_CLICK, h_ok_single, true);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_DOUBLE_CLICK, h_ok_double, true);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_LONG_PRESS_START, h_ok_long_start, true);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_LONG_PRESS_HOLD, h_ok_long_hold, true);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_PRESS_DOWN, h_ok_down, true, nullptr);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_PRESS_UP, h_ok_up, true, nullptr);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, h_ok_tap, true, nullptr);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_SINGLE_CLICK, h_ok_single, true, nullptr);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_DOUBLE_CLICK, h_ok_double, true, nullptr);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_LONG_PRESS_START, h_ok_long_start, true, nullptr);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_LONG_PRESS_HOLD, h_ok_long_hold, true, nullptr);
 
     // RIGHT
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_PRESS_DOWN, h_right_down, true);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_PRESS_UP, h_right_up, true);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, h_right_tap, true);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_SINGLE_CLICK, h_right_single, true);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_DOUBLE_CLICK, h_right_double, true);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_START, h_right_long_start, true);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_HOLD, h_right_long_hold, true);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_PRESS_DOWN, h_right_down, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_PRESS_UP, h_right_up, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, h_right_tap, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_SINGLE_CLICK, h_right_single, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_DOUBLE_CLICK, h_right_double, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_START, h_right_long_start, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_HOLD, h_right_long_hold, true, nullptr);
 
     // ON/OFF
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_PRESS_DOWN, h_onoff_down, true);
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_PRESS_UP, h_onoff_up, true);
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, h_onoff_tap, true);
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_SINGLE_CLICK, h_onoff_single, true);
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_DOUBLE_CLICK, h_onoff_double, true);
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_LONG_PRESS_START, h_onoff_long_start, true);
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_LONG_PRESS_HOLD, h_onoff_long_hold, true);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_PRESS_DOWN, h_onoff_down, true, nullptr);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_PRESS_UP, h_onoff_up, true, nullptr);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, h_onoff_tap, true, nullptr);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_SINGLE_CLICK, h_onoff_single, true, nullptr);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_DOUBLE_CLICK, h_onoff_double, true, nullptr);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_LONG_PRESS_START, h_onoff_long_start, true, nullptr);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_LONG_PRESS_HOLD, h_onoff_long_hold, true, nullptr);
 }

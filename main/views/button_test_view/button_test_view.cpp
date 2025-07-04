@@ -17,12 +17,12 @@ static lv_timer_t *ui_update_timer;
 
 // --- Private Function Prototypes ---
 static void update_ui_labels();
-static void handle_ok_press();
-static void handle_cancel_press();
-static void handle_test_button_press(const char* btn_name);
-static void handle_test_button_left() { handle_test_button_press("LEFT"); }
-static void handle_test_button_right() { handle_test_button_press("RIGHT"); }
-static void handle_test_button_on_off() { handle_test_button_press("ON/OFF"); }
+static void handle_ok_press(void* user_data);
+static void handle_cancel_press(void* user_data);
+static void handle_test_button_press_helper(const char* btn_name);
+static void handle_test_button_left(void* user_data) { handle_test_button_press_helper("LEFT"); }
+static void handle_test_button_right(void* user_data) { handle_test_button_press_helper("RIGHT"); }
+static void handle_test_button_on_off(void* user_data) { handle_test_button_press_helper("ON/OFF"); }
 static void ui_update_timer_cb(lv_timer_t *timer);
 
 // --- Implementation ---
@@ -35,7 +35,7 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
 }
 
 // Handler for the test buttons (Left, Right, On/Off)
-static void handle_test_button_press(const char* btn_name) {
+static void handle_test_button_press_helper(const char* btn_name) {
     if (current_mode == INPUT_DISPATCH_MODE_QUEUED) {
         // SAFE: We are in QUEUED mode, so this handler is called from the LVGL timer context.
         ESP_LOGI(TAG, "Button '%s' press handled in QUEUED mode.", btn_name);
@@ -48,7 +48,7 @@ static void handle_test_button_press(const char* btn_name) {
 }
 
 // Handler for the OK button (switches modes)
-static void handle_ok_press() {
+static void handle_ok_press(void* user_data) {
     if (current_mode == INPUT_DISPATCH_MODE_QUEUED) {
         current_mode = INPUT_DISPATCH_MODE_IMMEDIATE;
     } else {
@@ -65,7 +65,7 @@ static void handle_ok_press() {
 }
 
 // Handler for the Cancel button (exits the view)
-static void handle_cancel_press() {
+static void handle_cancel_press(void* user_data) {
     ESP_LOGI(TAG, "Exiting Button Test View.");
     // Clean up the timer
     if (ui_update_timer) {
@@ -127,14 +127,12 @@ void button_test_view_create(lv_obj_t *parent) {
     update_ui_labels();
 
     // --- Register Button Handlers ---
-    // --- CORRECCIÓN AQUÍ ---
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true);
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true, nullptr);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true, nullptr);
     // For test buttons, we also use single click for a clear demonstration
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, handle_test_button_left, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, handle_test_button_right, true);
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_SINGLE_CLICK, handle_test_button_on_off, true);
-    // --- FIN DE LA CORRECCIÓN ---
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_SINGLE_CLICK, handle_test_button_left, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_SINGLE_CLICK, handle_test_button_right, true, nullptr);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_SINGLE_CLICK, handle_test_button_on_off, true, nullptr);
     
     // --- Start UI Update Timer ---
     ui_update_timer = lv_timer_create(ui_update_timer_cb, 50, NULL);

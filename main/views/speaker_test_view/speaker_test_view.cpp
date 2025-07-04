@@ -47,12 +47,12 @@ static void ui_update_timer_cb(lv_timer_t *timer);
 // Callbacks and button handlers
 static void on_audio_file_selected(const char *path);
 static void on_explorer_exit_speaker();
-static void handle_ok_press_initial();
-static void handle_cancel_press_initial();
-static void handle_ok_press_playing();
-static void handle_cancel_press_playing();
-static void handle_left_press_playing();
-static void handle_right_press_playing();
+static void handle_ok_press_initial(void* user_data);
+static void handle_cancel_press_initial(void* user_data);
+static void handle_ok_press_playing(void* user_data);
+static void handle_cancel_press_playing(void* user_data);
+static void handle_left_press_playing(void* user_data);
+static void handle_right_press_playing(void* user_data);
 
 
 // --- Utility Functions ---
@@ -92,7 +92,6 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
     }
 
     // Check 3: Song just finished normally.
-    // This is the core of the fix: detect when the song finishes, reset the UI, but KEEP the timer alive.
     if (is_playing_active && state == AUDIO_STATE_STOPPED) {
         is_playing_active = false; // Mark as finished.
         ESP_LOGI(TAG, "Song finished. Resetting UI but keeping timer alive for button events.");
@@ -194,13 +193,13 @@ static void play_audio_task(void* user_data) {
 // --- Dedicated function to start playback ---
 static void start_playback() {
     ESP_LOGI(TAG, "Initiating playback sequence.");
-    is_playing_active = true; // <<< FIX: Set state flag
+    is_playing_active = true;
     lv_async_call(play_audio_task, NULL);
 }
 
 // --- Button Handlers for "Now Playing" View ---
 
-static void handle_ok_press_playing() {
+static void handle_ok_press_playing(void* user_data) {
     audio_player_state_t state = audio_manager_get_state();
     switch (state) {
         case AUDIO_STATE_PLAYING:
@@ -221,19 +220,19 @@ static void handle_ok_press_playing() {
     lv_async_call(handle_play_pause_ui_update_task, NULL);
 }
 
-static void handle_cancel_press_playing() {
+static void handle_cancel_press_playing(void* user_data) {
     if (is_exiting) return;
     is_exiting = true;
     button_manager_unregister_view_handlers();
     lv_async_call(stop_audio_task, NULL);
 }
 
-static void handle_left_press_playing() {
+static void handle_left_press_playing(void* user_data) {
     audio_manager_volume_down();
     lv_async_call(update_volume_label_task, NULL);
 }
 
-static void handle_right_press_playing() {
+static void handle_right_press_playing(void* user_data) {
     audio_manager_volume_up();
     lv_async_call(update_volume_label_task, NULL);
 }
@@ -290,7 +289,7 @@ static void show_file_explorer() {
 
 static void create_now_playing_view(const char *file_path) {
     is_exiting = false;
-    is_playing_active = false; // <<< FIX: Initialize state flag
+    is_playing_active = false;
     viz_data_received = false;
     lv_obj_clean(view_parent);
     strncpy(current_song_path, file_path, sizeof(current_song_path) - 1);
@@ -346,15 +345,15 @@ static void create_now_playing_view(const char *file_path) {
     lv_label_set_text(play_pause_btn_label, LV_SYMBOL_PLAY);
     lv_obj_set_style_text_font(play_pause_btn_label, &lv_font_montserrat_28, 0);
     
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press_playing, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_playing, true);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press_playing, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press_playing, true);
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press_playing, true, nullptr);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_playing, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press_playing, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press_playing, true, nullptr);
     
     start_playback();
 }
 
-static void handle_ok_press_initial() {
+static void handle_ok_press_initial(void* user_data) {
     ESP_LOGI(TAG, "OK button pressed. Forcing SD card re-mount...");
     sd_manager_unmount();
     if (sd_manager_mount()) {
@@ -368,7 +367,7 @@ static void handle_ok_press_initial() {
     }
 }
 
-static void handle_cancel_press_initial() {
+static void handle_cancel_press_initial(void* user_data) {
     if (ui_update_timer) {
         lv_timer_delete(ui_update_timer);
         ui_update_timer = NULL;
@@ -392,10 +391,10 @@ static void create_initial_speaker_view() {
     lv_label_set_text(info_label_widget, "Press OK to\nselect an audio file");
 
     button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press_initial, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_initial, true);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, NULL, true);
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press_initial, true, nullptr);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_initial, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, NULL, true, nullptr);
 }
 
 void speaker_test_view_create(lv_obj_t *parent) {

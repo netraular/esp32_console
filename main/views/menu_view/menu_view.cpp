@@ -12,7 +12,7 @@ static const char *view_options[] = {
     "Test SD",
     "Test Image",
     "Test Button Events",
-    "WiFi Audio Stream" // --> AÑADIDO
+    "WiFi Audio Stream"
 };
 static const int num_options = sizeof(view_options) / sizeof(view_options[0]);
 
@@ -23,15 +23,15 @@ static const view_id_t view_ids[] = {
     VIEW_ID_SD_TEST,
     VIEW_ID_IMAGE_TEST,
     VIEW_ID_MULTI_CLICK_TEST,
-    VIEW_ID_WIFI_STREAM_TEST // --> AÑADIDO
+    VIEW_ID_WIFI_STREAM_TEST
 };
 
 static void update_menu_label() {
     lv_label_set_text_fmt(main_label, "< %s >", view_options[selected_view_index]);
 }
 
-// Button handlers for this view
-static void handle_left_press() {
+// MODIFIED: Handler signature updated
+static void handle_left_press(void* user_data) {
     selected_view_index--;
     if (selected_view_index < 0) {
         selected_view_index = num_options - 1; // Wrap around
@@ -39,7 +39,8 @@ static void handle_left_press() {
     update_menu_label();
 }
 
-static void handle_right_press() {
+// MODIFIED: Handler signature updated
+static void handle_right_press(void* user_data) {
     selected_view_index++;
     if (selected_view_index >= num_options) {
         selected_view_index = 0; // Wrap around
@@ -47,7 +48,8 @@ static void handle_right_press() {
     update_menu_label();
 }
 
-static void handle_ok_press() {
+// MODIFIED: Handler signature updated
+static void handle_ok_press(void* user_data) {
     // Load the currently selected view
     view_manager_load_view(view_ids[selected_view_index]);
 }
@@ -62,11 +64,8 @@ void menu_view_create(lv_obj_t *parent) {
     selected_view_index = 0; 
     update_menu_label();
 
-    // Register button handlers for this view using the new API
-    // The last parameter 'false' indicates these are default handlers, not view-specific
-    // but for the menu, we register them as 'view-specific' to ensure they are cleared when leaving.
-    // --- CAMBIO: Se usa BUTTON_EVENT_TAP para una respuesta inmediata sin esperar al timeout del doble click. ---
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, handle_left_press, true);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, handle_right_press, true);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true);
+    // MODIFIED: Passing nullptr as user_data
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, handle_left_press, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, handle_right_press, true, nullptr);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true, nullptr);
 }

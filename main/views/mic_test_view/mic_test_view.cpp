@@ -71,7 +71,7 @@ static void ui_update_timer_cb(lv_timer_t* timer) {
     }
 }
 
-static void handle_ok_press() {
+static void handle_ok_press(void* user_data) {
     audio_recorder_state_t state = audio_recorder_get_state();
 
     if (state == RECORDER_STATE_IDLE || state == RECORDER_STATE_ERROR) {
@@ -119,7 +119,7 @@ static void handle_ok_press() {
     }
 }
 
-static void handle_cancel_press() {
+static void handle_cancel_press(void* user_data) {
     cleanup_mic_test_view();
     view_manager_load_view(VIEW_ID_MENU);
 }
@@ -166,9 +166,7 @@ void mic_test_view_create(lv_obj_t* parent) {
     // Create a timer to periodically update the UI
     ui_update_timer = lv_timer_create(ui_update_timer_cb, 250, NULL);
 
-    // --- CORRECCIÓN AQUÍ ---
     // Register button handlers using the new API for single click events.
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true);
-    // --- FIN DE LA CORRECCIÓN ---
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true, nullptr);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true, nullptr);
 }

@@ -32,20 +32,20 @@ static void on_text_viewer_exit();
 
 
 /***************************************************
- *  ACTION MENU BUTTON HANDLERS
+ *  ACTION MENU BUTTON HANDLERS (MODIFIED: with new signature)
  ***************************************************/
-static void handle_action_menu_left_press() {
+static void handle_action_menu_left_press(void* user_data) {
     if (action_menu_group) lv_group_focus_prev(action_menu_group);
 }
-static void handle_action_menu_right_press() {
+static void handle_action_menu_right_press(void* user_data) {
     if (action_menu_group) lv_group_focus_next(action_menu_group);
 }
 
-static void handle_action_menu_cancel_press() {
+static void handle_action_menu_cancel_press(void* user_data) {
     destroy_action_menu_internal(true);
 }
 
-static void handle_action_menu_ok_press() {
+static void handle_action_menu_ok_press(void* user_data) {
     if (!action_menu_group) return;
 
     lv_obj_t* selected_btn = lv_group_get_focused(action_menu_group);
@@ -60,8 +60,8 @@ static void handle_action_menu_ok_press() {
         size_t file_size = 0;
         const char* filename = strrchr(selected_item_path, '/') ? strrchr(selected_item_path, '/') + 1 : selected_item_path;
         if (sd_manager_read_file(selected_item_path, &file_content, &file_size)) {
-            // Usar el nuevo componente text_viewer
-            destroy_action_menu_internal(false); // Destruir menú antes de mostrar el visor
+            // Use the new text_viewer component
+            destroy_action_menu_internal(false); // Destroy menu before showing viewer
             text_viewer_create(view_parent, filename, file_content, on_text_viewer_exit);
         } else {
             if(file_content) free(file_content);
@@ -134,10 +134,11 @@ static void create_action_menu(const char* path) {
         lv_group_focus_obj(lv_obj_get_child(list, 0));
     }
 
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_action_menu_ok_press, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_action_menu_cancel_press, true);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_action_menu_left_press, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_action_menu_right_press, true);
+    // MODIFIED: Passing nullptr as user_data
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_action_menu_ok_press, true, nullptr);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_action_menu_cancel_press, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_action_menu_left_press, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_action_menu_right_press, true, nullptr);
 }
 
 static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
@@ -162,12 +163,12 @@ static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
  *  COMPONENT EVENT HANDLERS
  ********************************/
 
-// Se llama cuando el usuario sale del visor de texto
+// Called when the user exits the text viewer
 static void on_text_viewer_exit() {
-    show_file_explorer(); // Vuelve al explorador de archivos
+    show_file_explorer(); // Go back to the file explorer
 }
 
-// Se llama cuando se selecciona un item en el explorador de archivos
+// Called when an item is selected in the file explorer
 static void on_file_or_dir_selected(const char *path) {
     struct stat st;
     if (stat(path, &st) == 0 && !S_ISDIR(st.st_mode)) {
@@ -175,7 +176,7 @@ static void on_file_or_dir_selected(const char *path) {
     }
 }
 
-// Se llama cuando se elige una acción "crear" en el explorador
+// Called when a "create" action is chosen in the explorer
 static void on_create_action(file_item_type_t action_type, const char *current_path_from_explorer) {
     char full_path[256];
     char basename[32];
@@ -201,7 +202,7 @@ static void on_create_action(file_item_type_t action_type, const char *current_p
     file_explorer_refresh();
 }
 
-// Se llama cuando el usuario sale del explorador de archivos
+// Called when the user exits the file explorer
 static void on_explorer_exit() {
     create_initial_sd_view();
 }
@@ -230,7 +231,7 @@ static void show_file_explorer() {
     lv_obj_set_size(explorer_container, lv_pct(95), lv_pct(85));
     lv_obj_clear_flag(explorer_container, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Usar el componente file_explorer
+    // Use the file_explorer component
     file_explorer_create(
         explorer_container,
         sd_manager_get_mount_point(),
@@ -240,7 +241,8 @@ static void show_file_explorer() {
     );
 }
 
-static void handle_initial_ok_press() {
+// MODIFIED: Handler signature updated
+static void handle_initial_ok_press(void* user_data) {
     sd_manager_unmount();
     if (sd_manager_mount()) {
         show_file_explorer();
@@ -249,7 +251,8 @@ static void handle_initial_ok_press() {
     }
 }
 
-static void handle_initial_cancel_press() {
+// MODIFIED: Handler signature updated
+static void handle_initial_cancel_press(void* user_data) {
     view_manager_load_view(VIEW_ID_MENU);
 }
 
@@ -269,10 +272,11 @@ static void create_initial_sd_view() {
     lv_label_set_text(info_label_widget, "Press OK to open\nthe file explorer");
 
     button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_initial_ok_press, true);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_initial_cancel_press, true);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, NULL, true);
+    // MODIFIED: Passing nullptr as user_data
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_initial_ok_press, true, nullptr);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_initial_cancel_press, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, NULL, true, nullptr);
 }
 
 void sd_test_view_create(lv_obj_t *parent) {

@@ -30,16 +30,24 @@ typedef enum {
     BUTTON_EVENT_DOUBLE_CLICK,
     BUTTON_EVENT_LONG_PRESS_START,
     BUTTON_EVENT_LONG_PRESS_HOLD,
-    BUTTON_EVENT_TAP, // --> AÑADIDO: Evento de clic rápido que se dispara al soltar el botón.
+    BUTTON_EVENT_TAP, // A fast click event that fires on press-up.
     BUTTON_EVENT_COUNT // Total number of event types
 } button_event_type_t;
 
 // Function type for button event handlers (callbacks)
-typedef void (*button_handler_t)(void);
+// MODIFIED: Accepts a user_data pointer
+typedef void (*button_handler_t)(void* user_data);
+
+// MODIFIED: Structure to store the handler and its user_data
+typedef struct {
+    button_handler_t handler;
+    void* user_data;
+} handler_entry_t;
 
 // Structure to hold handlers for all possible event types
 typedef struct {
-    button_handler_t handlers[BUTTON_EVENT_COUNT];
+    // MODIFIED: Now an array of handler_entry_t
+    handler_entry_t handlers[BUTTON_EVENT_COUNT];
 } button_event_handlers_t;
 
 // Main structure to manage default and view-specific handlers for a single button
@@ -69,8 +77,9 @@ void button_manager_set_dispatch_mode(input_dispatch_mode_t mode);
  * @param event The type of event to handle.
  * @param handler The callback function to execute.
  * @param is_view_handler If true, this is a view-specific handler that takes priority. If false, it's a default handler.
+ * @param user_data An optional pointer that will be passed to the handler function when it is executed.
  */
-void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler);
+void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler, void* user_data);
 
 /**
  * @brief Unregisters all view-specific handlers and clears any pending button events from the queue.

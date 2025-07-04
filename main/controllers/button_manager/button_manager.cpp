@@ -46,12 +46,17 @@ typedef struct {
 
 // --- Private Functions ---
 
+// MODIFIED: Now invokes the handler with its associated user_data
 static void execute_handler(button_id_t button_id, button_event_type_t event_type) {
     if (button_id >= BUTTON_COUNT || event_type >= BUTTON_EVENT_COUNT) return;
-    if (button_handlers[button_id].view_handlers.handlers[event_type]) {
-        button_handlers[button_id].view_handlers.handlers[event_type]();
-    } else if (button_handlers[button_id].default_handlers.handlers[event_type]) {
-        button_handlers[button_id].default_handlers.handlers[event_type]();
+
+    handler_entry_t* view_entry = &button_handlers[button_id].view_handlers.handlers[event_type];
+    handler_entry_t* default_entry = &button_handlers[button_id].default_handlers.handlers[event_type];
+
+    if (view_entry->handler) {
+        view_entry->handler(view_entry->user_data);
+    } else if (default_entry->handler) {
+        default_entry->handler(default_entry->user_data);
     }
 }
 
@@ -131,6 +136,7 @@ static void generic_button_event_cb(void *arg, void *usr_data) {
 void button_manager_init() {
     ESP_LOGI(TAG, "Initializing button manager...");
     
+    // MODIFIED: memset works the same because nullptr is 0.
     memset(button_handlers, 0, sizeof(button_handlers));
     memset(is_long_press_active, 0, sizeof(is_long_press_active));
 
@@ -178,28 +184,31 @@ void button_manager_set_dispatch_mode(input_dispatch_mode_t mode) {
     }
 }
 
-void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler) {
+// MODIFIED: Accepts and stores the user_data
+void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler, void* user_data) {
     if (button >= BUTTON_COUNT || event >= BUTTON_EVENT_COUNT) return;
     
+    handler_entry_t* entry;
     if (is_view_handler) {
-        button_handlers[button].view_handlers.handlers[event] = handler;
+        entry = &button_handlers[button].view_handlers.handlers[event];
     } else {
-        button_handlers[button].default_handlers.handlers[event] = handler;
+        entry = &button_handlers[button].default_handlers.handlers[event];
     }
+
+    entry->handler = handler;
+    entry->user_data = user_data;
 }
 
 void button_manager_unregister_view_handlers() {
     ESP_LOGI(TAG, "Unregistering view-handlers and clearing event queue.");
     
-    // *** SOLUCIÓN PRINCIPAL: Limpiar la cola de eventos ***
     if (s_input_event_queue) {
         xQueueReset(s_input_event_queue);
     }
     
+    // MODIFIED: Clears the complete structure (handler and user_data)
     for (int i = 0; i < BUTTON_COUNT; i++) {
-        for (int j = 0; j < BUTTON_EVENT_COUNT; j++) {
-            button_handlers[i].view_handlers.handlers[j] = nullptr;
-        }
+        memset(&button_handlers[i].view_handlers, 0, sizeof(button_event_handlers_t));
     }
     ESP_LOGI(TAG, "Event queue cleared and default button handlers restored.");
 }

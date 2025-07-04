@@ -9,7 +9,7 @@ extern "C" {
     extern const lv_image_dsc_t icon_1;
 }
 
-static void handle_cancel_press() {
+static void handle_cancel_press(void* user_data) {
     view_manager_load_view(VIEW_ID_MENU);
 }
 
@@ -34,5 +34,5 @@ void image_test_view_create(lv_obj_t *parent) {
     lv_label_set_text(info_label, "Press Cancel to return");
     lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -20);
 
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true, nullptr);
 }
