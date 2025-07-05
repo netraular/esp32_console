@@ -24,7 +24,6 @@ static struct {
 // --- Forward Declarations of Callbacks and State Changers ---
 static void on_start_pressed(const pomodoro_settings_t settings);
 static void on_timer_exit();
-static void handle_cancel_press_main(void* user_data);
 static void show_config_screen();
 static void show_timer_screen(const pomodoro_settings_t settings);
 
@@ -36,8 +35,11 @@ static void show_config_screen() {
     }
     s_view_state.current_component = pomodoro_config_component_create(s_view_state.parent_container, s_view_state.last_settings, on_start_pressed);
     s_view_state.state = POMODORO_STATE_CONFIG;
-    // Register the main "exit view" handler. The component will register its own handlers for other buttons.
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_main, true, nullptr);
+    // --- CORRECCIÓN ---
+    // Se elimina la siguiente línea. El componente de configuración ahora es
+    // completamente responsable de manejar su propio botón de cancelar,
+    // que ya contiene la lógica correcta (salir al menú solo desde el primer input).
+    // button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_main, true, nullptr);
 }
 
 static void show_timer_screen(const pomodoro_settings_t settings) {
@@ -46,7 +48,7 @@ static void show_timer_screen(const pomodoro_settings_t settings) {
     }
     s_view_state.current_component = pomodoro_timer_component_create(s_view_state.parent_container, settings, on_timer_exit);
     s_view_state.state = POMODORO_STATE_RUNNING;
-    // The timer component will register its own handlers, including for the CANCEL button.
+    // El componente del temporizador registra sus propios manejadores, lo cual es correcto.
 }
 
 
@@ -60,17 +62,6 @@ static void on_start_pressed(const pomodoro_settings_t settings) {
 static void on_timer_exit() {
     ESP_LOGI(TAG, "Timer exited. Returning to config screen.");
     show_config_screen();
-}
-
-// --- Main button handler (only for exiting the whole view) ---
-static void handle_cancel_press_main(void* user_data) {
-    // This handler is only active on the config screen.
-    ESP_LOGI(TAG, "Exiting Pomodoro view.");
-    if (s_view_state.current_component) {
-        lv_obj_del(s_view_state.current_component);
-        s_view_state.current_component = nullptr;
-    }
-    view_manager_load_view(VIEW_ID_MENU);
 }
 
 
