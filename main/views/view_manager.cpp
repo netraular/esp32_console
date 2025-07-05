@@ -9,7 +9,8 @@
 #include "image_test_view/image_test_view.h"
 #include "button_test_view/button_test_view.h"
 #include "multi_click_test_view/multi_click_test_view.h"
-#include "wifi_stream_view/wifi_stream_view.h" // --> AÑADIDO
+#include "wifi_stream_view/wifi_stream_view.h"
+#include "pomodoro_view/pomodoro_view.h"
 
 static const char *TAG = "VIEW_MGR";
 static view_id_t current_view_id;
@@ -57,8 +58,11 @@ void view_manager_load_view(view_id_t view_id) {
         case VIEW_ID_MULTI_CLICK_TEST:
             multi_click_test_view_create(scr);
             break;
-        case VIEW_ID_WIFI_STREAM_TEST: // --> AÑADIDO
+        case VIEW_ID_WIFI_STREAM_TEST:
             wifi_stream_view_create(scr);
+            break;
+        case VIEW_ID_POMODORO:
+            pomodoro_view_create(scr);
             break;
         default:
             break;

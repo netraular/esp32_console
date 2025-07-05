@@ -19,6 +19,9 @@ idf_component_register(SRCS "main.cpp"
                            "./views/button_test_view/button_test_view.cpp"
                            "./views/multi_click_test_view/multi_click_test_view.cpp"
                            "./views/wifi_stream_view/wifi_stream_view.cpp"
+                           "./views/pomodoro_view/pomodoro_view.cpp"
+                           "./views/pomodoro_view/components/pomodoro_config_component.cpp"
+                           "./views/pomodoro_view/components/pomodoro_timer_component.cpp"
                    INCLUDE_DIRS "."
                    )
 

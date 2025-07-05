@@ -12,7 +12,8 @@ typedef enum {
     VIEW_ID_IMAGE_TEST,
     VIEW_ID_BUTTON_DISPATCH_TEST,
     VIEW_ID_MULTI_CLICK_TEST,
-    VIEW_ID_WIFI_STREAM_TEST, // --> AÑADIDO
+    VIEW_ID_WIFI_STREAM_TEST,
+    VIEW_ID_POMODORO,
     VIEW_ID_COUNT // Total number of views
 } view_id_t;
 
