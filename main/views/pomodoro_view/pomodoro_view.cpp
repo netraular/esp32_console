@@ -35,11 +35,6 @@ static void show_config_screen() {
     }
     s_view_state.current_component = pomodoro_config_component_create(s_view_state.parent_container, s_view_state.last_settings, on_start_pressed);
     s_view_state.state = POMODORO_STATE_CONFIG;
-    // --- CORRECCIÓN ---
-    // Se elimina la siguiente línea. El componente de configuración ahora es
-    // completamente responsable de manejar su propio botón de cancelar,
-    // que ya contiene la lógica correcta (salir al menú solo desde el primer input).
-    // button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_main, true, nullptr);
 }
 
 static void show_timer_screen(const pomodoro_settings_t settings) {

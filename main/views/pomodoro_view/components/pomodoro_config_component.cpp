@@ -21,13 +21,13 @@ typedef struct {
 
 // --- Function Prototypes ---
 static void update_labels(config_component_state_t* state);
-static void update_focus_highlight(config_component_state_t* state, config_focus_t old_focus, config_focus_t new_focus);
+static void update_focus_highlight(config_component_state_t* state);
 static void cleanup_event_cb(lv_event_t * e);
 
-// --- Constants for colors ---
-const lv_color_t COLOR_BORDER_DEFAULT = lv_color_hex(0x444444); // Gris oscuro
+const lv_color_t COLOR_BORDER_DEFAULT = lv_palette_main(LV_PALETTE_GREY);
 const lv_color_t COLOR_BORDER_FOCUSED = lv_palette_main(LV_PALETTE_YELLOW);
-const lv_color_t COLOR_BORDER_CONFIRMED = lv_color_hex(0x000000); // Negro
+const lv_color_t COLOR_BORDER_CONFIRMED = lv_color_hex(0x000000);
+
 
 // --- Button Handlers ---
 static void handle_ok_press(void* user_data) {
@@ -41,9 +41,8 @@ static void handle_ok_press(void* user_data) {
             state->on_start_cb(state->current_settings);
         }
     } else {
-        config_focus_t old_focus = state->focus;
         state->focus = (config_focus_t)(((int)state->focus + 1));
-        update_focus_highlight(state, old_focus, state->focus);
+        update_focus_highlight(state);
     }
 }
 
@@ -53,9 +52,8 @@ static void handle_cancel_press(void* user_data) {
     if (state->focus == FOCUS_WORK_MIN) {
         view_manager_load_view(VIEW_ID_MENU);
     } else {
-        config_focus_t old_focus = state->focus;
         state->focus = (config_focus_t)(((int)state->focus - 1));
-        update_focus_highlight(state, old_focus, state->focus);
+        update_focus_highlight(state);
     }
 }
 
@@ -94,28 +92,30 @@ void update_labels(config_component_state_t* state) {
     lv_label_set_text_fmt(lv_obj_get_child(state->focusable_items[FOCUS_ROUNDS], 0), "%lu", state->current_settings.iterations);
 }
 
-void update_focus_highlight(config_component_state_t* state, config_focus_t old_focus, config_focus_t new_focus) {
-    lv_obj_t* old_item = state->focusable_items[old_focus];
-    lv_obj_t* new_item = state->focusable_items[new_focus];
+static void update_focus_highlight(config_component_state_t* state) {
+    config_focus_t current_focus = state->focus;
 
-    // Si se avanza (confirmando), poner el borde del item anterior en negro.
-    if (new_focus > old_focus) {
-        lv_obj_set_style_border_color(old_item, COLOR_BORDER_CONFIRMED, 0);
-    } 
-    // Si se retrocede, poner el borde del item anterior de vuelta en gris.
-    else {
-        lv_obj_set_style_border_color(old_item, COLOR_BORDER_DEFAULT, 0);
+    for (int i = 0; i < FOCUS_COUNT; i++) {
+        lv_obj_t* item = state->focusable_items[i];
+        if (i < current_focus) {
+            // Elementos antes del foco actual: confirmados
+            lv_obj_set_style_border_color(item, COLOR_BORDER_CONFIRMED, 0);
+        } else if (i == current_focus) {
+            // El elemento actual: enfocado
+            lv_obj_set_style_border_color(item, COLOR_BORDER_FOCUSED, 0);
+        } else {
+            // Elementos después del foco actual: pendientes
+            lv_obj_set_style_border_color(item, COLOR_BORDER_DEFAULT, 0);
+        }
     }
-    
-    // El item que acaba de recibir el foco siempre tiene el borde amarillo.
-    lv_obj_set_style_border_color(new_item, COLOR_BORDER_FOCUSED, 0);
 }
 
 lv_obj_t* create_time_box(lv_obj_t* parent) {
     lv_obj_t* box = lv_obj_create(parent);
     lv_obj_set_size(box, 60, 40);
     lv_obj_set_style_pad_all(box, 0, 0);
-    lv_obj_set_style_border_width(box, 2, 0);    
+    lv_obj_set_style_border_width(box, 2, 0);
+    lv_obj_set_style_border_color(box, COLOR_BORDER_DEFAULT, 0); // Establecer el color inicial
     lv_obj_t* label = lv_label_create(box);
     lv_obj_center(label);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
@@ -174,12 +174,12 @@ lv_obj_t* pomodoro_config_component_create(lv_obj_t* parent, const pomodoro_sett
     // Informational label
     lv_obj_t* info_label = lv_label_create(cont);
     lv_label_set_text(info_label, "OK to confirm, Cancel to go back");
-    lv_obj_set_style_text_color(info_label, lv_color_hex(0x888888), 0);
+    lv_obj_set_style_text_color(info_label, lv_color_hex(0xaaaaaa), 0);
 
     update_labels(state);
     
-    // Poner el resaltado inicial de foco. Todos los demás ya son grises.
-    lv_obj_set_style_border_color(state->focusable_items[state->focus], COLOR_BORDER_FOCUSED, 0);
+    // Establecer el estado visual inicial
+    update_focus_highlight(state);
 
     // Register button handlers
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true, state);
