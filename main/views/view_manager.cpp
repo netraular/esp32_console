@@ -11,6 +11,7 @@
 #include "multi_click_test_view/multi_click_test_view.h"
 #include "wifi_stream_view/wifi_stream_view.h"
 #include "pomodoro_view/pomodoro_view.h"
+#include "click_counter_view/click_counter_view.h"
 
 static const char *TAG = "VIEW_MGR";
 static view_id_t current_view_id;
@@ -63,6 +64,9 @@ void view_manager_load_view(view_id_t view_id) {
             break;
         case VIEW_ID_POMODORO:
             pomodoro_view_create(scr);
+            break;
+        case VIEW_ID_CLICK_COUNTER_TEST:
+            click_counter_view_create(scr);
             break;
         default:
             break;

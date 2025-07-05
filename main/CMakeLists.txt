@@ -22,6 +22,7 @@ idf_component_register(SRCS "main.cpp"
                            "./views/pomodoro_view/pomodoro_view.cpp"
                            "./views/pomodoro_view/components/pomodoro_config_component.cpp"
                            "./views/pomodoro_view/components/pomodoro_timer_component.cpp"
+                           "./views/click_counter_view/click_counter_view.cpp"
                    INCLUDE_DIRS "."
                    )
 
