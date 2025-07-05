@@ -1,5 +1,6 @@
 #include "pomodoro_config_component.h"
 #include "controllers/button_manager/button_manager.h"
+#include "../../view_manager.h" // <-- CAMBIO: Necesario para salir al menú
 #include <vector>
 
 // --- Enums and State ---
@@ -7,7 +8,7 @@ typedef enum {
     FOCUS_WORK_MIN, FOCUS_WORK_SEC,
     FOCUS_BREAK_MIN, FOCUS_BREAK_SEC,
     FOCUS_ROUNDS,
-    FOCUS_START_BTN,
+    // El botón de START ya no es un estado de foco, se activa automáticamente.
     FOCUS_COUNT
 } config_focus_t;
 
@@ -27,9 +28,11 @@ static void cleanup_event_cb(lv_event_t * e);
 // --- Button Handlers ---
 static void handle_ok_press(void* user_data) {
     auto* state = static_cast<config_component_state_t*>(user_data);
-    if (state->focus == FOCUS_START_BTN) {
+
+    // <-- CAMBIO: Lógica de inicio automático ---
+    if (state->focus == FOCUS_ROUNDS) {
         if (state->on_start_cb) {
-            // Ensure at least 1 second of work to prevent issues
+            // Aseguramos al menos 1 segundo de trabajo para evitar problemas
             if (state->current_settings.work_seconds == 0) {
                 state->current_settings.work_seconds = 1;
             }
@@ -37,10 +40,26 @@ static void handle_ok_press(void* user_data) {
         }
     } else {
         config_focus_t old_focus = state->focus;
-        state->focus = (config_focus_t)(((int)state->focus + 1) % FOCUS_COUNT);
+        state->focus = (config_focus_t)(((int)state->focus + 1)); // Avanza al siguiente
         update_focus_highlight(state, old_focus, state->focus);
     }
 }
+
+// <-- CAMBIO: Nueva función para el botón Cancelar ---
+static void handle_cancel_press(void* user_data) {
+    auto* state = static_cast<config_component_state_t*>(user_data);
+
+    if (state->focus == FOCUS_WORK_MIN) {
+        // Si estamos en el primer elemento, salimos de la vista
+        view_manager_load_view(VIEW_ID_MENU);
+    } else {
+        // Si no, retrocedemos al elemento anterior
+        config_focus_t old_focus = state->focus;
+        state->focus = (config_focus_t)(((int)state->focus - 1));
+        update_focus_highlight(state, old_focus, state->focus);
+    }
+}
+
 
 static void handle_left_press(void* user_data) {
     auto* state = static_cast<config_component_state_t*>(user_data);
@@ -78,6 +97,7 @@ void update_labels(config_component_state_t* state) {
 }
 
 void update_focus_highlight(config_component_state_t* state, config_focus_t old_focus, config_focus_t new_focus) {
+    // <-- CAMBIO: El array de focusable_items ahora es más pequeño ---
     lv_obj_set_style_border_color(state->focusable_items[old_focus], lv_color_hex(0x444444), 0);
     lv_obj_set_style_border_color(state->focusable_items[new_focus], lv_palette_main(LV_PALETTE_YELLOW), 0);
 }
@@ -111,9 +131,9 @@ lv_obj_t* pomodoro_config_component_create(lv_obj_t* parent, const pomodoro_sett
     // --- Work Row ---
     lv_obj_t* work_row = lv_obj_create(cont);
     lv_obj_remove_style_all(work_row);
+    lv_obj_set_width(work_row, lv_pct(100));
     lv_obj_set_flex_flow(work_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(work_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    // CORRECCIÓN: Usar la sintaxis de C para la API de LVGL
     lv_label_set_text(lv_label_create(work_row), "Work: ");
     state->focusable_items[FOCUS_WORK_MIN] = create_time_box(work_row);
     lv_label_set_text(lv_label_create(work_row), ":");
@@ -122,6 +142,7 @@ lv_obj_t* pomodoro_config_component_create(lv_obj_t* parent, const pomodoro_sett
     // --- Break Row ---
     lv_obj_t* break_row = lv_obj_create(cont);
     lv_obj_remove_style_all(break_row);
+    lv_obj_set_width(break_row, lv_pct(100));
     lv_obj_set_flex_flow(break_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(break_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_label_set_text(lv_label_create(break_row), "Break:");
@@ -132,26 +153,28 @@ lv_obj_t* pomodoro_config_component_create(lv_obj_t* parent, const pomodoro_sett
     // --- Rounds Row ---
     lv_obj_t* rounds_row = lv_obj_create(cont);
     lv_obj_remove_style_all(rounds_row);
+    lv_obj_set_width(rounds_row, lv_pct(100));
     lv_obj_set_flex_flow(rounds_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(rounds_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_label_set_text(lv_label_create(rounds_row), "Rounds:");
     state->focusable_items[FOCUS_ROUNDS] = create_time_box(rounds_row);
 
-    // --- Start Button ---
-    lv_obj_t* start_btn = lv_button_create(cont);
-    lv_label_set_text(lv_label_create(start_btn), "START");
-    state->focusable_items[FOCUS_START_BTN] = start_btn;
-    lv_obj_set_style_border_width(start_btn, 2, 0);
-    lv_obj_set_style_border_color(start_btn, lv_color_hex(0x444444), 0);
+    // <-- CAMBIO: El botón de START ya no es interactivo, es solo informativo.
+    lv_obj_t* info_label = lv_label_create(cont);
+    lv_label_set_text(info_label, "OK to confirm, Cancel to go back");
+    lv_obj_set_style_text_color(info_label, lv_color_hex(0x888888), 0);
 
     update_labels(state);
-    update_focus_highlight(state, FOCUS_START_BTN, state->focus);
+    // Inicia el resaltado en el primer elemento
+    lv_obj_set_style_border_color(state->focusable_items[FOCUS_ROUNDS], lv_color_hex(0x444444), 0);
+    update_focus_highlight(state, FOCUS_ROUNDS, state->focus);
 
     // Register button handlers
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true, state);
     button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, handle_left_press, true, state);
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, handle_right_press, true, state);
-    // Cancel is handled by the parent view
+    // <-- CAMBIO: El botón cancelar ahora tiene su propia lógica en este componente.
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, state);
 
     return cont;
 }
@@ -159,7 +182,7 @@ lv_obj_t* pomodoro_config_component_create(lv_obj_t* parent, const pomodoro_sett
 static void cleanup_event_cb(lv_event_t * e) {
     auto* state = static_cast<config_component_state_t*>(lv_event_get_user_data(e));
     if (state) {
-        button_manager_unregister_view_handlers();
+        // No es necesario llamar a unregister_view_handlers porque el componente principal lo hará
         delete state;
     }
 }
