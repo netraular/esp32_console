@@ -34,6 +34,13 @@ static void anim_ready_cb(lv_anim_t* anim) {
     }
 }
 
+// *** NUEVA FUNCIÓN WRAPPER PARA LA ANIMACIÓN ***
+// Esta función tiene la firma correcta que espera lv_anim_set_exec_cb
+static void set_img_opacity_anim_cb(void *var, int32_t v) {
+    // La función se llama con el objeto a animar (var) y el valor actual de la animación (v)
+    lv_obj_set_style_img_opa((lv_obj_t*)var, (lv_opa_t)v, 0);
+}
+
 // Inicia la animación de desvanecimiento para la imagen
 static void start_fade_out_animation() {
     if (!coin_image) return;
@@ -50,7 +57,11 @@ static void start_fade_out_animation() {
     lv_anim_set_var(&a, coin_image);
     lv_anim_set_values(&a, LV_OPA_COVER, LV_OPA_TRANSP); // Animar de opaco (255) a transparente (0)
     lv_anim_set_time(&a, 1000); // Duración de la animación: 1000 ms
-    lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_style_img_opa); // Función a ejecutar: cambiar la opacidad de la imagen
+
+    // *** LÍNEA CORREGIDA ***
+    // Ahora pasamos nuestra función wrapper, que es de tipo compatible. No se necesita casting.
+    lv_anim_set_exec_cb(&a, set_img_opacity_anim_cb); 
+
     lv_anim_set_ready_cb(&a, anim_ready_cb); // Función a llamar cuando la animación termine
 
     // 3. Iniciar la animación
