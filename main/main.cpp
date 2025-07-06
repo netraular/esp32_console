@@ -12,6 +12,7 @@
 #include "controllers/audio_recorder/audio_recorder.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/wifi_streamer/wifi_streamer.h"
+#include "controllers/data_manager/data_manager.h" 
 #include "views/view_manager.h"
 
 static const char *TAG = "main";
@@ -26,6 +27,10 @@ extern "C" void app_main(void) {
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // Initialize Data Manager (depends on NVS)
+    data_manager_init();
+    ESP_LOGI(TAG, "Data manager initialized.");
 
     // Initialize display (hardware and LVGL)
     screen_t* screen = screen_init();
