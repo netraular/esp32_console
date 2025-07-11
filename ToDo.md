@@ -1,3 +1,5 @@
+Añadir opción de transcribir nota de audio
+
 Corregir error al reproducir canciones con un volumen "alto" ? (Mostrar el valor del volumen real en todo momento para limitarlo)
 Arreglar envio audio por streaming.
 Permitir reproducir otro tipo de archivos de audio (no solo wav)

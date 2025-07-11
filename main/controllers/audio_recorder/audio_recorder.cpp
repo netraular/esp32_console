@@ -18,7 +18,7 @@ static const char *TAG = "AUDIO_REC";
 // Due to a potentially weak input signal from the MEMS microphone,
 // it may be necessary to apply significant digital gain. A value of 10.0f is a
 // reasonable starting point. Adjust if the audio is too quiet or distorted.
-#define RECORDING_GAIN (10.0f) 
+#define RECORDING_GAIN (35.0f) 
 
 // WAV file header structure
 typedef struct {
