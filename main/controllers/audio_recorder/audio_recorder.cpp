@@ -72,8 +72,15 @@ bool audio_recorder_start(const char *filepath) {
 
 void audio_recorder_stop(void) {
     if (recorder_state == RECORDER_STATE_RECORDING) {
-        ESP_LOGI(TAG, "Stop command received. Signalling task to terminate.");
+        ESP_LOGI(TAG, "Stop command received. Signalling task to terminate and save.");
         recorder_state = RECORDER_STATE_SAVING;
+    }
+}
+
+void audio_recorder_cancel(void) {
+    if (recorder_state == RECORDER_STATE_RECORDING) {
+        ESP_LOGI(TAG, "Cancel command received. Signalling task to terminate and discard.");
+        recorder_state = RECORDER_STATE_CANCELLING;
     }
 }
 
@@ -207,15 +214,11 @@ static void audio_recording_task(void *arg) {
     } while(0); // The loop runs only once.
 
     // --- Centralized Cleanup Block ---
-    ESP_LOGI(TAG, "Recording task entering cleanup...");
+    audio_recorder_state_t final_state = recorder_state;
+    ESP_LOGI(TAG, "Recording task stopping. Reason: State changed to %d", final_state);
 
-    if (i2s_raw_read_buffer) {
-        free(i2s_raw_read_buffer);
-    }
-    if (file_write_buffer) {
-        free(file_write_buffer);
-    }
-
+    if (i2s_raw_read_buffer) free(i2s_raw_read_buffer);
+    if (file_write_buffer) free(file_write_buffer);
     if (rx_chan) {
         i2s_channel_disable(rx_chan);
         i2s_del_channel(rx_chan);
@@ -223,17 +226,24 @@ static void audio_recording_task(void *arg) {
     }
 
     if (fp) {
-        if (recorder_state != RECORDER_STATE_ERROR && total_data_bytes_written_to_file > 0) {
-            ESP_LOGI(TAG, "Updating WAV header with final data size: %lu", total_data_bytes_written_to_file);
+        if (final_state == RECORDER_STATE_SAVING && total_data_bytes_written_to_file > 0) {
+            ESP_LOGI(TAG, "Finalizing WAV file. Updating header with final data size: %lu", total_data_bytes_written_to_file);
+            fseek(fp, 0, SEEK_SET);
             wav_header_t final_header;
             create_wav_header(&final_header, REC_SAMPLE_RATE, REC_BITS_PER_SAMPLE, REC_NUM_CHANNELS, total_data_bytes_written_to_file);
-            fseek(fp, 0, SEEK_SET);
             fwrite(&final_header, 1, sizeof(wav_header_t), fp);
         }
         fclose(fp);
+
+        if (final_state == RECORDER_STATE_CANCELLING || final_state == RECORDER_STATE_ERROR) {
+            ESP_LOGI(TAG, "Recording cancelled or errored. Deleting file: %s", current_filepath);
+            if (unlink(current_filepath) != 0) {
+                ESP_LOGE(TAG, "Failed to delete temporary file %s. Error: %s", current_filepath, strerror(errno));
+            }
+        }
     }
 
-    if (recorder_state != RECORDER_STATE_ERROR) {
+    if (final_state != RECORDER_STATE_ERROR) {
       recorder_state = RECORDER_STATE_IDLE;
     }
 

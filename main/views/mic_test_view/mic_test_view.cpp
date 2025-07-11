@@ -46,6 +46,11 @@ static void update_ui_for_state(audio_recorder_state_t state) {
             lv_label_set_text(icon_label, LV_SYMBOL_SAVE);
             lv_obj_set_style_text_color(icon_label, lv_palette_main(LV_PALETTE_YELLOW), 0);
             break;
+        case RECORDER_STATE_CANCELLING:
+            lv_label_set_text(status_label, "Cancelling...");
+            lv_label_set_text(icon_label, LV_SYMBOL_TRASH);
+            lv_obj_set_style_text_color(icon_label, lv_palette_main(LV_PALETTE_GREY), 0);
+            break;
         case RECORDER_STATE_ERROR:
             lv_label_set_text(status_label, "Error! Check SD card.");
             lv_label_set_text(icon_label, LV_SYMBOL_WARNING);
@@ -120,14 +125,17 @@ static void handle_ok_press(void* user_data) {
 }
 
 static void handle_cancel_press(void* user_data) {
+    if (audio_recorder_get_state() == RECORDER_STATE_RECORDING) {
+        ESP_LOGI(TAG, "Cancel pressed during recording. Discarding file and exiting.");
+        audio_recorder_cancel(); // Signal to discard the file
+    }
     cleanup_mic_test_view();
     view_manager_load_view(VIEW_ID_MENU);
 }
 
 static void cleanup_mic_test_view() {
-    if (audio_recorder_get_state() == RECORDER_STATE_RECORDING) {
-        audio_recorder_stop();
-    }
+    // The stop/cancel action is handled by the button press itself.
+    // Cleanup should only handle UI resources.
     if (ui_update_timer) {
         lv_timer_delete(ui_update_timer);
         ui_update_timer = NULL;
@@ -166,7 +174,7 @@ void mic_test_view_create(lv_obj_t* parent) {
     // Create a timer to periodically update the UI
     ui_update_timer = lv_timer_create(ui_update_timer_cb, 250, NULL);
 
-    // Register button handlers using the new API for single click events.
-    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_SINGLE_CLICK, handle_ok_press, true, nullptr);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true, nullptr);
+    // Register button handlers using the TAP event for better responsiveness.
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true, nullptr);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
 }

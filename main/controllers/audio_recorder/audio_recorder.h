@@ -6,9 +6,10 @@
 
 // Audio recorder states
 typedef enum {
-    RECORDER_STATE_IDLE,    // Not recording
+    RECORDER_STATE_IDLE,      // Not recording
     RECORDER_STATE_RECORDING, // Actively recording
     RECORDER_STATE_SAVING,    // Finishing up, writing final header
+    RECORDER_STATE_CANCELLING,// User cancelled, stopping and deleting file
     RECORDER_STATE_ERROR      // An error occurred
 } audio_recorder_state_t;
 
@@ -27,10 +28,16 @@ void audio_recorder_init(void);
 bool audio_recorder_start(const char *filepath);
 
 /**
- * @brief Stops the current audio recording.
+ * @brief Stops the current audio recording and saves the file.
  * Signals the recording task to finalize the file and terminate.
  */
 void audio_recorder_stop(void);
+
+/**
+ * @brief Cancels the current audio recording and deletes the file.
+ * Signals the recording task to stop and discard the recorded data.
+ */
+void audio_recorder_cancel(void);
 
 /**
  * @brief Gets the current recorder state.

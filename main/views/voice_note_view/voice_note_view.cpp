@@ -46,6 +46,11 @@ static void update_ui_for_state(audio_recorder_state_t state) {
             lv_label_set_text(icon_label, LV_SYMBOL_SAVE);
             lv_obj_set_style_text_color(icon_label, lv_palette_main(LV_PALETTE_YELLOW), 0);
             break;
+        case RECORDER_STATE_CANCELLING:
+            lv_label_set_text(status_label, "Cancelling...");
+            lv_label_set_text(icon_label, LV_SYMBOL_TRASH);
+            lv_obj_set_style_text_color(icon_label, lv_palette_main(LV_PALETTE_GREY), 0);
+            break;
         case RECORDER_STATE_ERROR:
             lv_label_set_text(status_label, "Error! Check SD card.");
             lv_label_set_text(icon_label, LV_SYMBOL_WARNING);
@@ -110,25 +115,22 @@ static void handle_ok_press(void* user_data) {
             update_ui_for_state(RECORDER_STATE_ERROR);
         }
     } else if (state == RECORDER_STATE_RECORDING) {
-        // --- Stop Recording ---
-        ESP_LOGI(TAG, "Stopping voice note recording.");
+        // --- Stop and Save Recording ---
+        ESP_LOGI(TAG, "Stopping voice note recording and saving.");
         audio_recorder_stop();
     }
 }
 
-/**
- * @brief --- MODIFICADO ---
- * Maneja la pulsación del botón de cancelar con la nueva lógica.
- */
 static void handle_cancel_press(void* user_data) {
     audio_recorder_state_t state = audio_recorder_get_state();
 
     if (state == RECORDER_STATE_RECORDING) {
-        // Si se está grabando, solo se detiene la grabación. No se sale de la vista.
-        ESP_LOGI(TAG, "Cancel pressed during recording. Stopping recording.");
-        audio_recorder_stop();
+        // If recording, cancel and discard the recording. The view will remain
+        // active and will transition back to IDLE state automatically.
+        ESP_LOGI(TAG, "Cancel pressed during recording. Discarding recording.");
+        audio_recorder_cancel();
     } else {
-        // Si no se está grabando (está en reposo, guardando o en error), se sale de la vista.
+        // If not recording (is idle, saving, or in error), exit the view.
         ESP_LOGI(TAG, "Cancel pressed while not recording. Exiting view.");
         cleanup_voice_note_view();
         view_manager_load_view(VIEW_ID_MENU);
@@ -136,9 +138,10 @@ static void handle_cancel_press(void* user_data) {
 }
 
 static void cleanup_voice_note_view() {
+    // If the view is destroyed while recording (e.g. by an external event),
+    // we choose to discard the recording to avoid leaving partial files.
     if (audio_recorder_get_state() == RECORDER_STATE_RECORDING) {
-        // Asegurarse de detener la grabación si la limpieza se llama desde otro lugar
-        audio_recorder_stop();
+        audio_recorder_cancel();
     }
     if (ui_update_timer) {
         lv_timer_delete(ui_update_timer);
