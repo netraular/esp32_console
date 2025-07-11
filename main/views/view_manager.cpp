@@ -14,6 +14,7 @@
 #include "pomodoro_view/pomodoro_view.h"
 #include "click_counter_view/click_counter_view.h"
 #include "voice_note_view/voice_note_view.h"
+#include "voice_note_player_view/voice_note_player_view.h"
 
 static const char *TAG = "VIEW_MGR";
 static view_id_t current_view_id;
@@ -128,6 +129,9 @@ void view_manager_load_view(view_id_t view_id) {
             break;
         case VIEW_ID_VOICE_NOTE:
             voice_note_view_create(scr);
+            break;
+        case VIEW_ID_VOICE_NOTE_PLAYER:
+            voice_note_player_view_create(scr);
             break;
         default:
             // Si por alguna razón se llama con un ID no manejado, mostrar un error simple.

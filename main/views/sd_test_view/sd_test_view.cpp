@@ -231,11 +231,14 @@ static void show_file_explorer() {
     lv_obj_set_size(explorer_container, lv_pct(95), lv_pct(85));
     lv_obj_clear_flag(explorer_container, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Use the file_explorer component
+    // **** CORRECCIÓN AQUÍ ****
+    // La llamada a file_explorer_create ahora necesita 6 argumentos.
+    // Añadimos nullptr para on_long_press.
     file_explorer_create(
         explorer_container,
         sd_manager_get_mount_point(),
         on_file_or_dir_selected,
+        nullptr, // on_long_press
         on_create_action,
         on_explorer_exit
     );

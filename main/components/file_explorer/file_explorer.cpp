@@ -22,6 +22,7 @@ static bool in_error_state = false;
 
 // --- External Callbacks ---
 static file_select_callback_t on_file_select_cb = NULL;
+static file_long_press_callback_t on_file_long_press_cb = NULL; // NUEVO
 static file_action_callback_t on_action_cb = NULL;
 static file_explorer_exit_callback_t on_exit_cb = NULL;
 
@@ -102,6 +103,27 @@ static void handle_ok_press(void* user_data) {
                 on_action_cb(item_data->type, current_path);
             }
             break;
+    }
+}
+
+// NUEVO: Manejador para la pulsación larga del botón OK
+static void handle_ok_long_press(void* user_data) {
+    ESP_LOGD(TAG, "OK Press (Long)");
+    if (in_error_state || !on_file_long_press_cb) return;
+
+    lv_obj_t * focused_obj = lv_group_get_focused(explorer_group);
+    if (!focused_obj) return;
+
+    list_item_data_t* item_data = static_cast<list_item_data_t*>(lv_obj_get_user_data(focused_obj));
+    if (!item_data) return;
+
+    // Solo actuar sobre archivos, no sobre directorios o acciones
+    if (item_data->type == ITEM_TYPE_FILE) {
+        const char* entry_name = lv_list_get_button_text(list_widget, focused_obj);
+        ESP_LOGI(TAG, "File long-pressed: %s", entry_name);
+        char full_path[300];
+        snprintf(full_path, sizeof(full_path), "%s/%s", current_path, entry_name);
+        on_file_long_press_cb(full_path);
     }
 }
 
@@ -231,6 +253,7 @@ void file_explorer_destroy(void) {
     
     list_widget = nullptr;
     on_file_select_cb = NULL;
+    on_file_long_press_cb = NULL; // NUEVO
     on_action_cb = NULL;
     on_exit_cb = NULL;
     in_error_state = false;
@@ -241,11 +264,13 @@ void file_explorer_set_input_active(bool active) {
     if (active) {
         ESP_LOGD(TAG, "Re-activating file explorer input handlers.");
         button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-        // MODIFIED: Passing nullptr as user_data
         button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
         button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true, nullptr);
         button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press, true, nullptr);
         button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press, true, nullptr);
+        // NUEVO: Registrar el manejador de pulsación larga
+        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_LONG_PRESS_START, handle_ok_long_press, true, nullptr);
+
         if (explorer_group) {
             lv_group_set_default(explorer_group);
         }
@@ -258,10 +283,11 @@ void file_explorer_set_input_active(bool active) {
     }
 }
 
-void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_select_callback_t on_select, file_action_callback_t on_action, file_explorer_exit_callback_t on_exit) {
+void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_select_callback_t on_select, file_long_press_callback_t on_long_press, file_action_callback_t on_action, file_explorer_exit_callback_t on_exit) {
     ESP_LOGI(TAG, "Creating file explorer at path: %s", initial_path);
     
     on_file_select_cb = on_select;
+    on_file_long_press_cb = on_long_press; // NUEVO
     on_action_cb = on_action;
     on_exit_cb = on_exit;
     strncpy(current_path, initial_path, sizeof(current_path) - 1);

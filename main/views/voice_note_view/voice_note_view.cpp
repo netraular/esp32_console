@@ -31,7 +31,8 @@ static void format_time(char* buf, size_t buf_size, uint32_t time_s) {
 static void update_ui_for_state(audio_recorder_state_t state) {
     switch (state) {
         case RECORDER_STATE_IDLE:
-            lv_label_set_text(status_label, "Press OK to add a note");
+            // MODIFICADO: Informa al usuario sobre la nueva opción del botón derecho.
+            lv_label_set_text(status_label, "OK: Record | Right: Play Notes");
             lv_label_set_text(time_label, "00:00");
             lv_label_set_text(icon_label, LV_SYMBOL_AUDIO);
             lv_obj_set_style_text_color(icon_label, lv_color_white(), 0);
@@ -121,6 +122,23 @@ static void handle_ok_press(void* user_data) {
     }
 }
 
+/**
+ * @brief NUEVO: Manejador para el botón derecho.
+ * Carga la vista del reproductor de notas de voz si no se está grabando.
+ */
+static void handle_right_press(void* user_data) {
+    audio_recorder_state_t state = audio_recorder_get_state();
+
+    // Solo permite cambiar de vista si la grabadora está inactiva
+    if (state == RECORDER_STATE_IDLE || state == RECORDER_STATE_ERROR) {
+        ESP_LOGI(TAG, "Right press detected, loading voice note player.");
+        cleanup_voice_note_view();
+        view_manager_load_view(VIEW_ID_VOICE_NOTE_PLAYER);
+    } else {
+        ESP_LOGI(TAG, "Ignoring right press, recorder is busy (state: %d)", state);
+    }
+}
+
 static void handle_cancel_press(void* user_data) {
     audio_recorder_state_t state = audio_recorder_get_state();
 
@@ -182,6 +200,9 @@ void voice_note_view_create(lv_obj_t* parent) {
     ui_update_timer = lv_timer_create(ui_update_timer_cb, 250, NULL);
 
     // Register button handlers
+    // MODIFICADO: Se añaden los manejadores para los botones derecho e izquierdo.
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press, true, nullptr);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true, nullptr);
 }
