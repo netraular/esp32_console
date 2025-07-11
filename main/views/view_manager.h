@@ -15,6 +15,7 @@ typedef enum {
     VIEW_ID_WIFI_STREAM_TEST,
     VIEW_ID_POMODORO,
     VIEW_ID_CLICK_COUNTER_TEST,
+    VIEW_ID_VOICE_NOTE,
     VIEW_ID_SD_CARD_ERROR,
     VIEW_ID_COUNT // Total number of views
 } view_id_t;

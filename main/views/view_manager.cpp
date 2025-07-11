@@ -13,6 +13,7 @@
 #include "wifi_stream_view/wifi_stream_view.h"
 #include "pomodoro_view/pomodoro_view.h"
 #include "click_counter_view/click_counter_view.h"
+#include "voice_note_view/voice_note_view.h"
 
 static const char *TAG = "VIEW_MGR";
 static view_id_t current_view_id;
@@ -125,7 +126,9 @@ void view_manager_load_view(view_id_t view_id) {
         case VIEW_ID_CLICK_COUNTER_TEST:
             click_counter_view_create(scr);
             break;
-        // No hay 'case' para VIEW_ID_SD_CARD_ERROR porque se carga de forma especial.
+        case VIEW_ID_VOICE_NOTE:
+            voice_note_view_create(scr);
+            break;
         default:
             // Si por alguna razón se llama con un ID no manejado, mostrar un error simple.
             lv_label_set_text(lv_label_create(scr), "Error: View not found!");

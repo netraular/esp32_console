@@ -14,7 +14,8 @@ static const char *view_options[] = {
     "Test Button Events",
     "WiFi Audio Stream",
     "Pomodoro Clock",
-    "Click Counter Test"
+    "Click Counter Test",
+    "Voice Notes"
 };
 static const int num_options = sizeof(view_options) / sizeof(view_options[0]);
 
@@ -27,7 +28,8 @@ static const view_id_t view_ids[] = {
     VIEW_ID_MULTI_CLICK_TEST,
     VIEW_ID_WIFI_STREAM_TEST,
     VIEW_ID_POMODORO,
-    VIEW_ID_CLICK_COUNTER_TEST
+    VIEW_ID_CLICK_COUNTER_TEST,
+    VIEW_ID_VOICE_NOTE
 };
 
 static void update_menu_label() {

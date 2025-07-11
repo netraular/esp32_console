@@ -25,6 +25,7 @@ idf_component_register(SRCS "main.cpp"
                            "./views/pomodoro_view/components/pomodoro_timer_component.cpp"
                            "./views/click_counter_view/click_counter_view.cpp"
                            "./views/click_counter_view/coin_pile.c"
+                           "./views/voice_note_view/voice_note_view.cpp"
                    INCLUDE_DIRS "."
                    )
 
