@@ -14,6 +14,14 @@
 
 static const char *TAG = "AUDIO_MGR";
 
+// --- NUEVO: Constantes para el filtro de paso alto ---
+// El volumen físico (0-100) por encima del cual se activará el filtro.
+#define HIGH_PASS_FILTER_THRESHOLD 15 
+// Coeficiente del filtro (alpha). Un valor más cercano a 1.0 corta más graves.
+// Este valor (0.93) corresponde a una frecuencia de corte de aprox. 180Hz para un sample rate de 16kHz.
+// Es un buen punto de partida para eliminar los subgraves problemáticos.
+#define HIGH_PASS_FILTER_ALPHA 0.93f
+
 // WAV file header structure
 typedef struct {
     char riff_header[4];
@@ -349,6 +357,12 @@ static void audio_playback_task(void *arg) {
     uint8_t *buffer = (uint8_t*)malloc(buffer_size);
     size_t bytes_read, bytes_written;
 
+    // --- NUEVO: Variables de estado para el filtro HPF ---
+    // Usamos int32_t para evitar desbordamientos en los cálculos intermedios.
+    int32_t last_input_l = 0, last_output_l = 0;
+    int32_t last_input_r = 0, last_output_r = 0;
+
+
     ESP_LOGI(TAG, "Starting playback... Duration: %lu seconds. Initial Volume: %u%% (physical)", song_duration_s, audio_manager_get_volume());
     total_bytes_played = 0;
     
@@ -374,7 +388,46 @@ static void audio_playback_task(void *arg) {
             break;
         }
 
-        // Process audio data for the visualizer
+        // --- INICIO DE LA LÓGICA DEL FILTRO Y VOLUMEN ---
+
+        // Obtener el volumen físico actual UNA VEZ por cada bloque de audio
+        uint8_t current_physical_vol = audio_manager_get_volume();
+
+        // Aplicar filtro de paso alto si el volumen supera el umbral
+        if (current_physical_vol > HIGH_PASS_FILTER_THRESHOLD && wav_file_info.bits_per_sample == 16) {
+            int16_t *samples = (int16_t *)buffer;
+            size_t num_samples = bytes_read / sizeof(int16_t);
+
+            if (wav_file_info.num_channels == 1) { // MONO
+                for (size_t i = 0; i < num_samples; i++) {
+                    int32_t current_input = samples[i];
+                    int32_t current_output = HIGH_PASS_FILTER_ALPHA * (last_output_l + current_input - last_input_l);
+                    
+                    last_input_l = current_input;
+                    last_output_l = current_output;
+                    
+                    samples[i] = (int16_t)current_output;
+                }
+            } else { // STEREO
+                for (size_t i = 0; i < num_samples; i += 2) {
+                    // Canal Izquierdo (Left)
+                    int32_t current_input_l = samples[i];
+                    int32_t current_output_l = HIGH_PASS_FILTER_ALPHA * (last_output_l + current_input_l - last_input_l);
+                    last_input_l = current_input_l;
+                    last_output_l = current_output_l;
+                    samples[i] = (int16_t)current_output_l;
+
+                    // Canal Derecho (Right)
+                    int32_t current_input_r = samples[i + 1];
+                    int32_t current_output_r = HIGH_PASS_FILTER_ALPHA * (last_output_r + current_input_r - last_input_r);
+                    last_input_r = current_input_r;
+                    last_output_r = current_output_r;
+                    samples[i + 1] = (int16_t)current_output_r;
+                }
+            }
+        }
+        
+        // Process audio data for the visualizer (se hace sobre el audio ya filtrado)
         if (visualizer_queue != NULL && wav_file_info.bits_per_sample == 16) {
             visualizer_data_t viz_data;
             int16_t* samples = (int16_t*)buffer;
@@ -391,9 +444,7 @@ static void audio_playback_task(void *arg) {
                         if (val > peak) peak = val;
                     }
                     if (peak > 0) {
-                        // Calculate bar height on a logarithmic scale for a more natural look.
                         float log_val = log10f((float)peak);
-                        // Adjusts the visualizer's sensitivity. Higher value = less sensitive.
                         const float sensitivity_divisor = 6.0f;
                         float calculated_height = (log_val / sensitivity_divisor) * 255.0f;
                         
@@ -408,7 +459,7 @@ static void audio_playback_task(void *arg) {
             }
         }
         
-        // Apply volume control
+        // Aplicar control de volumen (factor)
         float local_volume_factor = 0.0f;
         if (volume_mutex && xSemaphoreTake(volume_mutex, portMAX_DELAY) == pdTRUE) {
             local_volume_factor = volume_factor;
@@ -425,7 +476,6 @@ static void audio_playback_task(void *arg) {
                     samples[i] = (int16_t)((float)samples[i] * local_volume_factor);
                 }
             } else if (wav_file_info.bits_per_sample == 8) {
-                // For 8-bit samples, convert to signed, apply volume, and convert back to unsigned.
                 uint8_t *samples = (uint8_t *)buffer;
                 for (size_t i = 0; i < bytes_read; i++) {
                     int16_t sample_signed = (int16_t)samples[i] - 128;
@@ -436,6 +486,8 @@ static void audio_playback_task(void *arg) {
                 }
             }
         }
+        
+        // --- FIN DE LA LÓGICA DEL FILTRO Y VOLUMEN ---
 
         i2s_channel_write(tx_chan, buffer, bytes_read, &bytes_written, portMAX_DELAY);
         total_bytes_played += bytes_written;
