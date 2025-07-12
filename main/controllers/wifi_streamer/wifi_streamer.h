@@ -9,13 +9,15 @@
 extern "C" {
 #endif
 
-// States for the streamer
+/**
+ * @brief States for the audio streamer.
+ */
 typedef enum {
-    WIFI_STREAM_STATE_IDLE,
-    WIFI_STREAM_STATE_CONNECTING,
-    WIFI_STREAM_STATE_STREAMING,
-    WIFI_STREAM_STATE_STOPPING,
-    WIFI_STREAM_STATE_ERROR
+    WIFI_STREAM_STATE_IDLE,       // The streamer is inactive.
+    WIFI_STREAM_STATE_CONNECTING, // The streamer is attempting to connect to the TCP server.
+    WIFI_STREAM_STATE_STREAMING,  // The streamer is actively sending audio data.
+    WIFI_STREAM_STATE_STOPPING,   // A stop has been requested, and the task is shutting down.
+    WIFI_STREAM_STATE_ERROR       // An error occurred (e.g., connection failed, I2S error).
 } wifi_stream_state_t;
 
 /**
@@ -25,13 +27,14 @@ void wifi_streamer_init(void);
 
 /**
  * @brief Starts the audio streaming task.
- * The task will attempt to connect to the server and stream audio.
- * @return true if the task was started, false if it was already running.
+ * The task will wait for a WiFi connection, then attempt to connect to the server and stream audio.
+ * @return true if the task was started successfully, false if it was already running.
  */
 bool wifi_streamer_start(void);
 
 /**
- * @brief Stops the audio streaming task.
+ * @brief Signals the audio streaming task to stop gracefully.
+ * The task will close the connection, clean up resources, and terminate.
  */
 void wifi_streamer_stop(void);
 
@@ -42,8 +45,8 @@ void wifi_streamer_stop(void);
 wifi_stream_state_t wifi_streamer_get_state(void);
 
 /**
- * @brief Gets a human-readable status message.
- * @param buffer The buffer to store the message.
+ * @brief Gets a human-readable status message for UI display.
+ * @param buffer A character buffer to store the message.
  * @param buffer_size The size of the provided buffer.
  */
 void wifi_streamer_get_status_message(char* buffer, size_t buffer_size);

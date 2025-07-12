@@ -62,3 +62,4 @@ This component manages the system's physical buttons using the `espressif/button
 ## Dependencies
 -   `espressif/button` component.
 -   `lvgl/lvgl` for the queued dispatch mode timer.
+-   Button pins and timings defined in `config.h`.

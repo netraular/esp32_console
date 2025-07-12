@@ -8,24 +8,25 @@ extern "C" {
 #endif
 
 /**
- * @brief Callback para notificar el resultado de la transcripción.
+ * @brief Callback to notify the result of the transcription.
  *
- * @param success true si la transcripción fue exitosa.
- * @param result Puntero al texto transcrito (debe ser liberado por el receptor con free()) o a un mensaje de error.
+ * @param success true if the transcription was successful.
+ * @param result Pointer to the transcribed text or an error message. The receiver of this callback is responsible for freeing this buffer with `free()`.
  */
 typedef void (*stt_result_callback_t)(bool success, char* result);
 
 /**
- * @brief Inicializa el manager de STT.
+ * @brief Initializes the Speech-to-Text manager.
  */
 void stt_manager_init(void);
 
 /**
- * @brief Inicia la transcripción de un archivo de audio en una tarea de fondo.
+ * @brief Starts the transcription of an audio file in a background task.
+ * The task handles WiFi/Time sync checks, file reading, and the HTTP request.
  *
- * @param file_path Ruta completa del archivo .wav a transcribir.
- * @param cb El callback que se ejecutará al finalizar la transcripción.
- * @return true si la tarea de transcripción se inició correctamente, false en caso contrario.
+ * @param file_path Full path of the .wav file to transcribe.
+ * @param cb The callback that will be executed upon completion or failure.
+ * @return true if the transcription task was successfully started, false otherwise.
  */
 bool stt_manager_transcribe(const char* file_path, stt_result_callback_t cb);
 
