@@ -1,4 +1,5 @@
-Crear tester de volumen alto para averiguar máximo volumen adecuado.
+Arreglar petardeo al aplicar filtro de graves en vista note viewer
+Hacer que en test max volume, si salgo de la vista sin parar el audio, se pare el audio solo.
 
 Corregir error al reproducir canciones con un volumen "alto" ? (Mostrar el valor del volumen real en todo momento para limitarlo)
 Arreglar envio audio por streaming.

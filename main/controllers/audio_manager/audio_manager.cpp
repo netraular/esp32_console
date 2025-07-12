@@ -14,13 +14,10 @@
 
 static const char *TAG = "AUDIO_MGR";
 
-// --- NUEVO: Constantes para el filtro de paso alto ---
 // El volumen físico (0-100) por encima del cual se activará el filtro.
-#define HIGH_PASS_FILTER_THRESHOLD 15 
-// Coeficiente del filtro (alpha). Un valor más cercano a 1.0 corta más graves.
-// Este valor (0.93) corresponde a una frecuencia de corte de aprox. 180Hz para un sample rate de 16kHz.
-// Es un buen punto de partida para eliminar los subgraves problemáticos.
-#define HIGH_PASS_FILTER_ALPHA 0.93f
+#define HIGH_PASS_FILTER_THRESHOLD 13 
+// Coeficiente del filtro (alpha). 
+#define HIGH_PASS_FILTER_ALPHA 0.90f
 
 // WAV file header structure
 typedef struct {
@@ -211,34 +208,38 @@ uint32_t audio_manager_get_progress_s(void) {
     return 0;
 }
 
+// --- VERSIÓN CORREGIDA Y SIMPLIFICADA DEL CONTROL DE VOLUMEN ---
 void audio_manager_volume_up(void) {
     uint8_t current_physical_vol = audio_manager_get_volume();
-
-    // 1. Get the current volume mapped to a 0-100 display scale.
-    uint8_t raw_display_vol = (current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE;
-    // 2. Snap it to the nearest lower step (e.g., 23% -> 20%).
-    uint8_t current_snapped_vol = (uint8_t)(roundf((float)raw_display_vol / VOLUME_STEP) * VOLUME_STEP);
-    // 3. Add a step and clamp to 100.
-    uint8_t new_display_vol = current_snapped_vol + VOLUME_STEP;
-    if (new_display_vol > 100) {
-        new_display_vol = 100;
+    
+    // Calcula el volumen de visualización actual (0-100) y lo redondea al múltiplo de 5 más cercano.
+    uint8_t display_vol = (uint8_t)(roundf((float)((current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE) / VOLUME_STEP) * VOLUME_STEP);
+    
+    // Calcula el siguiente paso en la escala de visualización.
+    uint8_t next_display_vol = display_vol + VOLUME_STEP;
+    if (next_display_vol > 100) {
+        next_display_vol = 100;
     }
-    // 4. Convert the new display volume back to the physical hardware volume and apply it.
-    uint8_t new_physical_vol = (new_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
+
+    // Convierte el nuevo valor de visualización a un valor físico y lo aplica.
+    // El +50 es para redondear correctamente en la división entera.
+    uint8_t new_physical_vol = (next_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
     audio_manager_set_volume_internal(new_physical_vol, true);
 }
 
 void audio_manager_volume_down(void) {
     uint8_t current_physical_vol = audio_manager_get_volume();
+
+    uint8_t display_vol = (uint8_t)(roundf((float)((current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE) / VOLUME_STEP) * VOLUME_STEP);
     
-    uint8_t raw_display_vol = (current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE;
-    uint8_t current_snapped_vol = (uint8_t)(roundf((float)raw_display_vol / VOLUME_STEP) * VOLUME_STEP);
-    int temp_display_vol = (int)current_snapped_vol - VOLUME_STEP;
+    // Resta un paso, asegurándose de no bajar de cero.
+    int temp_display_vol = (int)display_vol - VOLUME_STEP;
     if (temp_display_vol < 0) {
         temp_display_vol = 0;
     }
-    uint8_t new_display_vol = (uint8_t)temp_display_vol;
-    uint8_t new_physical_vol = (new_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
+    uint8_t next_display_vol = (uint8_t)temp_display_vol;
+
+    uint8_t new_physical_vol = (next_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
     audio_manager_set_volume_internal(new_physical_vol, true);
 }
 
@@ -322,7 +323,6 @@ static void audio_playback_task(void *arg) {
         song_duration_s = wav_file_info.data_size / wav_file_info.byte_rate;
     }
     
-    // --- CAMBIO: Asignación explícita de puerto I2S ---
     // Configure and initialize I2S for speaker output on I2S_NUM_0
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_chan, NULL));
@@ -357,11 +357,8 @@ static void audio_playback_task(void *arg) {
     uint8_t *buffer = (uint8_t*)malloc(buffer_size);
     size_t bytes_read, bytes_written;
 
-    // --- NUEVO: Variables de estado para el filtro HPF ---
-    // Usamos int32_t para evitar desbordamientos en los cálculos intermedios.
     int32_t last_input_l = 0, last_output_l = 0;
     int32_t last_input_r = 0, last_output_r = 0;
-
 
     ESP_LOGI(TAG, "Starting playback... Duration: %lu seconds. Initial Volume: %u%% (physical)", song_duration_s, audio_manager_get_volume());
     total_bytes_played = 0;
@@ -388,13 +385,11 @@ static void audio_playback_task(void *arg) {
             break;
         }
 
-        // --- INICIO DE LA LÓGICA DEL FILTRO Y VOLUMEN ---
-
         // Obtener el volumen físico actual UNA VEZ por cada bloque de audio
         uint8_t current_physical_vol = audio_manager_get_volume();
 
         // Aplicar filtro de paso alto si el volumen supera el umbral
-        if (current_physical_vol > HIGH_PASS_FILTER_THRESHOLD && wav_file_info.bits_per_sample == 16) {
+        if (current_physical_vol >= HIGH_PASS_FILTER_THRESHOLD && wav_file_info.bits_per_sample == 16) {
             int16_t *samples = (int16_t *)buffer;
             size_t num_samples = bytes_read / sizeof(int16_t);
 
@@ -406,6 +401,9 @@ static void audio_playback_task(void *arg) {
                     last_input_l = current_input;
                     last_output_l = current_output;
                     
+                    // --- MODIFICACIÓN: Aplicar clamping para evitar recorte digital ---
+                    if (current_output > 32767) current_output = 32767;
+                    else if (current_output < -32768) current_output = -32768;
                     samples[i] = (int16_t)current_output;
                 }
             } else { // STEREO
@@ -415,6 +413,10 @@ static void audio_playback_task(void *arg) {
                     int32_t current_output_l = HIGH_PASS_FILTER_ALPHA * (last_output_l + current_input_l - last_input_l);
                     last_input_l = current_input_l;
                     last_output_l = current_output_l;
+
+                    // --- MODIFICACIÓN: Aplicar clamping ---
+                    if (current_output_l > 32767) current_output_l = 32767;
+                    else if (current_output_l < -32768) current_output_l = -32768;
                     samples[i] = (int16_t)current_output_l;
 
                     // Canal Derecho (Right)
@@ -422,6 +424,10 @@ static void audio_playback_task(void *arg) {
                     int32_t current_output_r = HIGH_PASS_FILTER_ALPHA * (last_output_r + current_input_r - last_input_r);
                     last_input_r = current_input_r;
                     last_output_r = current_output_r;
+                    
+                    // --- MODIFICACIÓN: Aplicar clamping ---
+                    if (current_output_r > 32767) current_output_r = 32767;
+                    else if (current_output_r < -32768) current_output_r = -32768;
                     samples[i + 1] = (int16_t)current_output_r;
                 }
             }
@@ -487,8 +493,6 @@ static void audio_playback_task(void *arg) {
             }
         }
         
-        // --- FIN DE LA LÓGICA DEL FILTRO Y VOLUMEN ---
-
         i2s_channel_write(tx_chan, buffer, bytes_read, &bytes_written, portMAX_DELAY);
         total_bytes_played += bytes_written;
     }

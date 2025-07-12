@@ -6,7 +6,6 @@
 #include "esp_log.h"
 #include <string.h>
 #include <math.h>
-// #include "misc/lv_timer.h" // Esta línea ya no es necesaria y se puede eliminar
 
 static const char *TAG = "AUDIO_PLAYER_COMP";
 
@@ -166,9 +165,7 @@ lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path,
 
 // --- Lógica del Timer y Limpieza ---
 static void ui_update_timer_cb(lv_timer_t *timer) {
-    // ***** LA CORRECCIÓN ESTÁ AQUÍ *****
     audio_player_data_t* data = (audio_player_data_t*)lv_timer_get_user_data(timer);
-    // **********************************
 
     audio_player_state_t state = audio_manager_get_state();
 
