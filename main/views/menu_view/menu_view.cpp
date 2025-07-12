@@ -15,7 +15,8 @@ static const char *view_options[] = {
     "WiFi Audio Stream",
     "Pomodoro Clock",
     "Click Counter Test",
-    "Voice Notes"
+    "Voice Notes",
+    "Volume Tester" // <-- AÑADIDO PARA LA PRUEBA DE VOLUMEN
 };
 static const int num_options = sizeof(view_options) / sizeof(view_options[0]);
 
@@ -29,7 +30,8 @@ static const view_id_t view_ids[] = {
     VIEW_ID_WIFI_STREAM_TEST,
     VIEW_ID_POMODORO,
     VIEW_ID_CLICK_COUNTER_TEST,
-    VIEW_ID_VOICE_NOTE
+    VIEW_ID_VOICE_NOTE,
+    VIEW_ID_VOLUME_TESTER // <-- AÑADIDO PARA LA PRUEBA DE VOLUMEN
 };
 
 static void update_menu_label() {

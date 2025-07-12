@@ -82,6 +82,13 @@ void audio_manager_volume_down(void);
  */
 uint8_t audio_manager_get_volume(void);
 
+/**
+ * @brief Sets the physical volume directly.
+ * This bypasses the stepped logic and the MAX_VOLUME_PERCENTAGE cap, useful for testing.
+ * @param percentage The raw physical volume to set (0-100).
+ */
+void audio_manager_set_volume_physical(uint8_t percentage);
+
 
 // Number of bars for the audio visualizer
 #define VISUALIZER_BAR_COUNT 32

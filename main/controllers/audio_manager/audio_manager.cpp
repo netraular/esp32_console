@@ -53,13 +53,18 @@ static SemaphoreHandle_t playback_task_terminated_sem = NULL;
 
 // Function Prototypes
 static void audio_playback_task(void *arg);
+static void audio_manager_set_volume_internal(uint8_t percentage, bool apply_cap);
 
-static void audio_manager_set_volume(uint8_t percentage) {
+
+// --- Internal Volume Control ---
+static void audio_manager_set_volume_internal(uint8_t percentage, bool apply_cap) {
     if (volume_mutex && xSemaphoreTake(volume_mutex, portMAX_DELAY) == pdTRUE) {
         uint8_t old_percentage = current_volume_percentage;
 
-        if (percentage > MAX_VOLUME_PERCENTAGE) {
+        if (apply_cap && percentage > MAX_VOLUME_PERCENTAGE) {
             percentage = MAX_VOLUME_PERCENTAGE;
+        } else if (percentage > 100) {
+            percentage = 100;
         }
         
         current_volume_percentage = percentage;
@@ -72,6 +77,7 @@ static void audio_manager_set_volume(uint8_t percentage) {
         ESP_LOGE(TAG, "Failed to take volume mutex in set_volume!");
     }
 }
+
 
 // --- Public Functions ---
 
@@ -91,7 +97,7 @@ void audio_manager_init(void) {
 
     ESP_LOGI(TAG, "Audio Manager Initialized.");
     player_state = AUDIO_STATE_STOPPED;
-    audio_manager_set_volume(current_volume_percentage);
+    audio_manager_set_volume_internal(current_volume_percentage, true);
 
     visualizer_queue = xQueueCreate(1, sizeof(visualizer_data_t));
     if (visualizer_queue == NULL) {
@@ -211,7 +217,7 @@ void audio_manager_volume_up(void) {
     }
     // 4. Convert the new display volume back to the physical hardware volume and apply it.
     uint8_t new_physical_vol = (new_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
-    audio_manager_set_volume(new_physical_vol);
+    audio_manager_set_volume_internal(new_physical_vol, true);
 }
 
 void audio_manager_volume_down(void) {
@@ -225,7 +231,7 @@ void audio_manager_volume_down(void) {
     }
     uint8_t new_display_vol = (uint8_t)temp_display_vol;
     uint8_t new_physical_vol = (new_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
-    audio_manager_set_volume(new_physical_vol);
+    audio_manager_set_volume_internal(new_physical_vol, true);
 }
 
 uint8_t audio_manager_get_volume(void) {
@@ -238,6 +244,11 @@ uint8_t audio_manager_get_volume(void) {
         vol = current_volume_percentage;
     }
     return vol;
+}
+
+void audio_manager_set_volume_physical(uint8_t percentage) {
+    // Set volume directly, do not apply MAX_VOLUME_PERCENTAGE cap
+    audio_manager_set_volume_internal(percentage, false);
 }
 
 QueueHandle_t audio_manager_get_visualizer_queue(void) {

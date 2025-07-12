@@ -1,7 +1,7 @@
 #include "view_manager.h"
 #include "esp_log.h"
 #include "controllers/button_manager/button_manager.h"
-#include "controllers/sd_card_manager/sd_card_manager.h" // Necesario para la comprobación
+#include "controllers/sd_card_manager/sd_card_manager.h"
 
 #include "menu_view/menu_view.h"
 #include "mic_test_view/mic_test_view.h"
@@ -15,6 +15,7 @@
 #include "click_counter_view/click_counter_view.h"
 #include "voice_note_view/voice_note_view.h"
 #include "voice_note_player_view/voice_note_player_view.h"
+#include "volume_tester_view/volume_tester_view.h"
 
 static const char *TAG = "VIEW_MGR";
 static view_id_t current_view_id;
@@ -132,6 +133,9 @@ void view_manager_load_view(view_id_t view_id) {
             break;
         case VIEW_ID_VOICE_NOTE_PLAYER:
             voice_note_player_view_create(scr);
+            break;
+        case VIEW_ID_VOLUME_TESTER:
+            volume_tester_view_create(scr);
             break;
         default:
             // Si por alguna razón se llama con un ID no manejado, mostrar un error simple.
