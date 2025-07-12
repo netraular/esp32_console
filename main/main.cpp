@@ -3,6 +3,8 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "nvs_flash.h" // Necesario para WiFi
+#include "esp_event.h" 
+#include "esp_netif.h" // <-- AÑADIR ESTE INCLUDE
 #include "lvgl.h"
 
 #include "controllers/screen_manager/screen_manager.h"
@@ -13,6 +15,7 @@
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/wifi_streamer/wifi_streamer.h"
 #include "controllers/data_manager/data_manager.h" 
+#include "controllers/stt_manager/stt_manager.h"
 #include "views/view_manager.h"
 
 static const char *TAG = "main";
@@ -27,6 +30,12 @@ extern "C" void app_main(void) {
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // --- CORRECCIÓN: Inicializar el stack de red y el bucle de eventos aquí ---
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    ESP_LOGI(TAG, "Default event loop and netif created.");
+    // --- FIN DE LA CORRECCIÓN ---
 
     // Initialize Data Manager (depends on NVS)
     data_manager_init();
@@ -60,6 +69,10 @@ extern "C" void app_main(void) {
     // WiFi Manager is NOT initialized here anymore. It will be managed by its view.
     wifi_streamer_init();
     ESP_LOGI(TAG, "WiFi streamer initialized.");
+
+    // Initialize the Speech-to-Text manager
+    stt_manager_init();
+    ESP_LOGI(TAG, "STT manager initialized.");
 
     // Initialize the view manager, which creates the main UI.
     view_manager_init();

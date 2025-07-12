@@ -7,6 +7,7 @@ idf_component_register(SRCS "main.cpp"
                            "./controllers/wifi_manager/wifi_manager.cpp"
                            "./controllers/wifi_streamer/wifi_streamer.cpp"
                            "./controllers/data_manager/data_manager.cpp"
+                           "./controllers/stt_manager/stt_manager.cpp"
                            "./components/audio_visualizer/audio_visualizer.cpp"
                            "./components/audio_player_component/audio_player_component.cpp"
                            "./components/file_explorer/file_explorer.cpp"
@@ -29,6 +30,7 @@ idf_component_register(SRCS "main.cpp"
                            "./views/voice_note_player_view/voice_note_player_view.cpp"
                            "./views/voice_note_view/voice_note_view.cpp"
                    INCLUDE_DIRS "."
+                   EMBED_FILES "./server_certs/groq_api_ca.pem"
                    )
 
 idf_build_set_property(PARTITION_TABLE_FILENAME partitions.csv)

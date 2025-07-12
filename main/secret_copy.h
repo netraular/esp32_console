@@ -22,10 +22,13 @@
 
 // --- TCP Server Configuration ---
 // Replace with the IP address of the PC running the server
-#define HOST_IP_ADDR "Your_PC_IP_Address"
+#define STREAMING_SERVER_IP "Your_PC_IP_Address"
 
 // The server port (default is 8888, change only if necessary)
-#define HOST_PORT    8888
+#define STREAMING_SERVER_PORT    8888
 
+// --- Groq API Configuration ---
+// Replace with your Groq API Key for Speech-to-Text
+#define GROQ_API_KEY   "Your_Groq_API_Key"
 
 #endif // CONFIG_H_
