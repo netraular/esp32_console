@@ -7,19 +7,23 @@
 extern "C" {
 #endif
 
-// Callback para notificar a la vista contenedora que el usuario quiere salir.
+/**
+ * @brief Callback function type to notify the parent view that the user wants to exit the player.
+ */
 typedef void (*audio_player_exit_callback_t)(void);
 
 /**
- * @brief Crea un componente de reproductor de audio de pantalla completa.
+ * @brief Creates a full-screen audio player component.
  * 
- * Este componente se encarga de la UI de reproducción, la interacción con
- * el audio_manager y el manejo de los botones de control.
+ * This component builds a complete UI for audio playback, including a title,
+ * volume indicator, progress slider, and audio visualizer. It takes full control
+ * of the relevant buttons and manages the audio playback lifecycle via the audio_manager.
+ * It begins playing the specified file immediately upon creation.
  *
- * @param parent El objeto padre LVGL (normalmente la pantalla activa).
- * @param file_path La ruta completa del archivo .wav a reproducir.
- * @param on_exit Callback que se ejecuta cuando el usuario presiona Cancelar.
- * @return lv_obj_t* Un puntero al objeto contenedor principal del reproductor.
+ * @param parent The parent LVGL object (typically the active screen).
+ * @param file_path The full path of the .wav file to play.
+ * @param on_exit Callback function that is executed when the user presses the Cancel button to exit.
+ * @return A pointer to the main container object of the audio player UI.
  */
 lv_obj_t* audio_player_component_create(
     lv_obj_t* parent,
