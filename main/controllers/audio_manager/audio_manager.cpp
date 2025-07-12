@@ -44,7 +44,7 @@ static QueueHandle_t visualizer_queue = NULL;
 // Volume control variables
 // The increment/decrement step for the user-facing volume display (e.g., 0-100%).
 #define VOLUME_STEP 5
-static volatile uint8_t current_volume_percentage = 15;
+static volatile uint8_t current_volume_percentage = 5;
 static volatile float volume_factor = 0.1f;
 static SemaphoreHandle_t volume_mutex = NULL; 
 
