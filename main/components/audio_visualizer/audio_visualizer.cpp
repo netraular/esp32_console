@@ -4,6 +4,17 @@
 
 static const char* TAG = "AUDIO_VISUALIZER";
 
+// --- CORRECTED DRAW BUFFER SETUP ---
+// Define buffer dimensions
+#define CANVAS_WIDTH 240
+#define CANVAS_HEIGHT 100
+
+// 1. Statically allocate the memory buffer for the canvas.
+static uint8_t canvas_buf[LV_DRAW_BUF_SIZE(CANVAS_WIDTH, CANVAS_HEIGHT, LV_COLOR_FORMAT_NATIVE)];
+// 2. Statically declare the draw buffer struct, but uninitialized.
+static lv_draw_buf_t draw_buf;
+// --- END OF CORRECTION ---
+
 // Structure to store the state of the visualizer instance.
 typedef struct {
     lv_obj_t* canvas;   // Pointer to the canvas object for drawing.
@@ -51,7 +62,7 @@ static void redraw_bars(audio_visualizer_t* viz) {
         
         for (int i = 0; i < viz->bar_count; i++) {
             // Calculate the color for each individual bar to create the gradient effect.
-            uint8_t mix_ratio = (i * 255) / (viz->bar_count - 1);
+            uint8_t mix_ratio = (viz->bar_count > 1) ? (i * 255) / (viz->bar_count - 1) : 128;
             rect_dsc.bg_color = lv_color_mix(start_color, end_color, mix_ratio);
 
             // Calculate the bar's height based on its value (0-255).
@@ -76,11 +87,14 @@ static void redraw_bars(audio_visualizer_t* viz) {
 }
 
 lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count) {
-    #define CANVAS_WIDTH 240
-    #define CANVAS_HEIGHT 100
-    
-    // Statically allocate the draw buffer for the canvas.
-    LV_DRAW_BUF_DEFINE_STATIC(draw_buf, CANVAS_WIDTH, CANVAS_HEIGHT, LV_COLOR_FORMAT_NATIVE);
+    // --- CORRECTION: PROGRAMMATIC INITIALIZATION ---
+    // 3. Initialize the draw buffer struct, linking it to the static memory buffer.
+    // This is done once when the first visualizer is created.
+    // The `stride` parameter is set to 0 to let LVGL calculate it automatically.
+    if (draw_buf.data != canvas_buf) { // Simple check to initialize only once
+        lv_draw_buf_init(&draw_buf, CANVAS_WIDTH, CANVAS_HEIGHT, LV_COLOR_FORMAT_NATIVE, 0, canvas_buf, sizeof(canvas_buf));
+    }
+    // --- END OF CORRECTION ---
 
     if (bar_count > AUDIO_VISUALIZER_MAX_BARS) {
         ESP_LOGE(TAG, "Bar count %d exceeds max %d. Clamping to max.", bar_count, AUDIO_VISUALIZER_MAX_BARS);
@@ -95,6 +109,7 @@ lv_obj_t* audio_visualizer_create(lv_obj_t* parent, uint8_t bar_count) {
 
     // Create the canvas inside the container.
     lv_obj_t* canvas = lv_canvas_create(cont);
+    // Set the already initialized draw buffer for the canvas.
     lv_canvas_set_draw_buf(canvas, &draw_buf);
     lv_obj_set_size(canvas, lv_pct(100), lv_pct(100));
     lv_obj_center(canvas);
