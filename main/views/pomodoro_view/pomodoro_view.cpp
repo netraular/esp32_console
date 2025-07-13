@@ -26,12 +26,37 @@ static void on_start_pressed(const pomodoro_settings_t settings);
 static void on_timer_exit();
 static void show_config_screen();
 static void show_timer_screen(const pomodoro_settings_t settings);
+static void cleanup_pomodoro_view();
+
+// --- Callback para limpiar los recursos de la vista ---
+static void cleanup_event_cb(lv_event_t *e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_DELETE) {
+        ESP_LOGI(TAG, "Pomodoro view is being deleted, cleaning up resources.");
+        cleanup_pomodoro_view();
+    }
+}
+
+// --- Función de limpieza centralizada ---
+static void cleanup_pomodoro_view() {
+    // Los componentes son hijos de parent_container, lv_obj_del los borrará,
+    // lo que a su vez debería disparar sus propios eventos de limpieza y
+    // destruir sus temporizadores internos (asumiendo que los componentes están bien hechos).
+    if (s_view_state.current_component) {
+        // No es necesario llamar a lv_obj_del aquí si el padre se está borrando,
+        // pero es una buena práctica para la limpieza explícita.
+        // lv_obj_del(s_view_state.current_component);
+        s_view_state.current_component = nullptr;
+    }
+    // Si esta vista creara sus propios timers, se borrarían aquí.
+}
 
 
 // --- Main Logic: Switching between components ---
 static void show_config_screen() {
     if (s_view_state.current_component) {
         lv_obj_del(s_view_state.current_component);
+        s_view_state.current_component = nullptr;
     }
     s_view_state.current_component = pomodoro_config_component_create(s_view_state.parent_container, s_view_state.last_settings, on_start_pressed);
     s_view_state.state = POMODORO_STATE_CONFIG;
@@ -40,10 +65,10 @@ static void show_config_screen() {
 static void show_timer_screen(const pomodoro_settings_t settings) {
     if (s_view_state.current_component) {
         lv_obj_del(s_view_state.current_component);
+        s_view_state.current_component = nullptr;
     }
     s_view_state.current_component = pomodoro_timer_component_create(s_view_state.parent_container, settings, on_timer_exit);
     s_view_state.state = POMODORO_STATE_RUNNING;
-    // El componente del temporizador registra sus propios manejadores, lo cual es correcto.
 }
 
 
@@ -71,6 +96,9 @@ void pomodoro_view_create(lv_obj_t *parent) {
     s_view_state.last_settings.work_seconds = 25 * 60; // 25 minutes
     s_view_state.last_settings.break_seconds = 5 * 60;   // 5 minutes
     s_view_state.last_settings.iterations = 4;
+    
+    // Añadir el callback de limpieza
+    lv_obj_add_event_cb(parent, cleanup_event_cb, LV_EVENT_DELETE, NULL);
 
     show_config_screen();
 }

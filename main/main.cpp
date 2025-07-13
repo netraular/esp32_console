@@ -65,8 +65,9 @@ extern "C" void app_main(void) {
     audio_recorder_init();
     ESP_LOGI(TAG, "Audio recorder initialized.");
 
-    // Initialize network and streaming managers
-    // WiFi Manager is NOT initialized here anymore. It will be managed by its view.
+    // Initialize network managers
+    wifi_manager_init_sta();
+    ESP_LOGI(TAG, "WiFi manager initialized.");
     wifi_streamer_init();
     ESP_LOGI(TAG, "WiFi streamer initialized.");
 

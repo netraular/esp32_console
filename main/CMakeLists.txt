@@ -13,6 +13,7 @@ idf_component_register(SRCS "main.cpp"
                            "./components/file_explorer/file_explorer.cpp"
                            "./components/text_viewer/text_viewer.cpp"
                            "./views/view_manager.cpp"
+                           "./views/standby_view/standby_view.cpp"
                            "./views/menu_view/menu_view.cpp"
                            "./views/mic_test_view/mic_test_view.cpp"
                            "./views/speaker_test_view/speaker_test_view.cpp"
@@ -35,5 +36,3 @@ idf_component_register(SRCS "main.cpp"
                    )
 
 idf_build_set_property(PARTITION_TABLE_FILENAME partitions.csv)
-
-

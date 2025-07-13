@@ -62,6 +62,12 @@ static void handle_ok_press(void* user_data) {
     view_manager_load_view(view_ids[selected_view_index]);
 }
 
+// ADDED: Handler to go back to standby view
+static void handle_cancel_press(void* user_data) {
+    // Load the standby view
+    view_manager_load_view(VIEW_ID_STANDBY);
+}
+
 void menu_view_create(lv_obj_t *parent) {
     // Create the main label
     main_label = lv_label_create(parent);
@@ -72,8 +78,9 @@ void menu_view_create(lv_obj_t *parent) {
     selected_view_index = 0; 
     update_menu_label();
 
-    // MODIFIED: Passing nullptr as user_data
+    // MODIFIED: Passing nullptr as user_data and adding CANCEL handler
     button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, handle_left_press, true, nullptr);
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, handle_right_press, true, nullptr);
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true, nullptr);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
 }

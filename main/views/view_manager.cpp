@@ -3,6 +3,7 @@
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
 
+#include "standby_view/standby_view.h"
 #include "menu_view/menu_view.h"
 #include "mic_test_view/mic_test_view.h"
 #include "speaker_test_view/speaker_test_view.h"
@@ -66,7 +67,7 @@ static void load_sd_error_view(lv_obj_t* parent) {
 
 void view_manager_init(void) {
     ESP_LOGI(TAG, "Initializing View Manager and loading initial view.");
-    view_manager_load_view(VIEW_ID_MENU);
+    view_manager_load_view(VIEW_ID_STANDBY);
 }
 
 void view_manager_load_view(view_id_t view_id) {
@@ -98,6 +99,9 @@ void view_manager_load_view(view_id_t view_id) {
 
     // Create the UI for the selected view.
     switch (view_id) {
+        case VIEW_ID_STANDBY:
+            standby_view_create(scr);
+            break;
         case VIEW_ID_MENU:
             menu_view_create(scr);
             break;

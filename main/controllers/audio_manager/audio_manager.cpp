@@ -15,9 +15,10 @@
 static const char *TAG = "AUDIO_MGR";
 
 // El volumen físico (0-100) por encima del cual se activará el filtro.
-#define HIGH_PASS_FILTER_THRESHOLD 13 
-// Coeficiente del filtro (alpha). 
-#define HIGH_PASS_FILTER_ALPHA 0.90f
+#define HIGH_PASS_FILTER_THRESHOLD 15 
+
+// --- MODIFICACIÓN: Se elimina la macro para usar una variable ---
+// #define HIGH_PASS_FILTER_ALPHA 0.90f
 
 // WAV file header structure
 typedef struct {
@@ -390,18 +391,26 @@ static void audio_playback_task(void *arg) {
 
         // Aplicar filtro de paso alto si el volumen supera el umbral
         if (current_physical_vol >= HIGH_PASS_FILTER_THRESHOLD && wav_file_info.bits_per_sample == 16) {
+            // --- MODIFICACIÓN: Usar una variable local para el coeficiente ---
+            float high_pass_alpha = 0.90f; // Valor por defecto
+
+            // Lógica para hacer el filtro más agresivo a volúmenes más altos
+            if (current_physical_vol >= 18) {
+                high_pass_alpha = 0.85f;
+            }
+            
             int16_t *samples = (int16_t *)buffer;
             size_t num_samples = bytes_read / sizeof(int16_t);
 
             if (wav_file_info.num_channels == 1) { // MONO
                 for (size_t i = 0; i < num_samples; i++) {
                     int32_t current_input = samples[i];
-                    int32_t current_output = HIGH_PASS_FILTER_ALPHA * (last_output_l + current_input - last_input_l);
+                    // Usar la variable en lugar de la macro
+                    int32_t current_output = high_pass_alpha * (last_output_l + current_input - last_input_l);
                     
                     last_input_l = current_input;
                     last_output_l = current_output;
                     
-                    // --- MODIFICACIÓN: Aplicar clamping para evitar recorte digital ---
                     if (current_output > 32767) current_output = 32767;
                     else if (current_output < -32768) current_output = -32768;
                     samples[i] = (int16_t)current_output;
@@ -410,22 +419,20 @@ static void audio_playback_task(void *arg) {
                 for (size_t i = 0; i < num_samples; i += 2) {
                     // Canal Izquierdo (Left)
                     int32_t current_input_l = samples[i];
-                    int32_t current_output_l = HIGH_PASS_FILTER_ALPHA * (last_output_l + current_input_l - last_input_l);
+                    int32_t current_output_l = high_pass_alpha * (last_output_l + current_input_l - last_input_l);
                     last_input_l = current_input_l;
                     last_output_l = current_output_l;
 
-                    // --- MODIFICACIÓN: Aplicar clamping ---
                     if (current_output_l > 32767) current_output_l = 32767;
                     else if (current_output_l < -32768) current_output_l = -32768;
                     samples[i] = (int16_t)current_output_l;
 
                     // Canal Derecho (Right)
                     int32_t current_input_r = samples[i + 1];
-                    int32_t current_output_r = HIGH_PASS_FILTER_ALPHA * (last_output_r + current_input_r - last_input_r);
+                    int32_t current_output_r = high_pass_alpha * (last_output_r + current_input_r - last_input_r);
                     last_input_r = current_input_r;
                     last_output_r = current_output_r;
                     
-                    // --- MODIFICACIÓN: Aplicar clamping ---
                     if (current_output_r > 32767) current_output_r = 32767;
                     else if (current_output_r < -32768) current_output_r = -32768;
                     samples[i + 1] = (int16_t)current_output_r;

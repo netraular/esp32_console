@@ -5,6 +5,7 @@
 
 // Enum to uniquely identify each view
 typedef enum {
+    VIEW_ID_STANDBY,
     VIEW_ID_MENU,
     VIEW_ID_MIC_TEST,
     VIEW_ID_SPEAKER_TEST,
