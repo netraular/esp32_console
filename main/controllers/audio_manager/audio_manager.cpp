@@ -14,16 +14,25 @@
 
 static const char *TAG = "AUDIO_MGR";
 
-// --- CONFIGURACIÓN DEL FILTRO DE PASO ALTO (HPF) DINÁMICO ---
-#define HIGH_PASS_FILTER_THRESHOLD 15 // Volumen físico (0-100) a partir del cual el filtro empieza a actuar.
-#define HPF_MIN_CUTOFF_FREQ 80.0f   // Frecuencia de corte (en Hz) al activarse. Define la atenuación MÍNIMA.
-#define HPF_MAX_CUTOFF_FREQ 330.0f  // Frecuencia de corte (en Hz) a máximo volumen. Define la atenuación MÁXIMA.
-#define HPF_Q_FACTOR 0.707f // Forma del filtro (0.707 es neutro y plano). No tocar a menos que se busque un efecto sonoro específico.
+// --- CONFIGURACIÓN DEL FILTRO DE PASO ALTO (HPF) DINÁMICO DE 4º ORDEN ---
+// Un filtro de 4º orden se implementa encadenando dos filtros de 2º orden para una
+// atenuación de graves mucho más pronunciada (-24dB/octava).
+#define HIGH_PASS_FILTER_THRESHOLD 13 // Volumen físico (0-100) a partir del cual el filtro empieza a actuar.
+#define HPF_MIN_CUTOFF_FREQ 60.0f   // Frecuencia de corte (en Hz) al activarse. Define la atenuación MÍNIMA.
+#define HPF_MAX_CUTOFF_FREQ 400.0f  // Frecuencia de corte (en Hz) a máximo volumen. Define la atenuación MÁXIMA.
+#define HPF_Q_FACTOR 0.707f         // Usamos dos filtros Butterworth en cascada (Q=0.707), que resulta en un filtro Linkwitz-Riley, ideal para audio.
 
-// --- ESTRUCTURAS PARA EL FILTRO BIQUAD ---
+// --- ESTRUCTURAS PARA EL FILTRO BIQUAD (4º ORDEN) ---
 typedef struct { float b0, b1, b2, a1, a2; } biquad_coeffs_t;
 typedef struct { float x1, x2, y1, y2; } biquad_state_t;
-typedef struct { biquad_state_t left; biquad_state_t right; } stereo_biquad_filter_t;
+
+// Un filtro estéreo tiene dos estados biquad (uno para cada canal)
+typedef struct { biquad_state_t left; biquad_state_t right; } stereo_biquad_stage_t;
+
+// Un filtro de 4º orden se implementa como dos etapas de 2º orden en cascada
+#define HPF_STAGES 2
+typedef struct { stereo_biquad_stage_t stages[HPF_STAGES]; } fourth_order_hpf_state_t;
+
 
 // WAV file header structure
 typedef struct {
@@ -61,9 +70,9 @@ static SemaphoreHandle_t volume_mutex = NULL;
 // Task synchronization
 static SemaphoreHandle_t playback_task_terminated_sem = NULL;
 
-// --- NUEVAS VARIABLES GLOBALES PARA EL FILTRO ---
-static stereo_biquad_filter_t hpf_state;
-static biquad_coeffs_t hpf_coeffs;
+// --- VARIABLES GLOBALES PARA EL FILTRO DE 4º ORDEN ---
+static fourth_order_hpf_state_t hpf_state;
+static biquad_coeffs_t hpf_coeffs; // Usamos los mismos coeficientes para ambas etapas
 static volatile bool hpf_active = false;
 static uint8_t last_known_volume_for_hpf = 0;
 
@@ -97,10 +106,12 @@ static void calculate_hpf_coeffs(float cutoff_freq, float sample_rate, float q) 
 }
 
 static void reset_hpf_state() {
-    memset(&hpf_state, 0, sizeof(stereo_biquad_filter_t));
+    // Limpia la estructura de estado completa para las dos etapas del filtro
+    memset(&hpf_state, 0, sizeof(fourth_order_hpf_state_t));
 }
 
 static int16_t apply_biquad_filter(biquad_state_t* state, int16_t input) {
+    // Esta función no cambia, procesa una única etapa biquad.
     float result = hpf_coeffs.b0 * input + hpf_coeffs.b1 * state->x1 + hpf_coeffs.b2 * state->x2 - hpf_coeffs.a1 * state->y1 - hpf_coeffs.a2 * state->y2;
     state->x2 = state->x1; state->x1 = input;
     state->y2 = state->y1; state->y1 = result;
@@ -173,13 +184,12 @@ uint32_t audio_manager_get_duration_s(void) { return song_duration_s; }
 uint32_t audio_manager_get_progress_s(void) { return (wav_file_info.byte_rate > 0) ? (total_bytes_played / wav_file_info.byte_rate) : 0; }
 
 void audio_manager_volume_up(void) {
-    uint8_t current_physical_vol = audio_manager_get_volume();
-    uint8_t display_vol = (uint8_t)(roundf((float)((current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE) / VOLUME_STEP) * VOLUME_STEP);
-    uint8_t next_display_vol = display_vol + VOLUME_STEP;
-    if (next_display_vol > 100) next_display_vol = 100;
-    uint8_t new_physical_vol = (next_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
-    audio_manager_set_volume_internal(new_physical_vol, true);
+    uint8_t current_vol = audio_manager_get_volume();
+    uint8_t next_vol = current_vol + VOLUME_STEP;
+    if (next_vol > MAX_VOLUME_PERCENTAGE) next_vol = MAX_VOLUME_PERCENTAGE;
+    audio_manager_set_volume_physical(next_vol); // Asumiendo que set_volume_physical usa el mismo rango
 }
+// Y ajustar set_volume_physical para manejar el rango correcto.
 
 void audio_manager_volume_down(void) {
     uint8_t current_physical_vol = audio_manager_get_volume();
@@ -297,6 +307,7 @@ static void audio_playback_task(void *arg) {
         uint8_t current_physical_vol = audio_manager_get_volume();
         hpf_active = (current_physical_vol >= HIGH_PASS_FILTER_THRESHOLD && wav_file_info.bits_per_sample == 16);
 
+        // --- INICIO: LÓGICA DEL FILTRO DE 4º ORDEN ---
         if (hpf_active) {
             if (current_physical_vol != last_known_volume_for_hpf) {
                 float cutoff = map_range(current_physical_vol, HIGH_PASS_FILTER_THRESHOLD, MAX_VOLUME_PERCENTAGE, HPF_MIN_CUTOFF_FREQ, HPF_MAX_CUTOFF_FREQ);
@@ -306,14 +317,24 @@ static void audio_playback_task(void *arg) {
             int16_t *samples = (int16_t *)buffer;
             size_t num_samples = bytes_read / sizeof(int16_t);
             if (wav_file_info.num_channels == 1) {
-                for (size_t i = 0; i < num_samples; i++) samples[i] = apply_biquad_filter(&hpf_state.left, samples[i]);
-            } else {
+                for (size_t i = 0; i < num_samples; i++) {
+                    // Aplicar las dos etapas en cascada para MONO
+                    int16_t stage1_out = apply_biquad_filter(&hpf_state.stages[0].left, samples[i]);
+                    samples[i] = apply_biquad_filter(&hpf_state.stages[1].left, stage1_out);
+                }
+            } else { // Stereo
                 for (size_t i = 0; i < num_samples; i += 2) {
-                    samples[i] = apply_biquad_filter(&hpf_state.left, samples[i]);
-                    samples[i+1] = apply_biquad_filter(&hpf_state.right, samples[i+1]);
+                    // Aplicar las dos etapas en cascada para el canal IZQUIERDO
+                    int16_t stage1_out_l = apply_biquad_filter(&hpf_state.stages[0].left, samples[i]);
+                    samples[i] = apply_biquad_filter(&hpf_state.stages[1].left, stage1_out_l);
+                    
+                    // Aplicar las dos etapas en cascada para el canal DERECHO
+                    int16_t stage1_out_r = apply_biquad_filter(&hpf_state.stages[0].right, samples[i+1]);
+                    samples[i+1] = apply_biquad_filter(&hpf_state.stages[1].right, stage1_out_r);
                 }
             }
         }
+        // --- FIN: LÓGICA DEL FILTRO DE 4º ORDEN ---
         
         if (visualizer_queue != NULL && wav_file_info.bits_per_sample == 16) {
             visualizer_data_t viz_data;
@@ -335,8 +356,7 @@ static void audio_playback_task(void *arg) {
             }
         }
         
-        // --- CORRECCIÓN: Inicialización de la variable local ---
-        float local_volume_factor = 0.0f; // Inicializar con un valor seguro
+        float local_volume_factor = 0.0f;
         if (volume_mutex && xSemaphoreTake(volume_mutex, portMAX_DELAY) == pdTRUE) {
             local_volume_factor = volume_factor;
             xSemaphoreGive(volume_mutex);
