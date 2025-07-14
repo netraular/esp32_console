@@ -19,10 +19,9 @@ static const char *TAG = "AUDIO_MGR";
 // Es ideal para crossovers de audio por su respuesta de fase y suma plana.
 #define HIGH_PASS_FILTER_THRESHOLD 13 // Volumen físico (0-100) a partir del cual el filtro empieza a actuar.
 #define HPF_MIN_CUTOFF_FREQ 60.0f   // Frecuencia de corte (en Hz) al activarse. Define la atenuación MÍNIMA.
-#define HPF_MAX_CUTOFF_FREQ 400.0f  // Frecuencia de corte (en Hz) a máximo volumen. Define la atenuación MÁXIMA.
+#define HPF_MAX_CUTOFF_FREQ 350.0f  // Frecuencia de corte (en Hz) a máximo volumen. Define la atenuación MÁXIMA.
 
 // --- CAMBIO LR4: Q-Factors para un filtro Linkwitz-Riley de 4º orden ---
-// En lugar de un solo Q de 0.707, usamos dos Q diferentes para las dos etapas.
 #define HPF_LR4_Q1 0.541196f
 #define HPF_LR4_Q2 1.306563f
 
