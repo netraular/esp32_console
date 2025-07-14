@@ -26,6 +26,7 @@ static void audio_check_timer_cb(lv_timer_t* timer);
 static void update_volume_label(lv_obj_t* label) {
     if (label) {
         uint8_t vol = audio_manager_get_volume();
+        // Aquí usamos el set_volume_physical que da el valor real 0-100
         lv_label_set_text_fmt(label, "%u%%", vol);
     }
 }
@@ -52,6 +53,7 @@ static void handle_volume_down(void* user_data) {
 
 // Sale de la vista y vuelve al menú principal
 static void handle_exit(void* user_data) {
+    // No es necesario detener el audio aquí, el callback de DELETE se encargará.
     view_manager_load_view(VIEW_ID_MENU);
 }
 
@@ -77,12 +79,7 @@ static void handle_ok_press(void* user_data) {
             data->audio_check_timer = NULL;
         }
         lv_label_set_text(data->status_label, "Press OK to Play");
-
-        // --- SOLUCIÓN FINAL: Restablecer el color a un valor por defecto ---
-        // Simplemente sobreescribimos el estilo con un color neutro.
-        // Asumimos un tema claro donde el texto es negro. Si tu tema es oscuro, usa lv_color_white().
         lv_obj_set_style_text_color(data->status_label, lv_color_black(), 0);
-        
         data->is_playing = false;
     } else {
         // --- Iniciar la reproducción ---
@@ -125,32 +122,41 @@ void volume_tester_view_create(lv_obj_t* parent) {
     data->audio_check_timer = NULL;
     data->is_playing = false;
     
-    // Registrar el callback de limpieza
-    lv_obj_add_event_cb(parent, view_delete_cb, LV_EVENT_DELETE, data);
+    // --- INICIO DE LA CORRECCIÓN ---
+    
+    // 1. Crear un contenedor principal para esta vista.
+    lv_obj_t* view_container = lv_obj_create(parent);
+    lv_obj_remove_style_all(view_container);
+    lv_obj_set_size(view_container, lv_pct(100), lv_pct(100));
+    lv_obj_center(view_container);
 
-    // Configurar el contenedor principal
-    lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(parent, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(parent, 10, 0);
-    lv_obj_set_style_pad_gap(parent, 15, 0);
+    // 2. Registrar el callback de limpieza en ESTE contenedor, no en el padre.
+    lv_obj_add_event_cb(view_container, view_delete_cb, LV_EVENT_DELETE, data);
 
+    // 3. Aplicar el layout y los estilos al nuevo contenedor.
+    lv_obj_set_flex_flow(view_container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(view_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(view_container, 10, 0);
+    lv_obj_set_style_pad_gap(view_container, 15, 0);
+
+    // 4. Crear todos los widgets como hijos del nuevo contenedor.
     // Título de la vista
-    lv_obj_t* title_label = lv_label_create(parent);
+    lv_obj_t* title_label = lv_label_create(view_container);
     lv_label_set_text(title_label, "Volume Tester");
     lv_obj_set_style_text_font(title_label, &lv_font_montserrat_22, 0);
 
     // Etiqueta grande para el volumen actual
-    data->volume_label = lv_label_create(parent);
+    data->volume_label = lv_label_create(view_container);
     lv_obj_set_style_text_font(data->volume_label, &lv_font_montserrat_48, 0);
     update_volume_label(data->volume_label);
 
     // Etiqueta para el estado (Reproduciendo / Pausado)
-    data->status_label = lv_label_create(parent);
+    data->status_label = lv_label_create(view_container);
     lv_obj_set_style_text_font(data->status_label, &lv_font_montserrat_18, 0);
     lv_label_set_text(data->status_label, "Press OK to Play");
 
     // Etiqueta con las instrucciones
-    lv_obj_t* info_label = lv_label_create(parent);
+    lv_obj_t* info_label = lv_label_create(view_container);
     lv_label_set_text(info_label,
                       "Find the max safe volume.\n\n"
                       LV_SYMBOL_LEFT " / " LV_SYMBOL_RIGHT " : Adjust Volume\n"
@@ -158,6 +164,8 @@ void volume_tester_view_create(lv_obj_t* parent) {
                       LV_SYMBOL_CLOSE " : Exit to Menu");
     lv_obj_set_style_text_align(info_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_line_space(info_label, 4, 0);
+
+    // --- FIN DE LA CORRECCIÓN ---
 
     // Registrar manejadores de botones
     button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP,             handle_volume_down, true, data);
