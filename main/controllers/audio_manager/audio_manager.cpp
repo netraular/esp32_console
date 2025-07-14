@@ -14,13 +14,17 @@
 
 static const char *TAG = "AUDIO_MGR";
 
-// --- CONFIGURACIÓN DEL FILTRO DE PASO ALTO (HPF) DINÁMICO DE 4º ORDEN ---
-// Un filtro de 4º orden se implementa encadenando dos filtros de 2º orden para una
-// atenuación de graves mucho más pronunciada (-24dB/octava).
+// --- CONFIGURACIÓN DEL FILTRO DE PASO ALTO (HPF) LINKWITZ-RILEY DE 4º ORDEN ---
+// Un filtro LR4 se implementa encadenando dos filtros biquad de 2º orden.
+// Es ideal para crossovers de audio por su respuesta de fase y suma plana.
 #define HIGH_PASS_FILTER_THRESHOLD 13 // Volumen físico (0-100) a partir del cual el filtro empieza a actuar.
 #define HPF_MIN_CUTOFF_FREQ 60.0f   // Frecuencia de corte (en Hz) al activarse. Define la atenuación MÍNIMA.
 #define HPF_MAX_CUTOFF_FREQ 400.0f  // Frecuencia de corte (en Hz) a máximo volumen. Define la atenuación MÁXIMA.
-#define HPF_Q_FACTOR 0.707f         // Usamos dos filtros Butterworth en cascada (Q=0.707), que resulta en un filtro Linkwitz-Riley, ideal para audio.
+
+// --- CAMBIO LR4: Q-Factors para un filtro Linkwitz-Riley de 4º orden ---
+// En lugar de un solo Q de 0.707, usamos dos Q diferentes para las dos etapas.
+#define HPF_LR4_Q1 0.541196f
+#define HPF_LR4_Q2 1.306563f
 
 // --- ESTRUCTURAS PARA EL FILTRO BIQUAD (4º ORDEN) ---
 typedef struct { float b0, b1, b2, a1, a2; } biquad_coeffs_t;
@@ -32,6 +36,9 @@ typedef struct { biquad_state_t left; biquad_state_t right; } stereo_biquad_stag
 // Un filtro de 4º orden se implementa como dos etapas de 2º orden en cascada
 #define HPF_STAGES 2
 typedef struct { stereo_biquad_stage_t stages[HPF_STAGES]; } fourth_order_hpf_state_t;
+
+// --- CAMBIO LR4: Estructura para almacenar los coeficientes de AMBAS etapas ---
+typedef struct { biquad_coeffs_t stage[HPF_STAGES]; } fourth_order_hpf_coeffs_t;
 
 
 // WAV file header structure
@@ -72,16 +79,19 @@ static SemaphoreHandle_t playback_task_terminated_sem = NULL;
 
 // --- VARIABLES GLOBALES PARA EL FILTRO DE 4º ORDEN ---
 static fourth_order_hpf_state_t hpf_state;
-static biquad_coeffs_t hpf_coeffs; // Usamos los mismos coeficientes para ambas etapas
+// --- CAMBIO LR4: Usamos la nueva estructura para los coeficientes de ambas etapas ---
+static fourth_order_hpf_coeffs_t hpf_coeffs;
 static volatile bool hpf_active = false;
 static uint8_t last_known_volume_for_hpf = 0;
 
 // Function Prototypes
 static void audio_playback_task(void *arg);
 static void audio_manager_set_volume_internal(uint8_t percentage, bool apply_cap);
-static void calculate_hpf_coeffs(float cutoff_freq, float sample_rate, float q);
+// --- CAMBIO LR4: La función de cálculo ahora no necesita el Q como argumento ---
+static void calculate_lr4_hpf_coeffs(float cutoff_freq, float sample_rate);
 static void reset_hpf_state();
-static int16_t apply_biquad_filter(biquad_state_t* state, int16_t input);
+// --- CAMBIO LR4: La función de aplicación necesita saber qué coeficientes usar ---
+static int16_t apply_biquad_filter(biquad_state_t* state, const biquad_coeffs_t* coeffs, int16_t input);
 static inline float map_range(float value, float from_low, float from_high, float to_low, float to_high);
 
 // --- FUNCIONES DEL FILTRO BIQUAD ---
@@ -91,34 +101,44 @@ static inline float map_range(float value, float from_low, float from_high, floa
     return to_low + (to_high - to_low) * ((value - from_low) / (from_high - from_low));
 }
 
-static void calculate_hpf_coeffs(float cutoff_freq, float sample_rate, float q) {
-    const float omega = 2.0f * M_PI * cutoff_freq / sample_rate;
-    const float cos_omega = cosf(omega);
-    const float alpha = sinf(omega) / (2.0f * q);
-    float a0_t = 1.0f + alpha;
+// --- CAMBIO LR4: Función de cálculo de coeficientes para ambas etapas del LR4 ---
+static void calculate_lr4_hpf_coeffs(float cutoff_freq, float sample_rate) {
+    const float q_values[HPF_STAGES] = { HPF_LR4_Q1, HPF_LR4_Q2 };
+    
+    for (int i = 0; i < HPF_STAGES; i++) {
+        const float q = q_values[i];
+        const float omega = 2.0f * M_PI * cutoff_freq / sample_rate;
+        const float cos_omega = cosf(omega);
+        const float alpha = sinf(omega) / (2.0f * q);
+        const float a0_inv = 1.0f / (1.0f + alpha); // Usamos inversa para evitar divisiones repetidas
 
-    hpf_coeffs.b0 = ((1.0f + cos_omega) / 2.0f) / a0_t;
-    hpf_coeffs.b1 = (-(1.0f + cos_omega)) / a0_t;
-    hpf_coeffs.b2 = ((1.0f + cos_omega) / 2.0f) / a0_t;
-    hpf_coeffs.a1 = (-2.0f * cos_omega) / a0_t;
-    hpf_coeffs.a2 = (1.0f - alpha) / a0_t;
-    ESP_LOGD(TAG, "HPF coeffs calculated for %.1f Hz.", cutoff_freq);
+        hpf_coeffs.stage[i].b0 = ((1.0f + cos_omega) / 2.0f) * a0_inv;
+        hpf_coeffs.stage[i].b1 = (-(1.0f + cos_omega)) * a0_inv;
+        hpf_coeffs.stage[i].b2 = ((1.0f + cos_omega) / 2.0f) * a0_inv;
+        hpf_coeffs.stage[i].a1 = (-2.0f * cos_omega) * a0_inv;
+        hpf_coeffs.stage[i].a2 = (1.0f - alpha) * a0_inv;
+    }
+    ESP_LOGD(TAG, "LR4 HPF coeffs calculated for %.1f Hz.", cutoff_freq);
 }
 
 static void reset_hpf_state() {
-    // Limpia la estructura de estado completa para las dos etapas del filtro
     memset(&hpf_state, 0, sizeof(fourth_order_hpf_state_t));
 }
 
-static int16_t apply_biquad_filter(biquad_state_t* state, int16_t input) {
-    // Esta función no cambia, procesa una única etapa biquad.
-    float result = hpf_coeffs.b0 * input + hpf_coeffs.b1 * state->x1 + hpf_coeffs.b2 * state->x2 - hpf_coeffs.a1 * state->y1 - hpf_coeffs.a2 * state->y2;
+// --- CAMBIO LR4: La función ahora acepta un puntero a los coeficientes a usar ---
+static int16_t apply_biquad_filter(biquad_state_t* state, const biquad_coeffs_t* coeffs, int16_t input) {
+    // La función ahora usa los coeficientes pasados como argumento, no una variable global.
+    float result = coeffs->b0 * input + coeffs->b1 * state->x1 + coeffs->b2 * state->x2 - coeffs->a1 * state->y1 - coeffs->a2 * state->y2;
     state->x2 = state->x1; state->x1 = input;
     state->y2 = state->y1; state->y1 = result;
+    
+    // Clamping para evitar overflow
     if (result > 32767.0f) result = 32767.0f;
     if (result < -32768.0f) result = -32768.0f;
+    
     return (int16_t)result;
 }
+
 
 // --- Internal Volume Control ---
 static void audio_manager_set_volume_internal(uint8_t percentage, bool apply_cap) {
@@ -132,7 +152,7 @@ static void audio_manager_set_volume_internal(uint8_t percentage, bool apply_cap
     }
 }
 
-// --- Public Functions ---
+// --- Public Functions (sin cambios) ---
 void audio_manager_init(void) {
     volume_mutex = xSemaphoreCreateMutex();
     playback_task_terminated_sem = xSemaphoreCreateBinary();
@@ -184,12 +204,13 @@ uint32_t audio_manager_get_duration_s(void) { return song_duration_s; }
 uint32_t audio_manager_get_progress_s(void) { return (wav_file_info.byte_rate > 0) ? (total_bytes_played / wav_file_info.byte_rate) : 0; }
 
 void audio_manager_volume_up(void) {
-    uint8_t current_vol = audio_manager_get_volume();
-    uint8_t next_vol = current_vol + VOLUME_STEP;
-    if (next_vol > MAX_VOLUME_PERCENTAGE) next_vol = MAX_VOLUME_PERCENTAGE;
-    audio_manager_set_volume_physical(next_vol); // Asumiendo que set_volume_physical usa el mismo rango
+    uint8_t current_physical_vol = audio_manager_get_volume();
+    uint8_t display_vol = (uint8_t)(roundf((float)((current_physical_vol * 100) / MAX_VOLUME_PERCENTAGE) / VOLUME_STEP) * VOLUME_STEP);
+    uint8_t next_display_vol = display_vol + VOLUME_STEP;
+    if (next_display_vol > 100) next_display_vol = 100;
+    uint8_t new_physical_vol = (next_display_vol * MAX_VOLUME_PERCENTAGE + 50) / 100;
+    audio_manager_set_volume_internal(new_physical_vol, true);
 }
-// Y ajustar set_volume_physical para manejar el rango correcto.
 
 void audio_manager_volume_down(void) {
     uint8_t current_physical_vol = audio_manager_get_volume();
@@ -219,6 +240,7 @@ static void audio_playback_task(void *arg) {
     i2s_std_config_t std_cfg;
     int buffer_size = 2048;
 
+    // ... (El código de apertura de archivo y configuración de I2S es idéntico) ...
     fp = fopen(current_filepath, "rb");
     if (!fp) {
         ESP_LOGE(TAG, "Failed to open file: %s", current_filepath);
@@ -307,35 +329,38 @@ static void audio_playback_task(void *arg) {
         uint8_t current_physical_vol = audio_manager_get_volume();
         hpf_active = (current_physical_vol >= HIGH_PASS_FILTER_THRESHOLD && wav_file_info.bits_per_sample == 16);
 
-        // --- INICIO: LÓGICA DEL FILTRO DE 4º ORDEN ---
+        // --- INICIO: LÓGICA DEL FILTRO LINKWITZ-RILEY DE 4º ORDEN ---
         if (hpf_active) {
             if (current_physical_vol != last_known_volume_for_hpf) {
                 float cutoff = map_range(current_physical_vol, HIGH_PASS_FILTER_THRESHOLD, MAX_VOLUME_PERCENTAGE, HPF_MIN_CUTOFF_FREQ, HPF_MAX_CUTOFF_FREQ);
-                calculate_hpf_coeffs(cutoff, (float)wav_file_info.sample_rate, HPF_Q_FACTOR);
+                // --- CAMBIO LR4: Llamar a la nueva función de cálculo ---
+                calculate_lr4_hpf_coeffs(cutoff, (float)wav_file_info.sample_rate);
                 last_known_volume_for_hpf = current_physical_vol;
             }
             int16_t *samples = (int16_t *)buffer;
             size_t num_samples = bytes_read / sizeof(int16_t);
-            if (wav_file_info.num_channels == 1) {
+
+            if (wav_file_info.num_channels == 1) { // MONO
                 for (size_t i = 0; i < num_samples; i++) {
-                    // Aplicar las dos etapas en cascada para MONO
-                    int16_t stage1_out = apply_biquad_filter(&hpf_state.stages[0].left, samples[i]);
-                    samples[i] = apply_biquad_filter(&hpf_state.stages[1].left, stage1_out);
+                    // --- CAMBIO LR4: Aplicar cada etapa con sus propios coeficientes ---
+                    int16_t stage1_out = apply_biquad_filter(&hpf_state.stages[0].left, &hpf_coeffs.stage[0], samples[i]);
+                    samples[i] = apply_biquad_filter(&hpf_state.stages[1].left, &hpf_coeffs.stage[1], stage1_out);
                 }
-            } else { // Stereo
+            } else { // STEREO
                 for (size_t i = 0; i < num_samples; i += 2) {
-                    // Aplicar las dos etapas en cascada para el canal IZQUIERDO
-                    int16_t stage1_out_l = apply_biquad_filter(&hpf_state.stages[0].left, samples[i]);
-                    samples[i] = apply_biquad_filter(&hpf_state.stages[1].left, stage1_out_l);
+                    // Canal Izquierdo (L)
+                    int16_t stage1_out_l = apply_biquad_filter(&hpf_state.stages[0].left, &hpf_coeffs.stage[0], samples[i]);
+                    samples[i] = apply_biquad_filter(&hpf_state.stages[1].left, &hpf_coeffs.stage[1], stage1_out_l);
                     
-                    // Aplicar las dos etapas en cascada para el canal DERECHO
-                    int16_t stage1_out_r = apply_biquad_filter(&hpf_state.stages[0].right, samples[i+1]);
-                    samples[i+1] = apply_biquad_filter(&hpf_state.stages[1].right, stage1_out_r);
+                    // Canal Derecho (R)
+                    int16_t stage1_out_r = apply_biquad_filter(&hpf_state.stages[0].right, &hpf_coeffs.stage[0], samples[i+1]);
+                    samples[i+1] = apply_biquad_filter(&hpf_state.stages[1].right, &hpf_coeffs.stage[1], stage1_out_r);
                 }
             }
         }
-        // --- FIN: LÓGICA DEL FILTRO DE 4º ORDEN ---
+        // --- FIN: LÓGICA DEL FILTRO ---
         
+        // El resto del bucle (visualizador, control de volumen) permanece igual
         if (visualizer_queue != NULL && wav_file_info.bits_per_sample == 16) {
             visualizer_data_t viz_data;
             int16_t* samples = (int16_t*)buffer;
