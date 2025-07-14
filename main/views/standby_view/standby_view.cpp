@@ -24,6 +24,11 @@ static bool is_time_synced = false;
 
 // --- Tarea para actualizar el reloj central ---
 static void update_center_clock_task(lv_timer_t *timer) {
+    // Comprobación de seguridad: si la etiqueta ya no existe, no hacer nada.
+    if (!center_time_label || !center_date_label || !loading_label) {
+        return;
+    }
+
     if (wifi_manager_is_connected()) {
         if (!is_time_synced) {
             is_time_synced = true;
@@ -106,13 +111,18 @@ static void handle_volume_button_release(void *user_data) {
 static void cleanup_event_cb(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_DELETE) {
-        ESP_LOGI(TAG, "Standby view is being deleted, cleaning up timers.");
+        ESP_LOGI(TAG, "Standby view container is being deleted, cleaning up timers.");
         if (update_timer) {
             lv_timer_del(update_timer);
             update_timer = NULL;
         }
         // Asegurarse de limpiar los timers de volumen también
         handle_volume_button_release(NULL);
+        
+        // Limpiar punteros de widgets para evitar accesos accidentales
+        center_time_label = NULL;
+        center_date_label = NULL;
+        loading_label = NULL;
         is_time_synced = false;
     }
 }
@@ -126,22 +136,28 @@ void standby_view_create(lv_obj_t *parent) {
     volume_up_timer = NULL;
     volume_down_timer = NULL;
 
-    // 1. Crear la barra de estado
-    status_bar_create(parent);
+    // --- CORRECCIÓN: Crear un contenedor principal para toda la vista ---
+    lv_obj_t *view_container = lv_obj_create(parent);
+    lv_obj_remove_style_all(view_container);
+    lv_obj_set_size(view_container, LV_PCT(100), LV_PCT(100));
+    lv_obj_center(view_container);
 
-    // 2. Crear etiqueta "Loading..."
-    loading_label = lv_label_create(parent);
+    // 1. Crear la barra de estado como hija del contenedor
+    status_bar_create(view_container);
+
+    // 2. Crear etiqueta "Loading..." como hija del contenedor
+    loading_label = lv_label_create(view_container);
     lv_obj_set_style_text_font(loading_label, &lv_font_montserrat_24, 0);
     lv_label_set_text(loading_label, "Loading...");
     lv_obj_center(loading_label);
 
-    // 3. Crear reloj y fecha centrales (inicialmente ocultos)
-    center_time_label = lv_label_create(parent);
+    // 3. Crear reloj y fecha centrales como hijos del contenedor (inicialmente ocultos)
+    center_time_label = lv_label_create(view_container);
     lv_obj_set_style_text_font(center_time_label, &lv_font_montserrat_48, 0);
     lv_obj_align(center_time_label, LV_ALIGN_CENTER, 0, -20);
     lv_obj_add_flag(center_time_label, LV_OBJ_FLAG_HIDDEN);
 
-    center_date_label = lv_label_create(parent);
+    center_date_label = lv_label_create(view_container);
     lv_obj_set_style_text_font(center_date_label, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(center_date_label, lv_palette_main(LV_PALETTE_GREY), 0);
     lv_obj_align(center_date_label, LV_ALIGN_CENTER, 0, 25);
@@ -151,16 +167,14 @@ void standby_view_create(lv_obj_t *parent) {
     update_timer = lv_timer_create(update_center_clock_task, 1000, NULL);
     update_center_clock_task(update_timer);
 
-    // 5. Añadir evento de limpieza al destruir el objeto padre
-    lv_obj_add_event_cb(parent, cleanup_event_cb, LV_EVENT_DELETE, NULL);
+    // 5. --- CORRECCIÓN: Añadir evento de limpieza al CONTENEDOR, no al padre ---
+    lv_obj_add_event_cb(view_container, cleanup_event_cb, LV_EVENT_DELETE, NULL);
 
     // 6. Registrar manejadores de botones
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, NULL, true, nullptr);
 
-    // --- MODIFICACIÓN CLAVE ---
     // Las pulsaciones cortas (TAP) en izquierda/derecha ya no hacen nada.
-    // Se asigna NULL como manejador.
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, NULL, true, nullptr);
     button_manager_register_handler(BUTTON_LEFT,  BUTTON_EVENT_TAP, NULL, true, nullptr);
     
