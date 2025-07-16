@@ -3,6 +3,7 @@
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
+#include "controllers/power_manager/power_manager.h" // <-- AÑADIR: Incluir el nuevo manager
 #include "components/status_bar_component/status_bar_component.h"
 #include "esp_log.h"
 #include <time.h>
@@ -61,6 +62,13 @@ static void handle_cancel_press(void *user_data) {
     ESP_LOGI(TAG, "CANCEL pressed, loading menu.");
     view_manager_load_view(VIEW_ID_MENU);
 }
+
+// --- NUEVO: Manejador para entrar en modo de bajo consumo ---
+static void handle_on_off_press(void* user_data) {
+    ESP_LOGI(TAG, "ON/OFF button pressed, entering light sleep.");
+    power_manager_enter_light_sleep();
+}
+
 
 // --- Funciones para el control de volumen ---
 
@@ -171,10 +179,8 @@ void standby_view_create(lv_obj_t *parent) {
     lv_obj_add_event_cb(view_container, cleanup_event_cb, LV_EVENT_DELETE, NULL);
 
     // 6. Registrar manejadores de botones
-    // --- MODIFICACIÓN: Anular el botón ON/OFF para que no haga nada en esta vista ---
-    // Al registrar un manejador de vista (true) con una función NULL, se anula el
-    // comportamiento por defecto ("volver a standby") y se asegura que no ocurra nada.
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, NULL, true, nullptr);
+    // --- MODIFICACIÓN: El botón ON/OFF ahora entra en modo de bajo consumo ---
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, handle_on_off_press, true, nullptr);
 
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, NULL, true, nullptr);
