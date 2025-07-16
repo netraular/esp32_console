@@ -7,6 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/timers.h"
+#include "views/view_manager.h" // <-- AÑADIR: Necesario para cambiar de vista
 
 static const char *TAG = "BTN_MGR";
 
@@ -130,13 +131,22 @@ static void generic_button_event_cb(void *arg, void *usr_data) {
     }
 }
 
+// --- NUEVA FUNCIÓN: Manejador por defecto para el botón ON/OFF ---
+/**
+ * @brief Manejador por defecto para el botón ON/OFF. Carga la vista de standby.
+ * Este handler tiene baja prioridad y puede ser sobreescrito por un handler de vista.
+ */
+static void handle_on_off_default_tap(void* user_data) {
+    ESP_LOGI(TAG, "Default ON/OFF handler triggered. Returning to Standby view.");
+    view_manager_load_view(VIEW_ID_STANDBY);
+}
+
 
 // --- Public API Functions ---
 
 void button_manager_init() {
     ESP_LOGI(TAG, "Initializing button manager...");
     
-    // MODIFIED: memset works the same because nullptr is 0.
     memset(button_handlers, 0, sizeof(button_handlers));
     memset(is_long_press_active, 0, sizeof(is_long_press_active));
 
@@ -162,7 +172,6 @@ void button_manager_init() {
         assert(buttons[i]);
         
         // Register for all raw events needed for our custom logic.
-        // We now need to register for every event from the library.
         iot_button_register_cb(buttons[i], BUTTON_PRESS_DOWN, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_PRESS_DOWN });
         iot_button_register_cb(buttons[i], BUTTON_PRESS_UP, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_PRESS_UP });
         iot_button_register_cb(buttons[i], BUTTON_SINGLE_CLICK, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_SINGLE_CLICK });
@@ -170,6 +179,11 @@ void button_manager_init() {
         iot_button_register_cb(buttons[i], BUTTON_LONG_PRESS_START, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_LONG_PRESS_START });
         iot_button_register_cb(buttons[i], BUTTON_LONG_PRESS_HOLD, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_LONG_PRESS_HOLD });
     }
+    
+    // --- MODIFICACIÓN: Registrar el manejador por defecto para el botón ON/OFF ---
+    // El 'false' indica que es un manejador de baja prioridad (por defecto).
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, handle_on_off_default_tap, false, nullptr);
+    ESP_LOGI(TAG, "Registered default ON/OFF handler to return to Standby view.");
 
     ESP_LOGI(TAG, "Button manager initialized with: Double Click=%dms, Long Press=%dms", BUTTON_DOUBLE_CLICK_MS, BUTTON_LONG_PRESS_MS);
 }
@@ -184,7 +198,6 @@ void button_manager_set_dispatch_mode(input_dispatch_mode_t mode) {
     }
 }
 
-// MODIFIED: Accepts and stores the user_data
 void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler, void* user_data) {
     if (button >= BUTTON_COUNT || event >= BUTTON_EVENT_COUNT) return;
     
@@ -206,7 +219,6 @@ void button_manager_unregister_view_handlers() {
         xQueueReset(s_input_event_queue);
     }
     
-    // MODIFIED: Clears the complete structure (handler and user_data)
     for (int i = 0; i < BUTTON_COUNT; i++) {
         memset(&button_handlers[i].view_handlers, 0, sizeof(button_event_handlers_t));
     }

@@ -5,6 +5,8 @@
 #include "controllers/audio_manager/audio_manager.h"
 #include "components/status_bar_component/status_bar_component.h"
 #include "esp_log.h"
+#include "esp_sleep.h" // <-- AÑADIR: Necesario para la suspensión profunda
+#include "config.h"    // <-- AÑADIR: Necesario para BUTTON_ON_OFF_PIN
 #include <time.h>
 
 static const char *TAG = "STANDBY_VIEW";
@@ -61,6 +63,21 @@ static void handle_cancel_press(void *user_data) {
     ESP_LOGI(TAG, "CANCEL pressed, loading menu.");
     view_manager_load_view(VIEW_ID_MENU);
 }
+
+// --- NUEVA FUNCIÓN: Manejador para entrar en suspensión profunda ---
+/**
+ * @brief Manejador de vista para el botón ON/OFF. Pone el dispositivo en suspensión profunda.
+ * Este handler sobreescribe el comportamiento por defecto de "volver a standby".
+ */
+static void handle_on_off_deep_sleep(void *user_data) {
+    ESP_LOGI(TAG, "ON/OFF pressed in Standby view. Entering deep sleep.");
+    // Configura el pin del botón ON/OFF como fuente de despertar.
+    // El '0' significa que se despertará cuando el pin esté en nivel BAJO.
+    esp_sleep_enable_ext0_wakeup(BUTTON_ON_OFF_PIN, 0); 
+    // Inicia la suspensión profunda. El programa se reiniciará al despertar.
+    esp_deep_sleep_start();
+}
+
 
 // --- Funciones para el control de volumen ---
 
@@ -136,7 +153,7 @@ void standby_view_create(lv_obj_t *parent) {
     volume_up_timer = NULL;
     volume_down_timer = NULL;
 
-    // --- CORRECCIÓN: Crear un contenedor principal para toda la vista ---
+    // Crear un contenedor principal para toda la vista
     lv_obj_t *view_container = lv_obj_create(parent);
     lv_obj_remove_style_all(view_container);
     lv_obj_set_size(view_container, LV_PCT(100), LV_PCT(100));
@@ -167,10 +184,15 @@ void standby_view_create(lv_obj_t *parent) {
     update_timer = lv_timer_create(update_center_clock_task, 1000, NULL);
     update_center_clock_task(update_timer);
 
-    // 5. --- CORRECCIÓN: Añadir evento de limpieza al CONTENEDOR, no al padre ---
+    // 5. Añadir evento de limpieza al CONTENEDOR
     lv_obj_add_event_cb(view_container, cleanup_event_cb, LV_EVENT_DELETE, NULL);
 
     // 6. Registrar manejadores de botones
+    // --- MODIFICACIÓN: Añadir manejador específico para entrar en suspensión ---
+    // El 'true' indica que es un manejador de alta prioridad (de vista),
+    // por lo que anulará el manejador por defecto que registramos antes.
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, handle_on_off_deep_sleep, true, nullptr);
+
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, NULL, true, nullptr);
 
