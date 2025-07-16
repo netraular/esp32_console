@@ -18,19 +18,13 @@ static const char *NOTES_DIR = "/sdcard/notes";
 static lv_obj_t *view_parent = NULL;
 static lv_obj_t *loading_indicator = NULL;
 
-// --- Action Menu State ---
-typedef enum {
-    ACTION_DELETE,
-    ACTION_TRANSCRIBE,
-    ACTION_COUNT
-} menu_action_t;
-
+// --- Action Menu State (MODIFIED: Style like sd_test_view) ---
 static lv_obj_t *action_menu_container = NULL;
 static lv_group_t *action_menu_group = NULL;
 static char selected_item_path[256];
 static lv_style_t style_action_menu_focused;
 
-// --- CORRECCIÓN: Estructura para pasar datos a la llamada asíncrona de LVGL ---
+// --- Estructura para pasar datos a la llamada asíncrona de LVGL ---
 typedef struct {
     bool success;
     char* result_text;
@@ -41,7 +35,7 @@ typedef struct {
 static void show_file_explorer();
 static void destroy_action_menu_internal(bool refresh_explorer);
 static void on_transcription_complete(bool success, char* result);
-static void on_transcription_complete_ui_thread(void *user_data); // NUEVA
+static void on_transcription_complete_ui_thread(void *user_data);
 static void on_viewer_exit();
 
 
@@ -71,40 +65,43 @@ static void hide_loading_indicator() {
 }
 
 
-// --- Action Menu ---
+// --- Action Menu (MODIFIED: Style like sd_test_view) ---
+static void handle_action_menu_left_press(void* user_data) {
+    if (action_menu_group) lv_group_focus_prev(action_menu_group);
+}
+static void handle_action_menu_right_press(void* user_data) {
+    if (action_menu_group) lv_group_focus_next(action_menu_group);
+}
 static void handle_action_menu_cancel(void* user_data) {
     destroy_action_menu_internal(false);
 }
 
 static void handle_action_menu_ok(void* user_data) {
-    lv_obj_t* focused_btn = lv_group_get_focused(action_menu_group);
-    if (!focused_btn) return;
+    if (!action_menu_group) return;
 
-    menu_action_t action = (menu_action_t)(uintptr_t)lv_obj_get_user_data(focused_btn);
+    lv_obj_t* selected_btn = lv_group_get_focused(action_menu_group);
+    if (!selected_btn) return;
 
-    switch(action) {
-        case ACTION_DELETE:
-            ESP_LOGI(TAG, "Delete action confirmed for: %s", selected_item_path);
-            sd_manager_delete_item(selected_item_path);
-            destroy_action_menu_internal(true);
-            break;
-        case ACTION_TRANSCRIBE:
-            ESP_LOGI(TAG, "Transcribe action confirmed for: %s", selected_item_path);
-            if (!wifi_manager_is_connected()) {
-                 wifi_manager_init_sta(); // Attempt to connect if not already
-            }
-            destroy_action_menu_internal(false);
-            show_loading_indicator("Transcribing...");
-            if (!stt_manager_transcribe(selected_item_path, on_transcription_complete)) {
-                hide_loading_indicator();
-                ESP_LOGE(TAG, "Failed to start transcription task.");
-                // Opcional: mostrar un popup de error aquí
-                show_file_explorer();
-            }
-            break;
-        default:
-             destroy_action_menu_internal(false);
-             break;
+    lv_obj_t* list = lv_obj_get_parent(selected_btn);
+    const char* action_text = lv_list_get_button_text(list, selected_btn);
+    ESP_LOGI(TAG, "Action '%s' selected for: %s", action_text, selected_item_path);
+
+    if (strcmp(action_text, "Eliminar") == 0) {
+        sd_manager_delete_item(selected_item_path);
+        destroy_action_menu_internal(true);
+    } else if (strcmp(action_text, "Transcribir") == 0) {
+        if (!wifi_manager_is_connected()) {
+             wifi_manager_init_sta(); // Attempt to connect if not already
+        }
+        destroy_action_menu_internal(false);
+        show_loading_indicator("Transcribing...");
+        if (!stt_manager_transcribe(selected_item_path, on_transcription_complete)) {
+            hide_loading_indicator();
+            ESP_LOGE(TAG, "Failed to start transcription task.");
+            show_file_explorer();
+        }
+    } else {
+        destroy_action_menu_internal(false);
     }
 }
 
@@ -117,6 +114,7 @@ static void create_action_menu(const char* path) {
 
     lv_style_init(&style_action_menu_focused);
     lv_style_set_bg_color(&style_action_menu_focused, lv_palette_main(LV_PALETTE_BLUE));
+    lv_style_set_bg_opa(&style_action_menu_focused, LV_OPA_COVER);
 
     action_menu_container = lv_obj_create(view_parent);
     lv_obj_remove_style_all(action_menu_container);
@@ -128,42 +126,41 @@ static void create_action_menu(const char* path) {
     lv_obj_set_width(menu_box, lv_pct(80));
     lv_obj_set_height(menu_box, LV_SIZE_CONTENT);
     lv_obj_center(menu_box);
-    lv_obj_set_flex_flow(menu_box, LV_FLEX_FLOW_COLUMN);
+
+    lv_obj_t* list = lv_list_create(menu_box);
+    lv_obj_set_size(list, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_center(list);
 
     action_menu_group = lv_group_create();
 
-    // Add Delete button
-    lv_obj_t* btn_del = lv_button_create(menu_box);
-    lv_obj_set_width(btn_del, lv_pct(100));
-    lv_obj_set_user_data(btn_del, (void*)ACTION_DELETE);
-    lv_obj_add_style(btn_del, &style_action_menu_focused, LV_STATE_FOCUSED);
-    lv_group_add_obj(action_menu_group, btn_del);
-    lv_obj_t* lbl_del = lv_label_create(btn_del);
-    lv_label_set_text(lbl_del, LV_SYMBOL_TRASH " Eliminar");
-    lv_obj_center(lbl_del);
-
-    // Add Transcribe button
-    lv_obj_t* btn_stt = lv_button_create(menu_box);
-    lv_obj_set_width(btn_stt, lv_pct(100));
-    lv_obj_set_user_data(btn_stt, (void*)ACTION_TRANSCRIBE);
-    lv_obj_add_style(btn_stt, &style_action_menu_focused, LV_STATE_FOCUSED);
-    lv_group_add_obj(action_menu_group, btn_stt);
-    lv_obj_t* lbl_stt = lv_label_create(btn_stt);
-    lv_label_set_text(lbl_stt, LV_SYMBOL_EDIT " Transcribir");
-    lv_obj_center(lbl_stt);
+    const char* actions[][2] = {
+        {LV_SYMBOL_TRASH, "Eliminar"},
+        {LV_SYMBOL_EDIT, "Transcribir"}
+    };
+    for(auto const& action : actions) {
+        lv_obj_t* btn = lv_list_add_button(list, action[0], action[1]);
+        lv_obj_add_style(btn, &style_action_menu_focused, LV_STATE_FOCUSED);
+        lv_group_add_obj(action_menu_group, btn);
+    }
 
     lv_group_set_default(action_menu_group);
-    lv_group_focus_obj(btn_del); // Focus first element
+    if(lv_obj_get_child_cnt(list) > 0){
+        lv_group_focus_obj(lv_obj_get_child(list, 0));
+    }
 
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_action_menu_ok, true, nullptr);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_action_menu_cancel, true, nullptr);
-    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, [](void*d){if(action_menu_group) lv_group_focus_prev(action_menu_group);}, true, nullptr);
-    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, [](void*d){if(action_menu_group) lv_group_focus_next(action_menu_group);}, true, nullptr);
+    button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_action_menu_left_press, true, nullptr);
+    button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_action_menu_right_press, true, nullptr);
 }
 
 static void destroy_action_menu_internal(bool refresh_explorer) {
     if (action_menu_container) {
-        if(action_menu_group) { lv_group_del(action_menu_group); action_menu_group = NULL; }
+        if(action_menu_group) {
+            if (lv_group_get_default() == action_menu_group) lv_group_set_default(NULL);
+            lv_group_del(action_menu_group);
+            action_menu_group = NULL;
+        }
         lv_obj_del(action_menu_container);
         action_menu_container = NULL;
         file_explorer_set_input_active(true);
@@ -178,7 +175,7 @@ static void on_viewer_exit() {
     show_file_explorer();
 }
 
-// --- CORRECCIÓN: ESTA FUNCIÓN SE EJECUTA EN EL HILO DE LVGL ---
+// ESTA FUNCIÓN SE EJECUTA EN EL HILO DE LVGL
 static void on_transcription_complete_ui_thread(void *user_data) {
     transcription_result_t* result_data = (transcription_result_t*)user_data;
     
@@ -201,7 +198,7 @@ static void on_transcription_complete_ui_thread(void *user_data) {
     free(result_data);
 }
 
-// --- CORRECCIÓN: ESTE CALLBACK SE EJECUTA EN EL HILO DE STT ---
+// ESTE CALLBACK SE EJECUTA EN EL HILO DE STT
 // Su única misión es empaquetar los datos y enviarlos al hilo de LVGL.
 static void on_transcription_complete(bool success, char* result) {
     transcription_result_t* result_data = (transcription_result_t*)malloc(sizeof(transcription_result_t));
