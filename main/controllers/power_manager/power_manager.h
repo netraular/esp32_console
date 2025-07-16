@@ -12,10 +12,18 @@ extern "C" {
  * 1. Configura el pin del botón ON/OFF para que despierte el ESP32 en un nivel bajo.
  * 2. Llama a `esp_light_sleep_start()` para poner el dispositivo en modo de bajo consumo.
  * 3. Al despertar, registra la causa y deshabilita la configuración de despertar GPIO.
- * 4. Incluye un pequeño retardo para "debounce" el botón de despertar y evitar eventos
- *    no deseados en el button_manager al reanudar.
  */
 void power_manager_enter_light_sleep(void);
+
+/**
+ * @brief Entra en modo Deep Sleep de forma indefinida.
+ * 
+ * El dispositivo entrará en el modo de más bajo consumo y solo podrá despertarse
+ * mediante un reinicio externo (botón RST) o si se configuran fuentes de despertar
+ * para deep sleep (no implementado en esta función para un apagado "permanente").
+ * Esta función no retorna.
+ */
+void power_manager_enter_deep_sleep(void);
 
 
 #ifdef __cplusplus
