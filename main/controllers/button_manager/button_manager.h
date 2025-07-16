@@ -6,6 +6,8 @@
 #include "config.h"
 #include "lvgl.h"
 
+// ... (El resto de los enums y structs permanecen igual) ...
+
 /**
  * @brief Enum to uniquely identify each physical button.
  */
@@ -98,6 +100,15 @@ void button_manager_register_handler(button_id_t button, button_event_type_t eve
  * This is crucial to call when changing views to prevent stale events and restore default button behaviors.
  */
 void button_manager_unregister_view_handlers();
+
+/**
+ * @brief Pausa temporalmente el procesamiento de eventos de botón, ideal para después de despertar.
+ * Limpia la cola de eventos y establece un estado de pausa. Un temporizador interno
+ * reanudará automáticamente el procesamiento después del tiempo especificado.
+ *
+ * @param pause_ms La duración en milisegundos para ignorar las entradas de los botones.
+ */
+void button_manager_pause_for_wake_up(uint32_t pause_ms);
 
 
 #endif // BUTTON_MANAGER_H

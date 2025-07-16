@@ -7,7 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/timers.h"
-#include "views/view_manager.h" // <-- AÑADIR: Necesario para cambiar de vista
+#include "views/view_manager.h"
 
 static const char *TAG = "BTN_MGR";
 
@@ -20,8 +20,11 @@ static QueueHandle_t s_input_event_queue = NULL;
 static lv_timer_t* s_input_processor_timer = NULL;
 
 // --- State for Advanced Click Logic ---
-// Track long press state to suppress TAP and SINGLE_CLICK events correctly.
 static bool is_long_press_active[BUTTON_COUNT] = {false};
+
+// --- NUEVO: Estado para la pausa después de despertar ---
+static volatile bool s_is_paused_for_wake_up = false;
+
 
 // Maps the underlying library event to our custom, simplified enum
 static const std::map<button_event_t, button_event_type_t> event_map = {
@@ -81,6 +84,11 @@ static void process_queued_input_cb(lv_timer_t *timer) {
 
 // Generic callback registered for all buttons and events.
 static void generic_button_event_cb(void *arg, void *usr_data) {
+    // --- NUEVO: Comprobar si estamos en pausa y descartar el evento ---
+    if (s_is_paused_for_wake_up) {
+        return;
+    }
+
     button_cb_user_data_t* cb_data = static_cast<button_cb_user_data_t*>(usr_data);
     button_id_t button_id = cb_data->button_id;
     button_event_t raw_event = cb_data->raw_event_type;
@@ -131,20 +139,24 @@ static void generic_button_event_cb(void *arg, void *usr_data) {
     }
 }
 
-// --- NUEVA FUNCIÓN: Manejador por defecto para el botón ON/OFF ---
-/**
- * @brief Manejador por defecto para el botón ON/OFF. Carga la vista de standby.
- * Este handler tiene baja prioridad y puede ser sobreescrito por un handler de vista.
- */
+// --- Manejador por defecto para el botón ON/OFF ---
 static void handle_on_off_default_tap(void* user_data) {
     ESP_LOGI(TAG, "Default ON/OFF handler triggered. Returning to Standby view.");
     view_manager_load_view(VIEW_ID_STANDBY);
+}
+
+// --- NUEVO: Callback para el temporizador que reanuda los eventos ---
+static void resume_events_timer_cb(lv_timer_t* timer) {
+    ESP_LOGI(TAG, "Resuming button event processing after wake-up pause.");
+    s_is_paused_for_wake_up = false;
+    // El temporizador se elimina automáticamente porque fue creado como de un solo uso.
 }
 
 
 // --- Public API Functions ---
 
 void button_manager_init() {
+    // ... (El contenido de la función init no cambia) ...
     ESP_LOGI(TAG, "Initializing button manager...");
     
     memset(button_handlers, 0, sizeof(button_handlers));
@@ -171,7 +183,6 @@ void button_manager_init() {
         ESP_ERROR_CHECK(iot_button_new_gpio_device(&btn_config, &gpio_configs[i], &buttons[i]));
         assert(buttons[i]);
         
-        // Register for all raw events needed for our custom logic.
         iot_button_register_cb(buttons[i], BUTTON_PRESS_DOWN, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_PRESS_DOWN });
         iot_button_register_cb(buttons[i], BUTTON_PRESS_UP, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_PRESS_UP });
         iot_button_register_cb(buttons[i], BUTTON_SINGLE_CLICK, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_SINGLE_CLICK });
@@ -180,8 +191,6 @@ void button_manager_init() {
         iot_button_register_cb(buttons[i], BUTTON_LONG_PRESS_HOLD, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_LONG_PRESS_HOLD });
     }
     
-    // --- MODIFICACIÓN: Registrar el manejador por defecto para el botón ON/OFF ---
-    // El 'false' indica que es un manejador de baja prioridad (por defecto).
     button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, handle_on_off_default_tap, false, nullptr);
     ESP_LOGI(TAG, "Registered default ON/OFF handler to return to Standby view.");
 
@@ -189,6 +198,7 @@ void button_manager_init() {
 }
 
 void button_manager_set_dispatch_mode(input_dispatch_mode_t mode) {
+    // ... (sin cambios) ...
     if (s_current_dispatch_mode != mode) {
         s_current_dispatch_mode = mode;
         if(s_input_event_queue) {
@@ -199,6 +209,7 @@ void button_manager_set_dispatch_mode(input_dispatch_mode_t mode) {
 }
 
 void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler, void* user_data) {
+    // ... (sin cambios) ...
     if (button >= BUTTON_COUNT || event >= BUTTON_EVENT_COUNT) return;
     
     handler_entry_t* entry;
@@ -213,6 +224,7 @@ void button_manager_register_handler(button_id_t button, button_event_type_t eve
 }
 
 void button_manager_unregister_view_handlers() {
+    // ... (sin cambios) ...
     ESP_LOGI(TAG, "Unregistering view-handlers and clearing event queue.");
     
     if (s_input_event_queue) {
@@ -223,4 +235,22 @@ void button_manager_unregister_view_handlers() {
         memset(&button_handlers[i].view_handlers, 0, sizeof(button_event_handlers_t));
     }
     ESP_LOGI(TAG, "Event queue cleared and default button handlers restored.");
+}
+
+// --- NUEVO: Implementación de la función de pausa ---
+void button_manager_pause_for_wake_up(uint32_t pause_ms) {
+    ESP_LOGI(TAG, "Pausing button event processing for %lu ms.", pause_ms);
+    s_is_paused_for_wake_up = true;
+
+    // Limpiar cualquier evento que pudiera estar en la cola.
+    if (s_input_event_queue) {
+        xQueueReset(s_input_event_queue);
+    }
+    
+    // Resetear el estado lógico interno para evitar eventos de long_press espurios.
+    memset(is_long_press_active, 0, sizeof(is_long_press_active));
+
+    // Crear un temporizador de un solo uso para reanudar los eventos.
+    lv_timer_t* timer = lv_timer_create(resume_events_timer_cb, pause_ms, NULL);
+    lv_timer_set_repeat_count(timer, 1); // Asegura que solo se ejecute una vez.
 }
