@@ -15,24 +15,26 @@ static const char *TAG = "SD_TEST_VIEW";
 static lv_obj_t *view_parent = NULL;
 static lv_obj_t *info_label_widget = NULL;
 
-// --- State variables for the file action menu (Read, Rename, Delete) ---
+// --- State variables for the file action menu ---
 static lv_obj_t *action_menu_container = NULL;
 static lv_group_t *action_menu_group = NULL;
 static char selected_item_path[256];
 static lv_style_t style_action_menu_focused;
 
-// --- Forward declarations for callbacks and view states ---
+// --- Forward declarations ---
 static void create_initial_sd_view();
 static void show_file_explorer();
 static void on_explorer_exit();
-static void on_file_or_dir_selected(const char *path);
+static void on_file_selected(const char *path);
+static void on_file_long_pressed(const char *path);
 static void on_create_action(file_item_type_t action_type, const char *current_path);
 static void destroy_action_menu_internal(bool refresh_file_explorer_after);
 static void on_text_viewer_exit();
+static void create_action_menu(const char* path);
 
 
 /***************************************************
- *  ACTION MENU BUTTON HANDLERS (MODIFIED: with new signature)
+ *  ACTION MENU BUTTON HANDLERS
  ***************************************************/
 static void handle_action_menu_left_press(void* user_data) {
     if (action_menu_group) lv_group_focus_prev(action_menu_group);
@@ -40,11 +42,9 @@ static void handle_action_menu_left_press(void* user_data) {
 static void handle_action_menu_right_press(void* user_data) {
     if (action_menu_group) lv_group_focus_next(action_menu_group);
 }
-
 static void handle_action_menu_cancel_press(void* user_data) {
     destroy_action_menu_internal(true);
 }
-
 static void handle_action_menu_ok_press(void* user_data) {
     if (!action_menu_group) return;
 
@@ -56,30 +56,22 @@ static void handle_action_menu_ok_press(void* user_data) {
     ESP_LOGI(TAG, "Action '%s' selected for: %s", action_text, selected_item_path);
 
     if (strcmp(action_text, "Leer") == 0) {
-        char* file_content = NULL;
-        size_t file_size = 0;
-        const char* filename = strrchr(selected_item_path, '/') ? strrchr(selected_item_path, '/') + 1 : selected_item_path;
-        if (sd_manager_read_file(selected_item_path, &file_content, &file_size)) {
-            // Use the new text_viewer component
-            destroy_action_menu_internal(false); // Destroy menu before showing viewer
-            text_viewer_create(view_parent, filename, file_content, on_text_viewer_exit);
-        } else {
-            if(file_content) free(file_content);
-            ESP_LOGE(TAG, "Failed to read file for viewer.");
-            destroy_action_menu_internal(true);
-        }
+        on_file_selected(selected_item_path); // Reutilizamos la función de abrir
     } else if (strcmp(action_text, "Renombrar") == 0) {
         char new_path[256] = {0};
         const char* dir_end = strrchr(selected_item_path, '/');
         size_t dir_len = (dir_end) ? (dir_end - selected_item_path) + 1 : 0;
         if(dir_len > 0) strncpy(new_path, selected_item_path, dir_len);
+        
         char basename[32];
         time_t now = time(NULL);
         struct tm timeinfo;
-        if (now == (time_t)(-1)) { strcpy(basename, "renamed_file");}
+        if (now == (time_t)(-1)) { strcpy(basename, "renamed_file"); }
         else { localtime_r(&now, &timeinfo); strftime(basename, sizeof(basename), "%Y%m%d_%H%M%S", &timeinfo); }
+        
         const char* ext = strrchr(selected_item_path, '.');
         snprintf(new_path + dir_len, sizeof(new_path) - dir_len, "%s%s", basename, ext ? ext : "");
+        
         ESP_LOGI(TAG, "Renaming '%s' -> '%s'", selected_item_path, new_path);
         sd_manager_rename_item(selected_item_path, new_path);
         destroy_action_menu_internal(true);
@@ -88,6 +80,7 @@ static void handle_action_menu_ok_press(void* user_data) {
         destroy_action_menu_internal(true);
     }
 }
+
 
 /**********************
  *  ACTION MENU LOGIC
@@ -103,7 +96,6 @@ static void create_action_menu(const char* path) {
 
     lv_style_init(&style_action_menu_focused);
     lv_style_set_bg_color(&style_action_menu_focused, lv_palette_main(LV_PALETTE_BLUE));
-    lv_style_set_bg_opa(&style_action_menu_focused, LV_OPA_COVER);
 
     action_menu_container = lv_obj_create(view_parent);
     lv_obj_remove_style_all(action_menu_container);
@@ -134,7 +126,6 @@ static void create_action_menu(const char* path) {
         lv_group_focus_obj(lv_obj_get_child(list, 0));
     }
 
-    // MODIFIED: Passing nullptr as user_data
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_action_menu_ok_press, true, nullptr);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_action_menu_cancel_press, true, nullptr);
     button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_action_menu_left_press, true, nullptr);
@@ -160,23 +151,57 @@ static void destroy_action_menu_internal(bool refresh_file_explorer_after) {
 
 
 /********************************
- *  COMPONENT EVENT HANDLERS
+ *  COMPONENT & VIEW EVENT HANDLERS
  ********************************/
 
-// Called when the user exits the text viewer
-static void on_text_viewer_exit() {
-    show_file_explorer(); // Go back to the file explorer
+// **NUEVO**: Callback que se ejecuta cuando el contenedor del explorador es eliminado.
+// Esta es la corrección CRÍTICA para la fuga de recursos.
+static void explorer_cleanup_cb(lv_event_t *e) {
+    ESP_LOGI(TAG, "Explorer container deleted. Calling file_explorer_destroy().");
+    file_explorer_destroy();
 }
 
-// Called when an item is selected in the file explorer
-static void on_file_or_dir_selected(const char *path) {
+// Callback del text_viewer cuando el usuario sale.
+static void on_text_viewer_exit() {
+    show_file_explorer(); // Vuelve al explorador de archivos
+}
+
+// **MODIFICADO**: Se llama con un clic normal (TAP) en un archivo.
+// Acción rápida: abre el archivo en el visor de texto.
+static void on_file_selected(const char *path) {
     struct stat st;
+    // Asegurarse de que es un archivo antes de intentar leerlo.
+    if (stat(path, &st) == 0 && !S_ISDIR(st.st_mode)) {
+        char* file_content = NULL;
+        size_t file_size = 0;
+        const char* filename = strrchr(path, '/') ? strrchr(path, '/') + 1 : path;
+        
+        if (sd_manager_read_file(path, &file_content, &file_size)) {
+            // Destruye el menú de acción si estuviera abierto
+            destroy_action_menu_internal(false); 
+            // Limpia la pantalla actual (que contiene el explorador de archivos)
+            lv_obj_clean(view_parent); // Esto disparará explorer_cleanup_cb
+            // Crea el visor de texto. El visor tomará posesión del puntero file_content.
+            text_viewer_create(view_parent, filename, file_content, on_text_viewer_exit);
+        } else {
+            ESP_LOGE(TAG, "Failed to read file for viewer: %s", path);
+            if(file_content) free(file_content); // Liberar memoria si la lectura falló pero asignó buffer
+            destroy_action_menu_internal(true); // Cierra el menú y refresca por si acaso
+        }
+    }
+}
+
+// **NUEVO**: Se llama con una pulsación larga en un archivo.
+// Acción contextual: abre el menú de opciones (Leer, Renombrar, Eliminar).
+static void on_file_long_pressed(const char* path) {
+    struct stat st;
+    // Solo mostrar menú para archivos, no para directorios.
     if (stat(path, &st) == 0 && !S_ISDIR(st.st_mode)) {
         create_action_menu(path);
     }
 }
 
-// Called when a "create" action is chosen in the explorer
+// Callback para cuando se selecciona una acción de creación en el explorador.
 static void on_create_action(file_item_type_t action_type, const char *current_path_from_explorer) {
     char full_path[256];
     char basename[32];
@@ -202,7 +227,7 @@ static void on_create_action(file_item_type_t action_type, const char *current_p
     file_explorer_refresh();
 }
 
-// Called when the user exits the file explorer
+// Callback para cuando el usuario sale del explorador (navegando "hacia atrás" desde la raíz).
 static void on_explorer_exit() {
     create_initial_sd_view();
 }
@@ -226,25 +251,27 @@ static void show_file_explorer() {
     lv_obj_set_style_text_font(title_label, lv_theme_get_font_large(title_label), 0);
     lv_obj_set_style_margin_bottom(title_label, 10, 0);
 
+    // Este contenedor alojará al explorador. Es importante porque le asociaremos el callback de limpieza.
     lv_obj_t* explorer_container = lv_obj_create(main_cont);
     lv_obj_remove_style_all(explorer_container);
     lv_obj_set_size(explorer_container, lv_pct(95), lv_pct(85));
     lv_obj_clear_flag(explorer_container, LV_OBJ_FLAG_SCROLLABLE);
 
-    // **** CORRECCIÓN AQUÍ ****
-    // La llamada a file_explorer_create ahora necesita 6 argumentos.
-    // Añadimos nullptr para on_long_press.
+    // **LA CORRECCIÓN**: Registrar el callback de limpieza en el evento de borrado del contenedor.
+    // Cuando lv_obj_clean() o lv_obj_del() eliminen este contenedor, se llamará a explorer_cleanup_cb.
+    lv_obj_add_event_cb(explorer_container, explorer_cleanup_cb, LV_EVENT_DELETE, NULL);
+
+    // **MODIFICADO**: Pasar on_file_long_pressed al cuarto argumento.
     file_explorer_create(
         explorer_container,
         sd_manager_get_mount_point(),
-        on_file_or_dir_selected,
-        nullptr, // on_long_press
+        on_file_selected,
+        on_file_long_pressed,
         on_create_action,
         on_explorer_exit
     );
 }
 
-// MODIFIED: Handler signature updated
 static void handle_initial_ok_press(void* user_data) {
     sd_manager_unmount();
     if (sd_manager_mount()) {
@@ -254,7 +281,6 @@ static void handle_initial_ok_press(void* user_data) {
     }
 }
 
-// MODIFIED: Handler signature updated
 static void handle_initial_cancel_press(void* user_data) {
     view_manager_load_view(VIEW_ID_MENU);
 }
@@ -275,7 +301,6 @@ static void create_initial_sd_view() {
     lv_label_set_text(info_label_widget, "Press OK to open\nthe file explorer");
 
     button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-    // MODIFIED: Passing nullptr as user_data
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_initial_ok_press, true, nullptr);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_initial_cancel_press, true, nullptr);
     button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true, nullptr);

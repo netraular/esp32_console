@@ -58,7 +58,7 @@ static void update_center_clock_task(lv_timer_t *timer) {
     } else {
         if (is_time_synced) {
             is_time_synced = false;
-            lv_obj_clear_flag(loading_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(loading_label, LV_OBJ_FLAG_HIDDEN); // Debería ser clear_flag
             lv_obj_add_flag(center_time_label, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(center_date_label, LV_OBJ_FLAG_HIDDEN);
         }
@@ -72,13 +72,21 @@ static void handle_cancel_press(void *user_data) {
     view_manager_load_view(VIEW_ID_MENU);
 }
 
-// --- NUEVO: Manejador para el TAP del botón ON/OFF ---
+// Manejador para el TAP del botón ON/OFF (dormir)
 static void handle_on_off_tap_for_sleep(void* user_data) {
     ESP_LOGI(TAG, "ON/OFF TAP detected, entering light sleep.");
     // Detener cualquier timer de volumen activo antes de dormir para evitar problemas al despertar
     if (volume_up_timer) { lv_timer_del(volume_up_timer); volume_up_timer = NULL; }
     if (volume_down_timer) { lv_timer_del(volume_down_timer); volume_down_timer = NULL; }
+    
+    // Poner el dispositivo en modo de bajo consumo. La ejecución se bloqueará aquí hasta que despierte.
     power_manager_enter_light_sleep();
+
+    // **LA MEJORA**: Justo después de despertar, pausar brevemente la gestión de botones.
+    // Esto previene que se registren clics accidentales si el botón se mantiene presionado
+    // un instante después de que el sistema despierte.
+    ESP_LOGI(TAG, "Woke up from light sleep. Pausing button input momentarily.");
+    button_manager_pause_for_wake_up(200); // Pausa durante 200 ms
 }
 
 // --- Lógica del Popup de Apagado ---
@@ -132,7 +140,7 @@ static void create_shutdown_popup() {
 
     lv_obj_t *msgbox = lv_msgbox_create(shutdown_popup_container);
     lv_msgbox_add_title(msgbox, "Turn Off Device");
-    lv_msgbox_add_text(msgbox, "Reset  button will need to be pressed to start the device again.");
+    lv_msgbox_add_text(msgbox, "Reset button will be needed to start the device again.");
     lv_obj_t* btn_cancel = lv_msgbox_add_footer_button(msgbox, "Cancel");
     lv_obj_t* btn_ok = lv_msgbox_add_footer_button(msgbox, "Turn Off");
     lv_obj_center(msgbox);
@@ -221,6 +229,7 @@ void standby_view_create(lv_obj_t *parent) {
     lv_obj_remove_style_all(view_container);
     lv_obj_set_size(view_container, LV_PCT(100), LV_PCT(100));
     lv_obj_center(view_container);
+    lv_obj_add_event_cb(view_container, cleanup_event_cb, LV_EVENT_DELETE, NULL);
 
     status_bar_create(view_container);
 
@@ -243,8 +252,5 @@ void standby_view_create(lv_obj_t *parent) {
     update_timer = lv_timer_create(update_center_clock_task, 1000, NULL);
     update_center_clock_task(update_timer);
 
-    lv_obj_add_event_cb(view_container, cleanup_event_cb, LV_EVENT_DELETE, NULL);
-
-    // Registrar los manejadores de botones para la vista principal
     register_main_view_handlers();
 }
