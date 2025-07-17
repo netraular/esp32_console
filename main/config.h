@@ -42,8 +42,8 @@
 
 // --- FREE PINS ---
 // GPIO_NUM_18
-// GPIO_NUM_19 y GPIO_NUM_20 si no se usa USB nativo
-// GPIO_NUM_39 si no se usa JTAG
+// GPIO_NUM_19 & GPIO_NUM_20 if native USB is not used
+// GPIO_NUM_39 if JTAG is not used
 
 // --- DISPLAY & SPI CONFIGURATION ---
 #define SCREEN_WIDTH  240
@@ -56,7 +56,7 @@
 // --- AUDIO CONFIGURATION ---
 // Sets a safety limit on the physical volume (0-100) to protect the speaker.
 // The UI will still show 0-100%, but it will be mapped to this physical range.
-#define MAX_VOLUME_PERCENTAGE 25 //Para un altavoz pequeño debería ser de 25
+#define MAX_VOLUME_PERCENTAGE 25 // For a small speaker, 25 is a good value
 
 // --- RECORDING CONFIGURATION ---
 #define REC_SAMPLE_RATE 16000

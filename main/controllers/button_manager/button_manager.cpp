@@ -22,7 +22,7 @@ static lv_timer_t* s_input_processor_timer = NULL;
 // --- State for Advanced Click Logic ---
 static bool is_long_press_active[BUTTON_COUNT] = {false};
 
-// --- NUEVO: Estado para la pausa después de despertar ---
+// --- NEW: State for post-wakeup pause ---
 static volatile bool s_is_paused_for_wake_up = false;
 
 
@@ -84,7 +84,7 @@ static void process_queued_input_cb(lv_timer_t *timer) {
 
 // Generic callback registered for all buttons and events.
 static void generic_button_event_cb(void *arg, void *usr_data) {
-    // --- NUEVO: Comprobar si estamos en pausa y descartar el evento ---
+    // --- NEW: Check if paused and discard the event ---
     if (s_is_paused_for_wake_up) {
         return;
     }
@@ -139,24 +139,23 @@ static void generic_button_event_cb(void *arg, void *usr_data) {
     }
 }
 
-// --- Manejador por defecto para el botón ON/OFF ---
+// --- Default handler for the ON/OFF button ---
 static void handle_on_off_default_tap(void* user_data) {
     ESP_LOGI(TAG, "Default ON/OFF handler triggered. Returning to Standby view.");
     view_manager_load_view(VIEW_ID_STANDBY);
 }
 
-// --- NUEVO: Callback para el temporizador que reanuda los eventos ---
+// --- NEW: Timer callback to resume events ---
 static void resume_events_timer_cb(lv_timer_t* timer) {
     ESP_LOGI(TAG, "Resuming button event processing after wake-up pause.");
     s_is_paused_for_wake_up = false;
-    // El temporizador se elimina automáticamente porque fue creado como de un solo uso.
+    // The timer is automatically deleted because it was created as a one-shot.
 }
 
 
 // --- Public API Functions ---
 
 void button_manager_init() {
-    // ... (El contenido de la función init no cambia) ...
     ESP_LOGI(TAG, "Initializing button manager...");
     
     memset(button_handlers, 0, sizeof(button_handlers));
@@ -198,7 +197,6 @@ void button_manager_init() {
 }
 
 void button_manager_set_dispatch_mode(input_dispatch_mode_t mode) {
-    // ... (sin cambios) ...
     if (s_current_dispatch_mode != mode) {
         s_current_dispatch_mode = mode;
         if(s_input_event_queue) {
@@ -209,7 +207,6 @@ void button_manager_set_dispatch_mode(input_dispatch_mode_t mode) {
 }
 
 void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler, void* user_data) {
-    // ... (sin cambios) ...
     if (button >= BUTTON_COUNT || event >= BUTTON_EVENT_COUNT) return;
     
     handler_entry_t* entry;
@@ -224,8 +221,7 @@ void button_manager_register_handler(button_id_t button, button_event_type_t eve
 }
 
 void button_manager_unregister_view_handlers() {
-    // ... (sin cambios) ...
-    ESP_LOGI(TAG, "Unregistering view-handlers and clearing event queue.");
+    ESP_LOGD(TAG, "Unregistering view-handlers and clearing event queue.");
     
     if (s_input_event_queue) {
         xQueueReset(s_input_event_queue);
@@ -234,23 +230,23 @@ void button_manager_unregister_view_handlers() {
     for (int i = 0; i < BUTTON_COUNT; i++) {
         memset(&button_handlers[i].view_handlers, 0, sizeof(button_event_handlers_t));
     }
-    ESP_LOGI(TAG, "Event queue cleared and default button handlers restored.");
+    ESP_LOGD(TAG, "Event queue cleared and default button handlers restored.");
 }
 
-// --- NUEVO: Implementación de la función de pausa ---
+// --- NEW: Implementation of the pause function ---
 void button_manager_pause_for_wake_up(uint32_t pause_ms) {
     ESP_LOGI(TAG, "Pausing button event processing for %lu ms.", pause_ms);
     s_is_paused_for_wake_up = true;
 
-    // Limpiar cualquier evento que pudiera estar en la cola.
+    // Clear any events that might be in the queue.
     if (s_input_event_queue) {
         xQueueReset(s_input_event_queue);
     }
     
-    // Resetear el estado lógico interno para evitar eventos de long_press espurios.
+    // Reset internal logic state to prevent spurious long_press events.
     memset(is_long_press_active, 0, sizeof(is_long_press_active));
 
-    // Crear un temporizador de un solo uso para reanudar los eventos.
+    // Create a one-shot timer to resume events.
     lv_timer_t* timer = lv_timer_create(resume_events_timer_cb, pause_ms, NULL);
-    lv_timer_set_repeat_count(timer, 1); // Asegura que solo se ejecute una vez.
+    lv_timer_set_repeat_count(timer, 1); // Ensure it only runs once.
 }

@@ -3,5 +3,5 @@ dependencies:
   ## Required IDF version
   idf:
     version: '>=5.4'
-  lvgl/lvgl: ^9.2.2 # Muy importante tener en cuenta la versión de LVGL para la implementación en el código ya que la versión LVGL v9 cambia respecto a lvgl v8.
+  lvgl/lvgl: ^9.2.2 # Very important to keep the LVGL version in mind for code implementation, as LVGL v9 has breaking changes from v8.
   espressif/button: ^4.0.0

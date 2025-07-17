@@ -6,22 +6,22 @@ extern "C" {
 #endif
 
 /**
- * @brief Configura el botón ON/OFF como fuente de despertar y entra en modo Light Sleep.
+ * @brief Configures the ON/OFF button as a wake-up source and enters Light Sleep mode.
  * 
- * Esta función realiza los siguientes pasos:
- * 1. Configura el pin del botón ON/OFF para que despierte el ESP32 en un nivel bajo.
- * 2. Llama a `esp_light_sleep_start()` para poner el dispositivo en modo de bajo consumo.
- * 3. Al despertar, registra la causa y deshabilita la configuración de despertar GPIO.
+ * This function performs the following steps:
+ * 1. Configures the ON/OFF button pin to wake the ESP32 on a low level.
+ * 2. Calls `esp_light_sleep_start()` to put the device into a low-power state.
+ * 3. Upon wake-up, logs the cause and disables the GPIO wake-up configuration.
  */
 void power_manager_enter_light_sleep(void);
 
 /**
- * @brief Entra en modo Deep Sleep de forma indefinida.
+ * @brief Enters Deep Sleep mode indefinitely.
  * 
- * El dispositivo entrará en el modo de más bajo consumo y solo podrá despertarse
- * mediante un reinicio externo (botón RST) o si se configuran fuentes de despertar
- * para deep sleep (no implementado en esta función para un apagado "permanente").
- * Esta función no retorna.
+ * The device will enter its lowest power mode and can only be awakened
+ * by an external reset (RST button) or if deep sleep wake sources are
+ * configured (not implemented in this function for a "permanent" shutdown).
+ * This function does not return.
  */
 void power_manager_enter_deep_sleep(void);
 
