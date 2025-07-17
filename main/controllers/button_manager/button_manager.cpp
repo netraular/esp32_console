@@ -4,6 +4,7 @@
 #include <cassert>
 #include <map>
 #include <cstring>
+#include <vector>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/timers.h"
@@ -22,9 +23,8 @@ static lv_timer_t* s_input_processor_timer = NULL;
 // --- State for Advanced Click Logic ---
 static bool is_long_press_active[BUTTON_COUNT] = {false};
 
-// --- NEW: State for post-wakeup pause ---
+// --- State for post-wakeup pause ---
 static volatile bool s_is_paused_for_wake_up = false;
-
 
 // Maps the underlying library event to our custom, simplified enum
 static const std::map<button_event_t, button_event_type_t> event_map = {
@@ -47,6 +47,11 @@ typedef struct {
     button_id_t button_id;
     button_event_t raw_event_type;
 } button_cb_user_data_t;
+
+// --- FIX: Statically allocated user data to prevent memory leaks ---
+// We have BUTTON_COUNT buttons and we register for 6 different raw event types for each.
+#define NUM_RAW_EVENTS 6
+static button_cb_user_data_t s_button_cb_user_data[BUTTON_COUNT][NUM_RAW_EVENTS];
 
 // --- Private Functions ---
 
@@ -84,7 +89,7 @@ static void process_queued_input_cb(lv_timer_t *timer) {
 
 // Generic callback registered for all buttons and events.
 static void generic_button_event_cb(void *arg, void *usr_data) {
-    // --- NEW: Check if paused and discard the event ---
+    // Check if paused and discard the event
     if (s_is_paused_for_wake_up) {
         return;
     }
@@ -145,7 +150,7 @@ static void handle_on_off_default_tap(void* user_data) {
     view_manager_load_view(VIEW_ID_STANDBY);
 }
 
-// --- NEW: Timer callback to resume events ---
+// --- Timer callback to resume events ---
 static void resume_events_timer_cb(lv_timer_t* timer) {
     ESP_LOGI(TAG, "Resuming button event processing after wake-up pause.");
     s_is_paused_for_wake_up = false;
@@ -160,6 +165,7 @@ void button_manager_init() {
     
     memset(button_handlers, 0, sizeof(button_handlers));
     memset(is_long_press_active, 0, sizeof(is_long_press_active));
+    memset(s_button_cb_user_data, 0, sizeof(s_button_cb_user_data));
 
     s_input_event_queue = xQueueCreate(10, sizeof(button_event_data_t));
     assert(s_input_event_queue);
@@ -178,16 +184,20 @@ void button_manager_init() {
         [BUTTON_ON_OFF] = {BUTTON_ON_OFF_PIN, 0, false, false}
     };
 
+    const button_event_t events_to_register[NUM_RAW_EVENTS] = {
+        BUTTON_PRESS_DOWN, BUTTON_PRESS_UP, BUTTON_SINGLE_CLICK,
+        BUTTON_DOUBLE_CLICK, BUTTON_LONG_PRESS_START, BUTTON_LONG_PRESS_HOLD
+    };
+
     for (int i = 0; i < BUTTON_COUNT; i++) {
         ESP_ERROR_CHECK(iot_button_new_gpio_device(&btn_config, &gpio_configs[i], &buttons[i]));
         assert(buttons[i]);
         
-        iot_button_register_cb(buttons[i], BUTTON_PRESS_DOWN, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_PRESS_DOWN });
-        iot_button_register_cb(buttons[i], BUTTON_PRESS_UP, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_PRESS_UP });
-        iot_button_register_cb(buttons[i], BUTTON_SINGLE_CLICK, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_SINGLE_CLICK });
-        iot_button_register_cb(buttons[i], BUTTON_DOUBLE_CLICK, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_DOUBLE_CLICK });
-        iot_button_register_cb(buttons[i], BUTTON_LONG_PRESS_START, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_LONG_PRESS_START });
-        iot_button_register_cb(buttons[i], BUTTON_LONG_PRESS_HOLD, NULL, generic_button_event_cb, new button_cb_user_data_t{ (button_id_t)i, BUTTON_LONG_PRESS_HOLD });
+        for (int j = 0; j < NUM_RAW_EVENTS; j++) {
+            button_event_t event = events_to_register[j];
+            s_button_cb_user_data[i][j] = {(button_id_t)i, event};
+            iot_button_register_cb(buttons[i], event, NULL, generic_button_event_cb, &s_button_cb_user_data[i][j]);
+        }
     }
     
     button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, handle_on_off_default_tap, false, nullptr);
@@ -233,7 +243,6 @@ void button_manager_unregister_view_handlers() {
     ESP_LOGD(TAG, "Event queue cleared and default button handlers restored.");
 }
 
-// --- NEW: Implementation of the pause function ---
 void button_manager_pause_for_wake_up(uint32_t pause_ms) {
     ESP_LOGI(TAG, "Pausing button event processing for %lu ms.", pause_ms);
     s_is_paused_for_wake_up = true;
