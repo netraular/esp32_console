@@ -9,7 +9,6 @@
 #include "speaker_test_view/speaker_test_view.h"
 #include "sd_test_view/sd_test_view.h"
 #include "image_test_view/image_test_view.h"
-#include "button_test_view/button_test_view.h"
 #include "multi_click_test_view/multi_click_test_view.h"
 #include "wifi_stream_view/wifi_stream_view.h"
 #include "pomodoro_view/pomodoro_view.h"
@@ -116,9 +115,6 @@ void view_manager_load_view(view_id_t view_id) {
             break;
         case VIEW_ID_IMAGE_TEST:
             image_test_view_create(scr);
-            break;
-        case VIEW_ID_BUTTON_DISPATCH_TEST:
-            button_test_view_create(scr);
             break;
         case VIEW_ID_MULTI_CLICK_TEST:
             multi_click_test_view_create(scr);
