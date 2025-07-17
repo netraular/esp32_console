@@ -34,5 +34,8 @@ void image_test_view_create(lv_obj_t *parent) {
     lv_label_set_text(info_label, "Press Cancel to return");
     lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -20);
 
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_SINGLE_CLICK, handle_cancel_press, true, nullptr);
+    // Register a handler for the cancel button.
+    // The view_manager will automatically unregister this when the view changes.
+    // The 'true' flag marks this as a view-specific handler.
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
 }

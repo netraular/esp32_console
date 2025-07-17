@@ -72,26 +72,26 @@ static void handle_cancel_press(void* user_data) {
 void menu_view_create(lv_obj_t *parent) {
     ESP_LOGI(TAG, "Creating Menu View");
 
-    // Crear un contenedor principal para la vista. Esto ayuda a agrupar todos los elementos
-    // y hace que la limpieza sea consistente con otras vistas como standby_view.
+    // Create a main container for the view. This helps group all elements
+    // and makes cleanup consistent with other views like standby_view.
     lv_obj_t *view_container = lv_obj_create(parent);
     lv_obj_remove_style_all(view_container);
     lv_obj_set_size(view_container, LV_PCT(100), LV_PCT(100));
     lv_obj_center(view_container);
 
-    // 1. Crear la barra de estado en la parte superior del contenedor de la vista
+    // 1. Create the status bar at the top of the view container
     status_bar_create(view_container);
 
-    // 2. Crear la etiqueta principal del menú dentro del contenedor de la vista
+    // 2. Create the main menu label inside the view container
     main_label = lv_label_create(view_container);
     lv_obj_set_style_text_font(main_label, &lv_font_montserrat_24, 0);
-    lv_obj_center(main_label); // Centrarla dentro del contenedor
+    lv_obj_center(main_label); // Center it within the container
 
-    // 3. Empezar con el primer elemento seleccionado
+    // 3. Start with the first item selected
     selected_view_index = 0; 
     update_menu_label();
 
-    // 4. Registrar los manejadores de los botones
+    // 4. Register button handlers
     button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, handle_left_press, true, nullptr);
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, handle_right_press, true, nullptr);
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true, nullptr);

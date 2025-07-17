@@ -8,18 +8,18 @@ extern "C" {
 #endif
 
 /**
- * @brief Crea un componente de barra de estado.
+ * @brief Creates a status bar component.
  *
- * @param parent El objeto padre LVGL sobre el que se creará la barra de estado.
- * @return Un puntero al objeto contenedor principal de la barra de estado.
+ * @param parent The parent LVGL object on which the status bar will be created.
+ * @return A pointer to the main container object of the status bar.
  */
 lv_obj_t* status_bar_create(lv_obj_t* parent);
 
 /**
- * @brief Fuerza una actualización inmediata de los indicadores de volumen en la barra de estado.
+ * @brief Forces an immediate update of the volume indicators in the status bar.
  * 
- * Llama a esta función después de cambiar el volumen para que la UI se actualice
- * instantáneamente, sin esperar al ciclo de refresco periódico.
+ * Call this function after changing the volume so that the UI updates
+ * instantly, without waiting for the periodic refresh cycle.
  */
 void status_bar_update_volume_display(void);
 
