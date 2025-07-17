@@ -8,9 +8,9 @@ extern "C" {
 #endif
 
 /**
- * @brief Crea la interfaz de usuario para la vista del contador de clics.
+ * @brief Creates the user interface for the click counter view.
  * 
- * @param parent El objeto padre sobre el que se creará la interfaz (normalmente la pantalla activa).
+ * @param parent The parent object on which the UI will be created (usually the active screen).
  */
 void click_counter_view_create(lv_obj_t *parent);
 

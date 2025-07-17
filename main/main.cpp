@@ -2,9 +2,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "nvs_flash.h" // Necesario para WiFi
-#include "esp_event.h" 
-#include "esp_netif.h" // <-- AÑADIR ESTE INCLUDE
+#include "nvs_flash.h"
+#include "esp_event.h"
+#include "esp_netif.h" // Required for network initialization
 #include "lvgl.h"
 
 #include "controllers/screen_manager/screen_manager.h"
@@ -14,7 +14,7 @@
 #include "controllers/audio_recorder/audio_recorder.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/wifi_streamer/wifi_streamer.h"
-#include "controllers/data_manager/data_manager.h" 
+#include "controllers/data_manager/data_manager.h"
 #include "controllers/stt_manager/stt_manager.h"
 #include "views/view_manager.h"
 
@@ -31,11 +31,11 @@ extern "C" void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
 
-    // --- CORRECCIÓN: Inicializar el stack de red y el bucle de eventos aquí ---
+    // --- FIX: Initialize network stack and event loop before other managers ---
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_LOGI(TAG, "Default event loop and netif created.");
-    // --- FIN DE LA CORRECCIÓN ---
+    // --- END OF FIX ---
 
     // Initialize Data Manager (depends on NVS)
     data_manager_init();

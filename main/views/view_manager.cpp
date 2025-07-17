@@ -20,12 +20,12 @@
 static const char *TAG = "VIEW_MGR";
 static view_id_t current_view_id;
 
-// --- Funciones para la pantalla de error de la SD Card ---
+// --- Functions for the SD Card error screen ---
 
 /**
- * @brief Manejador del botón OK en la pantalla de error. Intenta volver al menú.
- * Si la SD sigue fallando, la comprobación en view_manager_load_view volverá
- * a mostrar la pantalla de error.
+ * @brief Handler for the OK button on the error screen. Tries to return to the menu.
+ * If the SD card is still missing, the check in view_manager_load_view will
+ * show the error screen again.
  */
 static void handle_error_view_retry(void* user_data) {
     ESP_LOGI(TAG, "Retry button pressed from error screen. Attempting to load menu.");
@@ -33,11 +33,11 @@ static void handle_error_view_retry(void* user_data) {
 }
 
 /**
- * @brief Crea una pantalla de error global para cuando la SD no está disponible.
- * @param parent El objeto padre sobre el que crear la vista de error.
+ * @brief Creates a global error screen for when the SD card is unavailable.
+ * @param parent The parent object on which to create the error view.
  */
 static void load_sd_error_view(lv_obj_t* parent) {
-    // Asegurarse de que no queden manejadores de vistas anteriores
+    // Ensure no handlers from previous views remain
     button_manager_unregister_view_handlers();
     lv_obj_clean(parent);
 
@@ -53,7 +53,7 @@ static void load_sd_error_view(lv_obj_t* parent) {
     lv_obj_set_style_text_align(body_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(body_label);
 
-    // Solo el botón OK (Reintentar) está activo en esta pantalla.
+    // Only the OK (Retry) button is active on this screen.
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_error_view_retry, true, nullptr);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, NULL, true, nullptr);
     button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, NULL, true, nullptr);
@@ -78,17 +78,17 @@ void view_manager_load_view(view_id_t view_id) {
     ESP_LOGI(TAG, "Request to load view %d", view_id);
     lv_obj_t *scr = lv_screen_active();
 
-    // --- REGLA GLOBAL: COMPROBACIÓN DE SD OBLIGATORIA ---
-    // Antes de cargar CUALQUIER vista (excepto la de error misma para evitar bucles),
-    // se comprueba si la tarjeta SD está lista.
+    // --- GLOBAL RULE: MANDATORY SD CARD CHECK ---
+    // Before loading ANY view (except the error view itself to prevent loops),
+    // check if the SD card is ready.
     if (view_id != VIEW_ID_SD_CARD_ERROR) {
         if (!sd_manager_check_ready()) {
             ESP_LOGE(TAG, "CRITICAL: SD Card not ready. Halting normal operation and loading error screen.");
             load_sd_error_view(scr);
-            return; // Detiene la carga de la vista solicitada y muestra el error.
+            return; // Stop loading the requested view and show the error instead.
         }
     }
-    // --- FIN DE LA REGLA GLOBAL ---
+    // --- END OF GLOBAL RULE ---
 
     // Unregister all view-specific button handlers to restore default behavior.
     button_manager_unregister_view_handlers();
@@ -138,7 +138,7 @@ void view_manager_load_view(view_id_t view_id) {
             volume_tester_view_create(scr);
             break;
         default:
-            // Si por alguna razón se llama con un ID no manejado, mostrar un error simple.
+            // If for some reason an unhandled ID is called, show a simple error.
             lv_label_set_text(lv_label_create(scr), "Error: View not found!");
             break;
     }
