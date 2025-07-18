@@ -28,7 +28,7 @@ static void show_config_screen();
 static void show_timer_screen(const pomodoro_settings_t settings);
 static void cleanup_pomodoro_view();
 
-// --- Callback para limpiar los recursos de la vista ---
+// --- Callback to clean up view resources on deletion ---
 static void cleanup_event_cb(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_DELETE) {
@@ -37,18 +37,18 @@ static void cleanup_event_cb(lv_event_t *e) {
     }
 }
 
-// --- Función de limpieza centralizada ---
+// --- Centralized cleanup function ---
 static void cleanup_pomodoro_view() {
-    // Los componentes son hijos de parent_container, lv_obj_del los borrará,
-    // lo que a su vez debería disparar sus propios eventos de limpieza y
-    // destruir sus temporizadores internos (asumiendo que los componentes están bien hechos).
+    // The components are children of parent_container. When the parent is deleted
+    // by view_manager, this callback is fired. lv_obj_del will be called on the children,
+    // which in turn should trigger their own cleanup events, destroying any internal timers.
+    // This assumes the child components are also well-behaved and clean up on LV_EVENT_DELETE.
     if (s_view_state.current_component) {
-        // No es necesario llamar a lv_obj_del aquí si el padre se está borrando,
-        // pero es una buena práctica para la limpieza explícita.
-        // lv_obj_del(s_view_state.current_component);
+        // No need to call lv_obj_del here if the parent is being deleted,
+        // but this makes explicit cleanup clearer.
         s_view_state.current_component = nullptr;
     }
-    // Si esta vista creara sus propios timers, se borrarían aquí.
+    // If this view itself created any timers or tasks, they would be deleted here.
 }
 
 
@@ -97,7 +97,8 @@ void pomodoro_view_create(lv_obj_t *parent) {
     s_view_state.last_settings.break_seconds = 5 * 60;   // 5 minutes
     s_view_state.last_settings.iterations = 4;
     
-    // Añadir el callback de limpieza
+    // Add the cleanup callback to the main container for this view.
+    // When the view_manager cleans the screen, this will be called automatically.
     lv_obj_add_event_cb(parent, cleanup_event_cb, LV_EVENT_DELETE, NULL);
 
     show_config_screen();

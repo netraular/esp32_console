@@ -13,7 +13,7 @@
 static const char *TAG = "WIFI_MGR";
 
 static EventGroupHandle_t s_wifi_event_group;
-// --- CORRECCIÓN: Hacer las constantes globales en lugar de estáticas ---
+// These are defined as extern in the header, so they must be global (not static) here.
 const int WIFI_CONNECTED_BIT = BIT0;
 const int TIME_SYNC_BIT = BIT1;
 
@@ -127,6 +127,7 @@ void wifi_manager_deinit_sta(void) {
 
     esp_err_t err = esp_wifi_stop();
     if (err == ESP_ERR_WIFI_NOT_INIT) {
+        // This is fine, means it was already stopped or not running.
     } else {
         ESP_ERROR_CHECK(err);
     }
@@ -147,7 +148,8 @@ bool wifi_manager_is_connected(void) {
         return false;
     }
     EventBits_t bits = xEventGroupGetBits(s_wifi_event_group);
-    return (bits & TIME_SYNC_BIT) != 0;
+    // For full network readiness, we require both connection and time sync.
+    return (bits & (WIFI_CONNECTED_BIT | TIME_SYNC_BIT)) == (WIFI_CONNECTED_BIT | TIME_SYNC_BIT);
 }
 
 bool wifi_manager_get_ip_address(char* buffer, size_t buffer_size) {
@@ -158,7 +160,7 @@ bool wifi_manager_get_ip_address(char* buffer, size_t buffer_size) {
     return false;
 }
 
-// --- CORRECCIÓN: Implementar la nueva función ---
+// --- FIX: Implement the function declared in the header ---
 EventGroupHandle_t wifi_manager_get_event_group(void) {
     return s_wifi_event_group;
 }

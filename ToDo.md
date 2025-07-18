@@ -1,3 +1,7 @@
+Simplemente ejecutar el prompt con las vistas siguientes desde pomodoro para revisar que todas tengan un callback para el clean up correcto de los recursos al pulsar ON/OFF y cambiar a la vista standby
+
+Generar archivos .h con comentarios en las funciones en vez de usar readme.
+
 Revisar todas las vistas sobre todo para ver que la opción de cerrar la vista limpie todos los recursos correctamente. (Ya que el botón de on/off va a cerrar la vista en cualquier estado)
 
 Al iniciar el dispositivo, la conexión wifi puede tardar un rato y consumir más energía por lo que puede que no se lea la micro sd al inicio y si se entra luego no funcione correctamentela reproducción de archivos.

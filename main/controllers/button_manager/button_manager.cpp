@@ -55,7 +55,7 @@ static button_cb_user_data_t s_button_cb_user_data[BUTTON_COUNT][NUM_RAW_EVENTS]
 
 // --- Private Functions ---
 
-// MODIFIED: Now invokes the handler with its associated user_data
+// Invokes the handler with its associated user_data
 static void execute_handler(button_id_t button_id, button_event_type_t event_type) {
     if (button_id >= BUTTON_COUNT || event_type >= BUTTON_EVENT_COUNT) return;
 
@@ -195,11 +195,13 @@ void button_manager_init() {
         
         for (int j = 0; j < NUM_RAW_EVENTS; j++) {
             button_event_t event = events_to_register[j];
+            // --- FIX: Use the statically allocated array for user data ---
             s_button_cb_user_data[i][j] = {(button_id_t)i, event};
             iot_button_register_cb(buttons[i], event, NULL, generic_button_event_cb, &s_button_cb_user_data[i][j]);
         }
     }
     
+    // The default ON/OFF handler is crucial for the global "back to sleep" functionality
     button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, handle_on_off_default_tap, false, nullptr);
     ESP_LOGI(TAG, "Registered default ON/OFF handler to return to Standby view.");
 
@@ -240,7 +242,7 @@ void button_manager_unregister_view_handlers() {
     for (int i = 0; i < BUTTON_COUNT; i++) {
         memset(&button_handlers[i].view_handlers, 0, sizeof(button_event_handlers_t));
     }
-    ESP_LOGD(TAG, "Event queue cleared and default button handlers restored.");
+    ESP_LOGD(TAG, "Event queue cleared and view-specific handlers removed.");
 }
 
 void button_manager_pause_for_wake_up(uint32_t pause_ms) {
@@ -257,5 +259,5 @@ void button_manager_pause_for_wake_up(uint32_t pause_ms) {
 
     // Create a one-shot timer to resume events.
     lv_timer_t* timer = lv_timer_create(resume_events_timer_cb, pause_ms, NULL);
-    lv_timer_set_repeat_count(timer, 1); // Ensure it only runs once.
+    lv_timer_set_repeat_count(timer, 1); // Ensure it only runs once and auto-deletes.
 }
