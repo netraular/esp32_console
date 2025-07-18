@@ -73,10 +73,10 @@ void menu_view_create(lv_obj_t *parent) {
     ESP_LOGI(TAG, "Creating Menu View");
 
     // Create a main container for the view. This helps group all elements
-    // and makes cleanup consistent with other views like standby_view.
+    // and ensures proper cleanup when the view is destroyed.
     lv_obj_t *view_container = lv_obj_create(parent);
     lv_obj_remove_style_all(view_container);
-    lv_obj_set_size(view_container, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_size(view_container, lv_pct(100), lv_pct(100));
     lv_obj_center(view_container);
 
     // 1. Create the status bar at the top of the view container

@@ -2,19 +2,20 @@
 #include "controllers/button_manager/button_manager.h"
 
 // --- Enums and State ---
-// CORRECCIÓN: Renombrado el enum para evitar conflicto con la struct.
+// An enum for the timer's current status.
 typedef enum {
     POMO_STATUS_RUNNING,
     POMO_STATUS_PAUSED,
     POMO_STATUS_FINISHED
 } pomodoro_status_t;
 
+// An enum for the current session mode.
 typedef enum {
     POMO_MODE_WORK,
     POMO_MODE_BREAK
 } pomodoro_mode_t;
 
-// La struct para el estado del componente.
+// The state structure for the timer component.
 typedef struct {
     // LVGL objects
     lv_obj_t* main_container;
@@ -67,7 +68,7 @@ void exit_component(timer_component_state_t* state) {
 }
 
 static void timer_update_cb(lv_timer_t *timer) {
-    // CORRECCIÓN: Usar la función getter oficial de LVGL.
+    // Get the state using the official LVGL v9 getter function.
     auto* state = static_cast<timer_component_state_t*>(lv_timer_get_user_data(timer));
 
     if (state->remaining_seconds > 0) {
@@ -148,7 +149,7 @@ lv_obj_t* pomodoro_timer_component_create(lv_obj_t* parent, const pomodoro_setti
     lv_obj_align(state->iteration_label, LV_ALIGN_CENTER, 0, 45);
 
     state->timer = lv_timer_create(timer_update_cb, 1000, state);
-    timer_update_cb(state->timer); // Initial update
+    timer_update_cb(state->timer); // Initial update to show correct time immediately
 
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true, state);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, state);
@@ -161,10 +162,12 @@ lv_obj_t* pomodoro_timer_component_create(lv_obj_t* parent, const pomodoro_setti
 static void cleanup_event_cb(lv_event_t * e) {
     auto* state = static_cast<timer_component_state_t*>(lv_event_get_user_data(e));
     if (state) {
-        button_manager_unregister_view_handlers();
+        // This component's most important cleanup task is to delete the lv_timer.
         if (state->timer) {
             lv_timer_delete(state->timer);
+            state->timer = nullptr;
         }
+        // The second is to free the dynamically allocated state struct.
         delete state;
     }
 }

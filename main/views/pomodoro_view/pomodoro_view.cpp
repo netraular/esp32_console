@@ -13,8 +13,10 @@ typedef enum {
     POMODORO_STATE_RUNNING
 } pomodoro_main_state_t;
 
+// This struct holds the state for the pomodoro view, including a pointer to the
+// container that holds all UI elements for this view.
 static struct {
-    lv_obj_t* parent_container;
+    lv_obj_t* view_container;
     lv_obj_t* current_component;
     pomodoro_main_state_t state;
     pomodoro_settings_t last_settings;
@@ -32,23 +34,21 @@ static void cleanup_pomodoro_view();
 static void cleanup_event_cb(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_DELETE) {
-        ESP_LOGI(TAG, "Pomodoro view is being deleted, cleaning up resources.");
+        ESP_LOGI(TAG, "Pomodoro view container is being deleted, cleaning up resources.");
         cleanup_pomodoro_view();
     }
 }
 
 // --- Centralized cleanup function ---
 static void cleanup_pomodoro_view() {
-    // The components are children of parent_container. When the parent is deleted
-    // by view_manager, this callback is fired. lv_obj_del will be called on the children,
-    // which in turn should trigger their own cleanup events, destroying any internal timers.
-    // This assumes the child components are also well-behaved and clean up on LV_EVENT_DELETE.
-    if (s_view_state.current_component) {
-        // No need to call lv_obj_del here if the parent is being deleted,
-        // but this makes explicit cleanup clearer.
-        s_view_state.current_component = nullptr;
-    }
-    // If this view itself created any timers or tasks, they would be deleted here.
+    // This function is called when the view's main container is deleted.
+    // The key cleanup action is handled automatically by LVGL: when `view_container` is
+    // deleted, all of its children (like `s_view_state.current_component`) are also deleted.
+    // This triggers the LV_EVENT_DELETE callbacks on the components themselves,
+    // which are responsible for freeing their own specific resources (e.g., timers, state).
+    ESP_LOGD(TAG, "Child components will be deleted by LVGL's parent-child mechanism.");
+    s_view_state.current_component = nullptr; // Avoid dangling pointer.
+    // If this view itself allocated any timers or tasks, they would be deleted here.
 }
 
 
@@ -58,7 +58,7 @@ static void show_config_screen() {
         lv_obj_del(s_view_state.current_component);
         s_view_state.current_component = nullptr;
     }
-    s_view_state.current_component = pomodoro_config_component_create(s_view_state.parent_container, s_view_state.last_settings, on_start_pressed);
+    s_view_state.current_component = pomodoro_config_component_create(s_view_state.view_container, s_view_state.last_settings, on_start_pressed);
     s_view_state.state = POMODORO_STATE_CONFIG;
 }
 
@@ -67,7 +67,7 @@ static void show_timer_screen(const pomodoro_settings_t settings) {
         lv_obj_del(s_view_state.current_component);
         s_view_state.current_component = nullptr;
     }
-    s_view_state.current_component = pomodoro_timer_component_create(s_view_state.parent_container, settings, on_timer_exit);
+    s_view_state.current_component = pomodoro_timer_component_create(s_view_state.view_container, settings, on_timer_exit);
     s_view_state.state = POMODORO_STATE_RUNNING;
 }
 
@@ -89,17 +89,23 @@ static void on_timer_exit() {
 void pomodoro_view_create(lv_obj_t *parent) {
     ESP_LOGI(TAG, "Creating Pomodoro main view");
 
-    s_view_state.parent_container = parent;
+    // Create a dedicated container for this view. This is crucial for proper cleanup.
+    // When view_manager calls lv_obj_clean(), this container will be deleted,
+    // which in turn will trigger its LV_EVENT_DELETE event.
+    s_view_state.view_container = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_view_state.view_container);
+    lv_obj_set_size(s_view_state.view_container, lv_pct(100), lv_pct(100));
+    lv_obj_center(s_view_state.view_container);
+
+    // Add the cleanup callback to the view's own container.
+    lv_obj_add_event_cb(s_view_state.view_container, cleanup_event_cb, LV_EVENT_DELETE, NULL);
+
     s_view_state.current_component = nullptr;
     
     // Set default initial settings
     s_view_state.last_settings.work_seconds = 25 * 60; // 25 minutes
     s_view_state.last_settings.break_seconds = 5 * 60;   // 5 minutes
     s_view_state.last_settings.iterations = 4;
-    
-    // Add the cleanup callback to the main container for this view.
-    // When the view_manager cleans the screen, this will be called automatically.
-    lv_obj_add_event_cb(parent, cleanup_event_cb, LV_EVENT_DELETE, NULL);
 
     show_config_screen();
 }

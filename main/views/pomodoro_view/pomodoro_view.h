@@ -8,9 +8,9 @@ extern "C" {
 #endif
 
 /**
- * @brief Crea la vista del reloj Pomodoro y sus controles.
+ * @brief Creates the Pomodoro Clock view and its controls.
  *
- * @param parent El objeto padre LVGL sobre el que se creará la vista.
+ * @param parent The parent LVGL object on which the view will be created.
  */
 void pomodoro_view_create(lv_obj_t *parent);
 

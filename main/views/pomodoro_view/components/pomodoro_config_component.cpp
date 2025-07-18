@@ -36,7 +36,7 @@ static void handle_ok_press(void* user_data) {
     if (state->focus == FOCUS_ROUNDS) {
         if (state->on_start_cb) {
             if (state->current_settings.work_seconds == 0) {
-                state->current_settings.work_seconds = 1;
+                state->current_settings.work_seconds = 1; // Prevent 0 second work time
             }
             state->on_start_cb(state->current_settings);
         }
@@ -98,13 +98,13 @@ static void update_focus_highlight(config_component_state_t* state) {
     for (int i = 0; i < FOCUS_COUNT; i++) {
         lv_obj_t* item = state->focusable_items[i];
         if (i < current_focus) {
-            // Elementos antes del foco actual: confirmados
+            // Items before the current focus are considered confirmed
             lv_obj_set_style_border_color(item, COLOR_BORDER_CONFIRMED, 0);
         } else if (i == current_focus) {
-            // El elemento actual: enfocado
+            // The currently focused item
             lv_obj_set_style_border_color(item, COLOR_BORDER_FOCUSED, 0);
         } else {
-            // Elementos después del foco actual: pendientes
+            // Items after the current focus are pending
             lv_obj_set_style_border_color(item, COLOR_BORDER_DEFAULT, 0);
         }
     }
@@ -115,7 +115,7 @@ lv_obj_t* create_time_box(lv_obj_t* parent) {
     lv_obj_set_size(box, 60, 40);
     lv_obj_set_style_pad_all(box, 0, 0);
     lv_obj_set_style_border_width(box, 2, 0);
-    lv_obj_set_style_border_color(box, COLOR_BORDER_DEFAULT, 0); // Establecer el color inicial
+    lv_obj_set_style_border_color(box, COLOR_BORDER_DEFAULT, 0); // Set initial color
     lv_obj_t* label = lv_label_create(box);
     lv_obj_center(label);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
@@ -178,7 +178,7 @@ lv_obj_t* pomodoro_config_component_create(lv_obj_t* parent, const pomodoro_sett
 
     update_labels(state);
     
-    // Establecer el estado visual inicial
+    // Set initial visual state
     update_focus_highlight(state);
 
     // Register button handlers
