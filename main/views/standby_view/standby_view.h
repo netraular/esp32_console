@@ -8,10 +8,10 @@ extern "C" {
 #endif
 
 /**
- * @brief Crea la vista de standby (pantalla de reposo).
- * Muestra la hora actual y espera la entrada del usuario para ir al menú principal.
+ * @brief Creates the standby view (idle screen).
+ * Displays the current time and waits for user input to navigate to the main menu.
  *
- * @param parent El objeto padre LVGL sobre el que se creará la vista.
+ * @param parent The parent LVGL object on which the view will be created.
  */
 void standby_view_create(lv_obj_t *parent);
 
