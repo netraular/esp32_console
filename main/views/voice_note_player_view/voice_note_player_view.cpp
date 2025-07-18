@@ -18,18 +18,17 @@ static const char *NOTES_DIR = "/sdcard/notes";
 static lv_obj_t *view_parent = NULL;
 static lv_obj_t *loading_indicator = NULL;
 
-// --- Action Menu State (MODIFIED: Style like sd_test_view) ---
+// --- Action Menu State ---
 static lv_obj_t *action_menu_container = NULL;
 static lv_group_t *action_menu_group = NULL;
 static char selected_item_path[256];
 static lv_style_t style_action_menu_focused;
 
-// --- Estructura para pasar datos a la llamada asíncrona de LVGL ---
+// --- Struct for passing data to the LVGL async call ---
 typedef struct {
     bool success;
     char* result_text;
 } transcription_result_t;
-
 
 // --- Prototypes ---
 static void show_file_explorer();
@@ -37,7 +36,7 @@ static void destroy_action_menu_internal(bool refresh_explorer);
 static void on_transcription_complete(bool success, char* result);
 static void on_transcription_complete_ui_thread(void *user_data);
 static void on_viewer_exit();
-
+static void explorer_cleanup_cb(lv_event_t * e); // --- FIX: Added prototype ---
 
 // --- Loading Indicator ---
 static void show_loading_indicator(const char* text) {
@@ -64,8 +63,7 @@ static void hide_loading_indicator() {
     }
 }
 
-
-// --- Action Menu (MODIFIED: Style like sd_test_view) ---
+// --- Action Menu ---
 static void handle_action_menu_left_press(void* user_data) {
     if (action_menu_group) lv_group_focus_prev(action_menu_group);
 }
@@ -86,10 +84,10 @@ static void handle_action_menu_ok(void* user_data) {
     const char* action_text = lv_list_get_button_text(list, selected_btn);
     ESP_LOGI(TAG, "Action '%s' selected for: %s", action_text, selected_item_path);
 
-    if (strcmp(action_text, "Eliminar") == 0) {
+    if (strcmp(action_text, "Delete") == 0) {
         sd_manager_delete_item(selected_item_path);
         destroy_action_menu_internal(true);
-    } else if (strcmp(action_text, "Transcribir") == 0) {
+    } else if (strcmp(action_text, "Transcribe") == 0) {
         if (!wifi_manager_is_connected()) {
              wifi_manager_init_sta(); // Attempt to connect if not already
         }
@@ -98,6 +96,7 @@ static void handle_action_menu_ok(void* user_data) {
         if (!stt_manager_transcribe(selected_item_path, on_transcription_complete)) {
             hide_loading_indicator();
             ESP_LOGE(TAG, "Failed to start transcription task.");
+            // On failure, return to the explorer so the user can try again.
             show_file_explorer();
         }
     } else {
@@ -114,7 +113,6 @@ static void create_action_menu(const char* path) {
 
     lv_style_init(&style_action_menu_focused);
     lv_style_set_bg_color(&style_action_menu_focused, lv_palette_main(LV_PALETTE_BLUE));
-    lv_style_set_bg_opa(&style_action_menu_focused, LV_OPA_COVER);
 
     action_menu_container = lv_obj_create(view_parent);
     lv_obj_remove_style_all(action_menu_container);
@@ -134,8 +132,8 @@ static void create_action_menu(const char* path) {
     action_menu_group = lv_group_create();
 
     const char* actions[][2] = {
-        {LV_SYMBOL_TRASH, "Eliminar"},
-        {LV_SYMBOL_EDIT, "Transcribir"}
+        {LV_SYMBOL_TRASH, "Delete"},
+        {LV_SYMBOL_EDIT, "Transcribe"}
     };
     for(auto const& action : actions) {
         lv_obj_t* btn = lv_list_add_button(list, action[0], action[1]);
@@ -144,7 +142,7 @@ static void create_action_menu(const char* path) {
     }
 
     lv_group_set_default(action_menu_group);
-    if(lv_obj_get_child_cnt(list) > 0){
+    if(lv_obj_get_child_count(list) > 0){
         lv_group_focus_obj(lv_obj_get_child(list, 0));
     }
 
@@ -168,14 +166,15 @@ static void destroy_action_menu_internal(bool refresh_explorer) {
     }
 }
 
-// --- Component Callbacks ---
+// --- Component and Asynchronous Callbacks ---
 
 // Callback from text_viewer when user exits
 static void on_viewer_exit() {
+    // Return to the file explorer. show_file_explorer() will clean the screen.
     show_file_explorer();
 }
 
-// ESTA FUNCIÓN SE EJECUTA EN EL HILO DE LVGL
+// This function runs on the LVGL UI thread after transcription is complete.
 static void on_transcription_complete_ui_thread(void *user_data) {
     transcription_result_t* result_data = (transcription_result_t*)user_data;
     
@@ -184,53 +183,69 @@ static void on_transcription_complete_ui_thread(void *user_data) {
     if(result_data->success) {
         ESP_LOGI(TAG, "UI THREAD: Transcription success. Showing result.");
         lv_obj_clean(view_parent);
-        // text_viewer_create toma posesión del puntero result_data->result_text
-        text_viewer_create(view_parent, "Transcripción", result_data->result_text, on_viewer_exit);
+        // text_viewer_create takes ownership of the result_data->result_text pointer
+        text_viewer_create(view_parent, "Transcription", result_data->result_text, on_viewer_exit);
     } else {
         ESP_LOGE(TAG, "UI THREAD: Transcription failed: %s", result_data->result_text);
-        // El text viewer no se crea, así que debemos liberar la memoria del mensaje de error
+        // The text viewer is not created, so we must free the error message buffer.
         free(result_data->result_text);
-        // Aquí podrías mostrar un popup de error. Por ahora, solo volvemos al explorador.
+        // Here you could show an error popup. For now, just return to the explorer.
         show_file_explorer();
     }
 
-    // Liberar el contenedor de datos
+    // Free the data container struct
     free(result_data);
 }
 
-// ESTE CALLBACK SE EJECUTA EN EL HILO DE STT
-// Su única misión es empaquetar los datos y enviarlos al hilo de LVGL.
+// This callback runs in the STT manager's task thread. Its only job
+// is to package the data and post it to the LVGL thread.
 static void on_transcription_complete(bool success, char* result) {
-    transcription_result_t* result_data = (transcription_result_t*)malloc(sizeof(transcription_result_t));
+    auto* result_data = (transcription_result_t*)malloc(sizeof(transcription_result_t));
     if (result_data) {
         result_data->success = success;
-        result_data->result_text = result; // El puntero del resultado se transfiere
+        result_data->result_text = result; // The result pointer ownership is transferred
         lv_async_call(on_transcription_complete_ui_thread, result_data);
     } else {
         ESP_LOGE(TAG, "Failed to allocate memory for async call, result will be lost.");
-        free(result);
+        free(result); // Prevent memory leak if async call fails
     }
 }
 
+// Callback from audio_player_component when user exits
 static void on_player_exit() {
     show_file_explorer();
 }
 
+// Callback when a file is selected in the explorer
 static void on_audio_file_selected(const char *path) {
+    // Clean the screen. This will trigger the explorer's cleanup callback automatically.
     lv_obj_clean(view_parent);
-    file_explorer_destroy();
+    // Create the audio player component.
     audio_player_component_create(view_parent, path, on_player_exit);
 }
 
+// Callback for long-press on a file in the explorer
 static void on_file_long_pressed(const char *path) {
     create_action_menu(path);
 }
 
+// Callback when user exits the explorer by backing out of the root directory
 static void on_explorer_exit() {
-    destroy_action_menu_internal(false); 
-    file_explorer_destroy(); 
+    // When exiting, the view manager will clean the screen, which triggers
+    // the explorer's cleanup callback. We just need to load the previous view.
     view_manager_load_view(VIEW_ID_VOICE_NOTE);
 }
+
+// --- FIX: Robust Cleanup for File Explorer ---
+// This event callback is attached to the explorer's container and ensures
+// that file_explorer_destroy() is always called when the container is deleted,
+// regardless of how the view is closed.
+static void explorer_cleanup_cb(lv_event_t * e) {
+    ESP_LOGI(TAG, "Explorer container deleted. Calling file_explorer_destroy() to free resources.");
+    file_explorer_destroy();
+}
+
+// --- Main UI Creation Logic ---
 
 static void show_file_explorer() {
     lv_obj_clean(view_parent);
@@ -245,14 +260,25 @@ static void show_file_explorer() {
         return;
     }
 
+    // This container will host the explorer and holds the cleanup callback.
     lv_obj_t * explorer_container = lv_obj_create(view_parent);
     lv_obj_remove_style_all(explorer_container);
     lv_obj_set_size(explorer_container, lv_pct(100), lv_pct(100));
     
-    file_explorer_create(explorer_container, NOTES_DIR, on_audio_file_selected, on_file_long_pressed, NULL, on_explorer_exit);
+    // --- FIX: Attach the cleanup function to the container's delete event ---
+    lv_obj_add_event_cb(explorer_container, explorer_cleanup_cb, LV_EVENT_DELETE, nullptr);
+
+    file_explorer_create(
+        explorer_container, 
+        NOTES_DIR, 
+        on_audio_file_selected, 
+        on_file_long_pressed, 
+        NULL, 
+        on_explorer_exit
+    );
 }
 
-// --- Entry Point ---
+// --- Public Entry Point ---
 void voice_note_player_view_create(lv_obj_t *parent) {
     ESP_LOGI(TAG, "Creating Voice Note Player View");
     view_parent = parent;
