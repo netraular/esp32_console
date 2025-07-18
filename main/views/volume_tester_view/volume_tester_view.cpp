@@ -7,7 +7,7 @@
 #include <new> // For std::nothrow
 
 static const char* TAG = "VolumeTesterView";
-static const char* TEST_SOUND_PATH = "/sdcard/sounds/test.wav";
+static const char* const TEST_SOUND_PATH = "/sdcard/sounds/test.wav";
 
 // --- State structure for the view ---
 // Encapsulates all dynamic elements of the view for proper resource management.
@@ -43,13 +43,16 @@ static void update_volume_label(lv_obj_t* label) {
 // It checks if the audio has stopped and restarts it.
 static void audio_check_timer_cb(lv_timer_t* timer) {
     auto* data = static_cast<volume_tester_data_t*>(lv_timer_get_user_data(timer));
+    if (!data) { // Defensive check
+        return;
+    }
     audio_player_state_t state = audio_manager_get_state();
     
     // If audio stopped (normally or due to an error), restart it.
     if (state == AUDIO_STATE_STOPPED || state == AUDIO_STATE_ERROR) {
         ESP_LOGI(TAG, "Audio stopped, re-playing for loop effect.");
         if (!audio_manager_play(TEST_SOUND_PATH)) {
-            if (data && data->status_label) {
+            if (data->status_label) {
                 lv_label_set_text(data->status_label, "Error re-playing!");
             }
         }
@@ -125,7 +128,8 @@ static void view_delete_cb(lv_event_t* e) {
         // 2. Stop any audio playback. This is crucial.
         audio_manager_stop();
         // 3. Restore a safe default volume when leaving this test view.
-        audio_manager_set_volume_physical(MAX_VOLUME_PERCENTAGE > 15 ? 15 : MAX_VOLUME_PERCENTAGE);
+        //    15% is a reasonable, safe level that is audible but not damaging.
+        audio_manager_set_volume_physical(15);
         // 4. Free the memory allocated for the state structure.
         delete data;
     }
@@ -154,7 +158,6 @@ void volume_tester_view_create(lv_obj_t* parent) {
     lv_obj_remove_style_all(view_container);
     lv_obj_set_size(view_container, lv_pct(100), lv_pct(100));
     lv_obj_center(view_container);
-
     // Register the cleanup callback on THIS container. It will be called when
     // view_manager executes lv_obj_clean() on the screen.
     lv_obj_add_event_cb(view_container, view_delete_cb, LV_EVENT_DELETE, data);
