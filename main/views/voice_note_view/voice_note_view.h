@@ -8,8 +8,8 @@ extern "C" {
 #endif
 
 /**
- * @brief Crea la interfaz de usuario para la vista de grabación de notas de voz.
- * @param parent El objeto padre sobre el que se creará la UI.
+ * @brief Creates the user interface for the voice note recording view.
+ * @param parent The parent object on which the UI will be created.
  */
 void voice_note_view_create(lv_obj_t *parent);
 
