@@ -36,7 +36,7 @@ static void destroy_action_menu_internal(bool refresh_explorer);
 static void on_transcription_complete(bool success, char* result);
 static void on_transcription_complete_ui_thread(void *user_data);
 static void on_viewer_exit();
-static void explorer_cleanup_cb(lv_event_t * e); // --- FIX: Added prototype ---
+static void explorer_cleanup_cb(lv_event_t * e);
 
 // --- Loading Indicator ---
 static void show_loading_indicator(const char* text) {
@@ -236,7 +236,7 @@ static void on_explorer_exit() {
     view_manager_load_view(VIEW_ID_VOICE_NOTE);
 }
 
-// --- FIX: Robust Cleanup for File Explorer ---
+// Robust Cleanup for File Explorer
 // This event callback is attached to the explorer's container and ensures
 // that file_explorer_destroy() is always called when the container is deleted,
 // regardless of how the view is closed.
@@ -265,7 +265,7 @@ static void show_file_explorer() {
     lv_obj_remove_style_all(explorer_container);
     lv_obj_set_size(explorer_container, lv_pct(100), lv_pct(100));
     
-    // --- FIX: Attach the cleanup function to the container's delete event ---
+    // Attach the cleanup function to the container's delete event
     lv_obj_add_event_cb(explorer_container, explorer_cleanup_cb, LV_EVENT_DELETE, nullptr);
 
     file_explorer_create(

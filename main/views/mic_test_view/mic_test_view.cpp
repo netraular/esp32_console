@@ -94,16 +94,19 @@ static void handle_ok_press(void* user_data) {
         char rec_dir[128];
         snprintf(rec_dir, sizeof(rec_dir), "%s/recordings", mount_point);
         
+        // --- FIX: Use the sd_card_manager abstraction instead of POSIX mkdir ---
+        // This ensures all SD card operations are handled consistently by the manager.
         struct stat st;
         if (stat(rec_dir, &st) == -1) {
-            ESP_LOGI(TAG, "Directory '%s' not found. Attempting to create...", rec_dir);
-            if (mkdir(rec_dir, 0755) != 0) {
-                ESP_LOGE(TAG, "Failed to create directory '%s'. Error: %s", rec_dir, strerror(errno));
+            ESP_LOGI(TAG, "Directory '%s' not found. Creating...", rec_dir);
+            if (!sd_manager_create_directory(rec_dir)) {
+                ESP_LOGE(TAG, "Failed to create directory '%s' using the manager.", rec_dir);
                 update_ui_for_state(RECORDER_STATE_ERROR);
                 return;
             }
-            ESP_LOGI(TAG, "Directory created successfully.");
+            ESP_LOGI(TAG, "Directory created successfully via manager.");
         }
+        // --- END OF FIX ---
 
         time_t now = time(NULL);
         struct tm* timeinfo = localtime(&now);
