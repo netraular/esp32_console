@@ -32,7 +32,10 @@ idf_component_register(SRCS
         "./views/image_test_view/assets/icon_1.c"
         "./views/sd_test_view/sd_test_view.cpp"
         "./views/speaker_test_view/speaker_test_view.cpp"
-        "./views/mic_test_view/mic_test_view.cpp" # <<< AÑADIDO
+        "./views/mic_test_view/mic_test_view.cpp"
+        "./views/pomodoro_view/pomodoro_view.cpp"                                   # <<< AÑADIDO
+        "./views/pomodoro_view/components/pomodoro_config_component.cpp"           # <<< AÑADIDO
+        "./views/pomodoro_view/components/pomodoro_timer_component.cpp"            # <<< AÑADIDO
 
     INCLUDE_DIRS "."
     EMBED_FILES "./server_certs/groq_api_ca.pem"

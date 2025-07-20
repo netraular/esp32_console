@@ -14,7 +14,8 @@
 #include "image_test_view/image_test_view.h"
 #include "sd_test_view/sd_test_view.h"
 #include "speaker_test_view/speaker_test_view.h"
-#include "mic_test_view/mic_test_view.h" // <<< AÑADIDO
+#include "mic_test_view/mic_test_view.h"
+#include "pomodoro_view/pomodoro_view.h" // <<< AÑADIDO
 
 // NOTE: sd_error_view is not included here as it's likely a special case view
 // not loaded through the standard menu flow.
@@ -39,7 +40,8 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_IMAGE_TEST] = []() { return new ImageTestView(); };
     s_view_factory[VIEW_ID_SD_TEST] = []() { return new SdTestView(); };
     s_view_factory[VIEW_ID_SPEAKER_TEST] = []() { return new SpeakerTestView(); };
-    s_view_factory[VIEW_ID_MIC_TEST] = []() { return new MicTestView(); }; // <<< AÑADIDO
+    s_view_factory[VIEW_ID_MIC_TEST] = []() { return new MicTestView(); };
+    s_view_factory[VIEW_ID_POMODORO] = []() { return new PomodoroView(); }; // <<< AÑADIDO
 
     // As you convert more views, you will add them here.
     // For now, they will fall through to the "not implemented" case.
@@ -53,18 +55,21 @@ void view_manager_init(void) {
 }
 
 void view_manager_load_view(view_id_t view_id) {
+    // A special value to prevent reloading during initialization
+    static view_id_t s_initializing_view_id = VIEW_ID_COUNT; 
     if (view_id >= VIEW_ID_COUNT) {
         ESP_LOGE(TAG, "Invalid view ID: %d", view_id);
         return;
     }
 
-    // Don't reload the same view
-    if (s_current_view && s_current_view_id == view_id) {
+    // Don't reload the same view or a view that is currently being loaded
+    if ((s_current_view && s_current_view_id == view_id) || s_initializing_view_id == view_id) {
         ESP_LOGW(TAG, "Attempted to load the same view (ID: %d) again. Ignoring.", view_id);
         return;
     }
 
     ESP_LOGI(TAG, "Request to load view %d", view_id);
+    s_initializing_view_id = view_id; // Mark as being loaded
     lv_obj_t *scr = lv_screen_active();
 
     // --- View Transition Logic ---
@@ -99,8 +104,10 @@ void view_manager_load_view(view_id_t view_id) {
         lv_obj_t* label = lv_label_create(scr);
         lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
         lv_label_set_text_fmt(label, "Error: View %d\nnot implemented.", view_id);
+        s_current_view.reset(); // No view object to manage
         s_current_view_id = view_id; // Set ID to avoid reload attempts
     }
 
+    s_initializing_view_id = VIEW_ID_COUNT; // Mark loading as complete
     ESP_LOGI(TAG, "View %d loaded successfully.", view_id);
 }
