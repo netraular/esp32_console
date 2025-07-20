@@ -30,6 +30,7 @@ idf_component_register(SRCS
         "./views/click_counter_view/assets/coin_pile.c"
         "./views/image_test_view/image_test_view.cpp"
         "./views/image_test_view/assets/icon_1.c"
+        "./views/sd_test_view/sd_test_view.cpp" # <<< AÑADIR ESTA LÍNEA
 
     INCLUDE_DIRS "."
     EMBED_FILES "./server_certs/groq_api_ca.pem"
