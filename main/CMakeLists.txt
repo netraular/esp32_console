@@ -28,6 +28,8 @@ idf_component_register(SRCS
         "./views/multi_click_test_view/multi_click_test_view.cpp"
         "./views/click_counter_view/click_counter_view.cpp"
         "./views/click_counter_view/assets/coin_pile.c"
+        "./views/image_test_view/image_test_view.cpp"
+        "./views/image_test_view/assets/icon_1.c"
 
     INCLUDE_DIRS "."
     EMBED_FILES "./server_certs/groq_api_ca.pem"

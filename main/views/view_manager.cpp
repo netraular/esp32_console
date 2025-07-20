@@ -11,6 +11,7 @@
 #include "menu_view/menu_view.h"
 #include "multi_click_test_view/multi_click_test_view.h"
 #include "click_counter_view/click_counter_view.h"
+#include "image_test_view/image_test_view.h"
 // NOTE: sd_error_view is not included here as it's likely a special case view
 // not loaded through the standard menu flow.
 
@@ -31,6 +32,7 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_MENU] = []() { return new MenuView(); };
     s_view_factory[VIEW_ID_MULTI_CLICK_TEST] = []() { return new MultiClickTestView(); };
     s_view_factory[VIEW_ID_CLICK_COUNTER_TEST] = []() { return new ClickCounterView(); };
+    s_view_factory[VIEW_ID_IMAGE_TEST] = []() { return new ImageTestView(); };
 
     // As you convert more views, you will add them here.
     // For now, they will fall through to the "not implemented" case.
