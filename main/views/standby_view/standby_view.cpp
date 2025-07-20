@@ -1,5 +1,5 @@
 #include "standby_view.h"
-#include "../view_manager.h"
+#include "views/view_manager.h" 
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
@@ -9,87 +9,94 @@
 #include <time.h>
 #include <cstring>
 
-// NOTE: We DO NOT need any extra LVGL includes. lvgl.h is sufficient.
-
-static const char *TAG = "StandbyView";
+static const char *TAG = "STANDBY_VIEW";
 #define VOLUME_REPEAT_PERIOD_MS 200
 
-// Define the volume callback as a static function
-static void volume_timer_callback(lv_timer_t* t) {
-    // --- FIX: Use the public API function to get user data ---
-    auto* direction = static_cast<int*>(lv_timer_get_user_data(t));
-    if (*direction > 0) {
-        audio_manager_volume_up();
-    } else {
-        audio_manager_volume_down();
+// --- Constructor & Destructor ---
+StandbyView::StandbyView() {
+    ESP_LOGI(TAG, "StandbyView constructed");
+}
+
+StandbyView::~StandbyView() {
+    ESP_LOGI(TAG, "StandbyView destructed");
+
+    // --- FIX ---
+    // Manually clean up any resources that are not LVGL widgets parented to the screen,
+    // as they won't be deleted by lv_obj_clean() in the ViewManager.
+    // DO NOT call functions that re-register button handlers (like destroy_shutdown_popup).
+    
+    // Delete timers
+    if (update_timer) { lv_timer_del(update_timer); update_timer = nullptr; }
+    if (volume_up_timer) { lv_timer_del(volume_up_timer); volume_up_timer = nullptr; }
+    if (volume_down_timer) { lv_timer_del(volume_down_timer); volume_down_timer = nullptr; }
+    
+    // Delete LVGL group used for the popup
+    if (shutdown_popup_group) {
+        lv_group_del(shutdown_popup_group);
+        shutdown_popup_group = nullptr;
     }
-    status_bar_update_volume_display();
+
+    // Reset styles
+    reset_popup_styles();
 }
 
 // --- View Lifecycle ---
-
-void StandbyView::create(lv_obj_t *parent) {
-    ESP_LOGI(TAG, "Creating Standby View");
-    is_time_synced = false;
-
+void StandbyView::create(lv_obj_t* parent) {
+    ESP_LOGI(TAG, "Creating Standby View UI");
     container = lv_obj_create(parent);
     lv_obj_remove_style_all(container);
-    lv_obj_set_size(container, lv_pct(100), lv_pct(100));
+    lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
     lv_obj_center(container);
     
-    status_bar_create(container);
+    setup_ui(container);
+    setup_main_button_handlers();
+}
 
-    loading_label = lv_label_create(container);
+// --- UI & Handler Setup ---
+void StandbyView::setup_ui(lv_obj_t* parent) {
+    status_bar_create(parent);
+
+    loading_label = lv_label_create(parent);
     lv_obj_set_style_text_font(loading_label, &lv_font_montserrat_24, 0);
-    lv_label_set_text(loading_label, "Loading...");
+    lv_label_set_text(loading_label, "Connecting...");
     lv_obj_center(loading_label);
 
-    center_time_label = lv_label_create(container);
+    center_time_label = lv_label_create(parent);
     lv_obj_set_style_text_font(center_time_label, &lv_font_montserrat_48, 0);
     lv_obj_align(center_time_label, LV_ALIGN_CENTER, 0, -20);
     lv_obj_add_flag(center_time_label, LV_OBJ_FLAG_HIDDEN);
 
-    center_date_label = lv_label_create(container);
+    center_date_label = lv_label_create(parent);
     lv_obj_set_style_text_font(center_date_label, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(center_date_label, lv_palette_main(LV_PALETTE_GREY), 0);
     lv_obj_align(center_date_label, LV_ALIGN_CENTER, 0, 25);
     lv_obj_add_flag(center_date_label, LV_OBJ_FLAG_HIDDEN);
 
-    update_timer = lv_timer_create([](lv_timer_t* timer) {
-        // --- FIX: Use the public API function to get user data ---
-        auto* view = static_cast<StandbyView*>(lv_timer_get_user_data(timer));
-        if (view) view->update_center_clock_task();
-    }, 1000, this);
-    update_center_clock_task();
-
-    register_main_view_handlers();
+    update_timer = lv_timer_create(StandbyView::update_clock_cb, 1000, this);
+    update_clock(); // Initial call to set state
 }
 
-StandbyView::~StandbyView() {
-    ESP_LOGI(TAG, "Destroying Standby View resources.");
-    
-    destroy_shutdown_popup();
-
-    if (update_timer) {
-        lv_timer_del(update_timer);
-        update_timer = nullptr;
-    }
-    if (volume_up_timer) {
-        lv_timer_del(volume_up_timer);
-        volume_up_timer = nullptr;
-    }
-    if (volume_down_timer) {
-        lv_timer_del(volume_down_timer);
-        volume_down_timer = nullptr;
-    }
-    reset_popup_styles();
+void StandbyView::setup_main_button_handlers() {
+    button_manager_unregister_view_handlers();
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, StandbyView::menu_press_cb, true, this);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, StandbyView::sleep_press_cb, true, this);
+    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_LONG_PRESS_START, StandbyView::shutdown_long_press_cb, true, this);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_START, StandbyView::volume_up_long_press_start_cb, true, this);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_LONG_PRESS_START, StandbyView::volume_down_long_press_start_cb, true, this);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_PRESS_UP, StandbyView::volume_up_press_up_cb, true, this);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_PRESS_UP, StandbyView::volume_down_press_up_cb, true, this);
 }
 
-// --- Private Methods ---
+void StandbyView::setup_popup_button_handlers() {
+    button_manager_unregister_view_handlers();
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, StandbyView::popup_ok_cb, true, this);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, StandbyView::popup_cancel_cb, true, this);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, StandbyView::popup_nav_left_cb, true, this);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, StandbyView::popup_nav_right_cb, true, this);
+}
 
-void StandbyView::update_center_clock_task() {
-    if (!center_time_label || !center_date_label || !loading_label) return;
-
+// --- UI Logic ---
+void StandbyView::update_clock() {
     if (wifi_manager_is_connected()) {
         if (!is_time_synced) {
             is_time_synced = true;
@@ -97,7 +104,8 @@ void StandbyView::update_center_clock_task() {
             lv_obj_clear_flag(center_time_label, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(center_date_label, LV_OBJ_FLAG_HIDDEN);
         }
-        char time_str[16], date_str[64];
+        char time_str[16];
+        char date_str[64];
         time_t now = time(NULL);
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
@@ -116,40 +124,119 @@ void StandbyView::update_center_clock_task() {
     }
 }
 
-void StandbyView::register_main_view_handlers() {
-    button_manager_unregister_view_handlers();
-
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_LONG_PRESS_START, [](void* d){ static_cast<StandbyView*>(d)->create_shutdown_popup(); }, true, this);
-    button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, [](void*d){
-        auto* view = static_cast<StandbyView*>(d);
-        if (view->volume_up_timer) { lv_timer_del(view->volume_up_timer); view->volume_up_timer = nullptr; }
-        if (view->volume_down_timer) { lv_timer_del(view->volume_down_timer); view->volume_down_timer = nullptr; }
-        power_manager_enter_light_sleep();
-        button_manager_pause_for_wake_up(200);
-    }, true, this);
-
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, [](void*d){
-        ESP_LOGI(TAG, "Cancel pressed. Menu view not implemented yet.");
-    }, true, this);
-    
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_START, [](void*d){ 
-        auto* v = static_cast<StandbyView*>(d); 
-        audio_manager_volume_up(); 
-        status_bar_update_volume_display(); 
-        static int dir=1; 
-        v->volume_up_timer = lv_timer_create(volume_timer_callback, VOLUME_REPEAT_PERIOD_MS, &dir);
-    }, true, this);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_LONG_PRESS_START, [](void*d){ 
-        auto* v = static_cast<StandbyView*>(d); 
-        audio_manager_volume_down(); 
-        status_bar_update_volume_display(); 
-        static int dir=-1; 
-        v->volume_down_timer = lv_timer_create(volume_timer_callback, VOLUME_REPEAT_PERIOD_MS, &dir);
-    }, true, this);
-
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_PRESS_UP, [](void*d){ auto* v = static_cast<StandbyView*>(d); if(v->volume_up_timer){lv_timer_del(v->volume_up_timer); v->volume_up_timer=nullptr;}}, true, this);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_PRESS_UP, [](void*d){ auto* v = static_cast<StandbyView*>(d); if(v->volume_down_timer){lv_timer_del(v->volume_down_timer); v->volume_down_timer=nullptr;}}, true, this);
+// --- Instance Methods for Button Actions ---
+void StandbyView::on_menu_press() {
+    ESP_LOGI(TAG, "CANCEL pressed, loading menu.");
+    view_manager_load_view(VIEW_ID_MENU);
 }
+
+void StandbyView::on_sleep_press() {
+    ESP_LOGI(TAG, "ON/OFF TAP detected, entering light sleep.");
+    // Stop any active volume timers before sleeping
+    stop_volume_repeat_timer(&volume_up_timer);
+    stop_volume_repeat_timer(&volume_down_timer);
+    power_manager_enter_light_sleep();
+    ESP_LOGI(TAG, "Woke up from light sleep. Pausing button input momentarily.");
+    button_manager_pause_for_wake_up(200);
+}
+
+void StandbyView::on_shutdown_long_press() {
+    create_shutdown_popup();
+}
+
+void StandbyView::on_volume_up_long_press_start() {
+    audio_manager_volume_up();
+    status_bar_update_volume_display();
+    if (!volume_up_timer) {
+        volume_up_timer = lv_timer_create([](lv_timer_t *t) {
+            audio_manager_volume_up();
+            status_bar_update_volume_display();
+        }, VOLUME_REPEAT_PERIOD_MS, nullptr);
+    }
+}
+
+void StandbyView::on_volume_down_long_press_start() {
+    audio_manager_volume_down();
+    status_bar_update_volume_display();
+    if (!volume_down_timer) {
+        volume_down_timer = lv_timer_create([](lv_timer_t *t) {
+            audio_manager_volume_down();
+            status_bar_update_volume_display();
+        }, VOLUME_REPEAT_PERIOD_MS, nullptr);
+    }
+}
+
+void StandbyView::stop_volume_repeat_timer(lv_timer_t** timer_ptr) {
+    if (timer_ptr && *timer_ptr) {
+        lv_timer_del(*timer_ptr);
+        *timer_ptr = nullptr;
+    }
+}
+
+// --- Shutdown Popup Logic ---
+void StandbyView::create_shutdown_popup() {
+    if (shutdown_popup_container) return;
+    ESP_LOGI(TAG, "Creating shutdown confirmation popup.");
+    init_popup_styles();
+
+    shutdown_popup_container = lv_obj_create(lv_screen_active());
+    lv_obj_remove_style_all(shutdown_popup_container);
+    lv_obj_set_size(shutdown_popup_container, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(shutdown_popup_container, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(shutdown_popup_container, LV_OPA_70, 0);
+
+    lv_obj_t* msgbox = lv_msgbox_create(shutdown_popup_container);
+    lv_msgbox_add_title(msgbox, "Turn Off Device");
+    lv_msgbox_add_text(msgbox, "Reset button will be needed to start the device again.");
+    lv_obj_t* btn_cancel_obj = lv_msgbox_add_footer_button(msgbox, "Cancel");
+    lv_obj_t* btn_ok_obj = lv_msgbox_add_footer_button(msgbox, "Turn Off");
+    
+    lv_obj_center(msgbox);
+    lv_obj_set_width(msgbox, 200);
+
+    lv_obj_add_style(btn_cancel_obj, &style_popup_normal, LV_STATE_DEFAULT);
+    lv_obj_add_style(btn_cancel_obj, &style_popup_focused, LV_STATE_FOCUSED);
+    lv_obj_add_style(btn_ok_obj, &style_popup_normal, LV_STATE_DEFAULT);
+    lv_obj_add_style(btn_ok_obj, &style_popup_focused, LV_STATE_FOCUSED);
+
+    shutdown_popup_group = lv_group_create();
+    lv_group_add_obj(shutdown_popup_group, btn_cancel_obj);
+    lv_group_add_obj(shutdown_popup_group, btn_ok_obj);
+    lv_group_focus_obj(btn_cancel_obj);
+
+    setup_popup_button_handlers();
+}
+
+void StandbyView::destroy_shutdown_popup() {
+    if (!shutdown_popup_container) return;
+    ESP_LOGI(TAG, "Destroying shutdown popup and restoring main handlers.");
+
+    // The group must be deleted before its objects
+    if (shutdown_popup_group) {
+        lv_group_del(shutdown_popup_group);
+        shutdown_popup_group = nullptr;
+    }
+    // Delete the top-level container; its children (msgbox, buttons) will be deleted automatically.
+    lv_obj_del(shutdown_popup_container);
+    shutdown_popup_container = nullptr;
+    
+    // Restore the main button handlers for the view
+    setup_main_button_handlers();
+}
+
+void StandbyView::on_popup_ok() {
+    lv_obj_t* focused_btn = lv_group_get_focused(shutdown_popup_group);
+    const char* action_text = lv_label_get_text(lv_obj_get_child(focused_btn, 0));
+    if (strcmp(action_text, "Turn Off") == 0) {
+        ESP_LOGI(TAG, "User confirmed shutdown. Entering deep sleep.");
+        power_manager_enter_deep_sleep();
+    } else {
+        destroy_shutdown_popup();
+    }
+}
+void StandbyView::on_popup_cancel() { destroy_shutdown_popup(); }
+void StandbyView::on_popup_nav_left() { if (shutdown_popup_group) lv_group_focus_prev(shutdown_popup_group); }
+void StandbyView::on_popup_nav_right() { if (shutdown_popup_group) lv_group_focus_next(shutdown_popup_group); }
 
 void StandbyView::init_popup_styles() {
     if (popup_styles_initialized) return;
@@ -170,62 +257,19 @@ void StandbyView::reset_popup_styles() {
     popup_styles_initialized = false;
 }
 
-void StandbyView::create_shutdown_popup() {
-    if (shutdown_popup_container) return;
-    init_popup_styles();
-
-    shutdown_popup_container = lv_obj_create(lv_screen_active());
-    lv_obj_remove_style_all(shutdown_popup_container);
-    lv_obj_set_size(shutdown_popup_container, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(shutdown_popup_container, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(shutdown_popup_container, LV_OPA_70, 0);
-
-    lv_obj_t *msgbox = lv_msgbox_create(shutdown_popup_container);
-    lv_msgbox_add_title(msgbox, "Turn Off Device");
-    lv_msgbox_add_text(msgbox, "Reset button will be needed to start the device again.");
-    lv_obj_t* btn_cancel = lv_msgbox_add_footer_button(msgbox, "Cancel");
-    lv_obj_t* btn_ok = lv_msgbox_add_footer_button(msgbox, "Turn Off");
-    lv_obj_center(msgbox);
-
-    lv_obj_add_style(btn_cancel, &style_popup_normal, LV_STATE_DEFAULT);
-    lv_obj_add_style(btn_cancel, &style_popup_focused, LV_STATE_FOCUSED);
-    lv_obj_add_style(btn_ok, &style_popup_normal, LV_STATE_DEFAULT);
-    lv_obj_add_style(btn_ok, &style_popup_focused, LV_STATE_FOCUSED);
-
-    shutdown_popup_group = lv_group_create();
-    lv_group_add_obj(shutdown_popup_group, btn_cancel);
-    lv_group_add_obj(shutdown_popup_group, btn_ok);
-    lv_group_set_default(shutdown_popup_group);
-    lv_group_focus_obj(btn_cancel);
-
-    button_manager_unregister_view_handlers();
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, [](void* d){
-        auto* view = static_cast<StandbyView*>(d);
-        if (view->shutdown_popup_group) {
-            lv_obj_t *focused = lv_group_get_focused(view->shutdown_popup_group);
-            const char* txt = lv_label_get_text(lv_obj_get_child(focused, 0));
-            if (strcmp(txt, "Turn Off") == 0) {
-                power_manager_enter_deep_sleep();
-            } else {
-                view->destroy_shutdown_popup();
-            }
-        }
-    }, true, this);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, [](void* d){ static_cast<StandbyView*>(d)->destroy_shutdown_popup(); }, true, this);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, [](void* d){ if(static_cast<StandbyView*>(d)->shutdown_popup_group) lv_group_focus_prev(static_cast<StandbyView*>(d)->shutdown_popup_group); }, true, this);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, [](void* d){ if(static_cast<StandbyView*>(d)->shutdown_popup_group) lv_group_focus_next(static_cast<StandbyView*>(d)->shutdown_popup_group); }, true, this);
+// --- Static Callback Bridges ---
+void StandbyView::update_clock_cb(lv_timer_t* timer) {
+    void* user_data = lv_timer_get_user_data(timer);
+    static_cast<StandbyView*>(user_data)->update_clock();
 }
-
-void StandbyView::destroy_shutdown_popup() {
-    if (!shutdown_popup_container) return;
-    
-    if (shutdown_popup_group) {
-        if (lv_group_get_default() == shutdown_popup_group) lv_group_set_default(NULL);
-        lv_group_del(shutdown_popup_group);
-        shutdown_popup_group = nullptr;
-    }
-    lv_obj_del(shutdown_popup_container);
-    shutdown_popup_container = nullptr;
-    
-    register_main_view_handlers();
-}
+void StandbyView::menu_press_cb(void* user_data) { static_cast<StandbyView*>(user_data)->on_menu_press(); }
+void StandbyView::sleep_press_cb(void* user_data) { static_cast<StandbyView*>(user_data)->on_sleep_press(); }
+void StandbyView::shutdown_long_press_cb(void* user_data) { static_cast<StandbyView*>(user_data)->on_shutdown_long_press(); }
+void StandbyView::volume_up_long_press_start_cb(void* user_data) { static_cast<StandbyView*>(user_data)->on_volume_up_long_press_start(); }
+void StandbyView::volume_down_long_press_start_cb(void* user_data) { static_cast<StandbyView*>(user_data)->on_volume_down_long_press_start(); }
+void StandbyView::volume_up_press_up_cb(void* user_data) { auto self = static_cast<StandbyView*>(user_data); self->stop_volume_repeat_timer(&self->volume_up_timer); }
+void StandbyView::volume_down_press_up_cb(void* user_data) { auto self = static_cast<StandbyView*>(user_data); self->stop_volume_repeat_timer(&self->volume_down_timer); }
+void StandbyView::popup_ok_cb(void* user_data) { static_cast<StandbyView*>(user_data)->on_popup_ok(); }
+void StandbyView::popup_cancel_cb(void* user_data) { static_cast<StandbyView*>(user_data)->on_popup_cancel(); }
+void StandbyView::popup_nav_left_cb(void* user_data) { static_cast<StandbyView*>(user_data)->on_popup_nav_left(); }
+void StandbyView::popup_nav_right_cb(void* user_data) { static_cast<StandbyView*>(user_data)->on_popup_nav_right(); }

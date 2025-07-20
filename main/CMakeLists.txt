@@ -24,10 +24,8 @@ idf_component_register(SRCS
         # --- Views (Class-based) ---
         "./views/view_manager.cpp"
         "./views/standby_view/standby_view.cpp"
-        #
-        # --- NOTE: All other views have been removed for this minimal example ---
-        # --- Add them back here as you convert them to the class-based model ---
-        #
+        "./views/menu_view/menu_view.cpp"
+        "./views/multi_click_test_view/multi_click_test_view.cpp"
 
     INCLUDE_DIRS "."
     EMBED_FILES "./server_certs/groq_api_ca.pem"

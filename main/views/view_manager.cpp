@@ -5,9 +5,13 @@
 #include <functional>
 #include <memory>
 
-// Include the base class and the only implemented view class
+// Include all view headers
 #include "view.h"
 #include "standby_view/standby_view.h"
+#include "menu_view/menu_view.h"
+#include "multi_click_test_view/multi_click_test_view.h"
+// NOTE: sd_error_view is not included here as it's likely a special case view
+// not loaded through the standard menu flow.
 
 static const char *TAG = "VIEW_MGR";
 
@@ -22,11 +26,12 @@ static std::map<view_id_t, std::function<View*()>> s_view_factory;
  * @brief Populates the view factory with all available views.
  */
 static void initialize_view_factory() {
-    // Add the only available view to the factory
-    s_view_factory[VIEW_ID_STANDBY] = []() { return static_cast<View*>(new StandbyView()); };
+    s_view_factory[VIEW_ID_STANDBY] = []() { return new StandbyView(); };
+    s_view_factory[VIEW_ID_MENU] = []() { return new MenuView(); };
+    s_view_factory[VIEW_ID_MULTI_CLICK_TEST] = []() { return new MultiClickTestView(); };
 
-    // As you convert more views, you will add them here, for example:
-    // s_view_factory[VIEW_ID_MENU] = []() { return static_cast<View*>(new MenuView()); };
+    // As you convert more views, you will add them here.
+    // For now, they will fall through to the "not implemented" case.
 }
 
 void view_manager_init(void) {
@@ -39,6 +44,12 @@ void view_manager_init(void) {
 void view_manager_load_view(view_id_t view_id) {
     if (view_id >= VIEW_ID_COUNT) {
         ESP_LOGE(TAG, "Invalid view ID: %d", view_id);
+        return;
+    }
+
+    // Don't reload the same view
+    if (s_current_view && s_current_view_id == view_id) {
+        ESP_LOGW(TAG, "Attempted to load the same view (ID: %d) again. Ignoring.", view_id);
         return;
     }
 
@@ -66,6 +77,7 @@ void view_manager_load_view(view_id_t view_id) {
     if (it != s_view_factory.end()) {
         // Create a new instance and transfer ownership to the unique_ptr.
         s_current_view.reset(it->second());
+        s_current_view_id = view_id;
         ESP_LOGD(TAG, "New view instance created for ID: %d", view_id);
         
         // 5. Initialize the new view's UI.
@@ -76,8 +88,8 @@ void view_manager_load_view(view_id_t view_id) {
         lv_obj_t* label = lv_label_create(scr);
         lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
         lv_label_set_text_fmt(label, "Error: View %d\nnot implemented.", view_id);
+        s_current_view_id = view_id; // Set ID to avoid reload attempts
     }
 
-    s_current_view_id = view_id;
     ESP_LOGI(TAG, "View %d loaded successfully.", view_id);
 }
