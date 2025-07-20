@@ -12,7 +12,8 @@
 #include "multi_click_test_view/multi_click_test_view.h"
 #include "click_counter_view/click_counter_view.h"
 #include "image_test_view/image_test_view.h"
-#include "sd_test_view/sd_test_view.h" // <<< AÑADIR ESTA LÍNEA
+#include "sd_test_view/sd_test_view.h"
+#include "speaker_test_view/speaker_test_view.h" // <<< AÑADIR ESTA LÍNEA
 
 // NOTE: sd_error_view is not included here as it's likely a special case view
 // not loaded through the standard menu flow.
@@ -35,7 +36,8 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_MULTI_CLICK_TEST] = []() { return new MultiClickTestView(); };
     s_view_factory[VIEW_ID_CLICK_COUNTER_TEST] = []() { return new ClickCounterView(); };
     s_view_factory[VIEW_ID_IMAGE_TEST] = []() { return new ImageTestView(); };
-    s_view_factory[VIEW_ID_SD_TEST] = []() { return new SdTestView(); }; // <<< AÑADIR ESTA LÍNEA
+    s_view_factory[VIEW_ID_SD_TEST] = []() { return new SdTestView(); };
+    s_view_factory[VIEW_ID_SPEAKER_TEST] = []() { return new SpeakerTestView(); }; // <<< AÑADIR ESTA LÍNEA
 
     // As you convert more views, you will add them here.
     // For now, they will fall through to the "not implemented" case.
