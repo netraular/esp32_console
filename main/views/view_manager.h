@@ -16,9 +16,10 @@ typedef enum {
     VIEW_ID_IMAGE_TEST,
     VIEW_ID_MULTI_CLICK_TEST,
     VIEW_ID_WIFI_STREAM_TEST,
-    VIEW_ID_POMODORO, // Already here
+    VIEW_ID_POMODORO,
     VIEW_ID_CLICK_COUNTER_TEST,
     VIEW_ID_VOICE_NOTE,
+    VIEW_ID_VOICE_NOTE_PLAYER, // <<< ADDED
     VIEW_ID_VOLUME_TESTER,
     
     // Add other views here as they are converted

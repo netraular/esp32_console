@@ -15,10 +15,10 @@
 #include "sd_test_view/sd_test_view.h"
 #include "speaker_test_view/speaker_test_view.h"
 #include "mic_test_view/mic_test_view.h"
-#include "pomodoro_view/pomodoro_view.h" // <<< AÑADIDO
+#include "pomodoro_view/pomodoro_view.h"
+#include "voice_note_view/voice_note_view.h"                   // <<< ADDED
+#include "voice_note_player_view/voice_note_player_view.h"     // <<< ADDED
 
-// NOTE: sd_error_view is not included here as it's likely a special case view
-// not loaded through the standard menu flow.
 
 static const char *TAG = "VIEW_MGR";
 
@@ -41,10 +41,9 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_SD_TEST] = []() { return new SdTestView(); };
     s_view_factory[VIEW_ID_SPEAKER_TEST] = []() { return new SpeakerTestView(); };
     s_view_factory[VIEW_ID_MIC_TEST] = []() { return new MicTestView(); };
-    s_view_factory[VIEW_ID_POMODORO] = []() { return new PomodoroView(); }; // <<< AÑADIDO
-
-    // As you convert more views, you will add them here.
-    // For now, they will fall through to the "not implemented" case.
+    s_view_factory[VIEW_ID_POMODORO] = []() { return new PomodoroView(); };
+    s_view_factory[VIEW_ID_VOICE_NOTE] = []() { return new VoiceNoteView(); };                 // <<< ADDED
+    s_view_factory[VIEW_ID_VOICE_NOTE_PLAYER] = []() { return new VoiceNotePlayerView(); };   // <<< ADDED
 }
 
 void view_manager_init(void) {
