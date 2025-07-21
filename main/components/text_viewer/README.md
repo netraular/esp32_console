@@ -6,7 +6,7 @@ A simple, reusable LVGL component for displaying read-only text content in a ful
 ## Features
 -   **Full-Screen Display:** Creates a view with a title and a large, scrollable text area.
 -   **Automatic Memory Management:** Takes ownership of the dynamically allocated text buffer (`char*`) and automatically frees it when the component is destroyed, preventing memory leaks.
--   **Exit Callback:** Uses a callback function to notify the parent view when the user wants to exit (by pressing the "Cancel" button).
+-   **Exit Callback:** Uses a callback function to notify the parent view when the user wants to exit (by pressing the "Cancel" button). The callback now supports a `void* user_data` parameter for passing context.
 -   **Focused Input:** Registers its own button handlers, ensuring only the "Cancel" button is active to provide a simple, predictable user experience.
 
 ## How to Use
@@ -24,12 +24,12 @@ A simple, reusable LVGL component for displaying read-only text content in a ful
     ```
 
 2.  **Create the Component:**
-    Instantiate the viewer, passing the parent object, a title, the content buffer, and an exit callback.
+    Instantiate the viewer, passing the parent object, a title, the content buffer, an exit callback, and a context pointer.
     ```cpp
     #include "components/text_viewer/text_viewer.h"
 
     // Forward declaration of the exit handler
-    void on_viewer_exit();
+    void on_viewer_exit(void* user_data);
 
     // In your view logic:
     if (file_content) {
@@ -37,16 +37,17 @@ A simple, reusable LVGL component for displaying read-only text content in a ful
             lv_screen_active(),     // Parent object
             "my_note.txt",          // Title
             file_content,           // The content to display
-            on_viewer_exit          // Function to call on exit
+            on_viewer_exit,         // Function to call on exit
+            this                    // Context pointer for the callback
         );
         // CRITICAL: Do NOT free(file_content) here! The component now owns it.
     }
     ```
 
 3.  **Implement the Exit Callback:**
-    This function defines what happens when the user closes the viewer. Typically, you would destroy the viewer's UI and restore the previous view.
+    This function defines what happens when the user closes the viewer. It now receives the `user_data` pointer.
     ```cpp
-    void on_viewer_exit() {
+    void on_viewer_exit(void* user_data) {
         // The text_viewer is a child of the screen. Cleaning the screen
         // will automatically destroy it and trigger its cleanup logic.
         lv_obj_clean(lv_screen_active());

@@ -6,8 +6,8 @@ This component manages audio playback of WAV files using the I2S peripheral. It 
 ## Features
 -   Plays `.wav` files from a filesystem (e.g., SD card).
 -   Supports basic playback controls: Play, Pause, Resume, and Stop.
--   **Robust Volume Control:** Implements a safe volume limit. It intelligently maps a user-facing 0-100% scale to a pre-configured physical maximum (e.g., 40%), protecting the speaker from damage.
--   **Dynamic Low-Frequency Attenuation:** To prevent distortion in small speakers at high volumes, this manager includes a **dynamic 2nd-order High-Pass Filter (HPF)**. The filter's cutoff frequency automatically increases with the volume, effectively rolling off problematic bass frequencies only when needed, preserving sound quality at lower volumes.
+-   **Robust Volume Control:** Implements a safe volume limit. It intelligently maps a user-facing 0-100% scale to a pre-configured physical maximum (e.g., 25%), protecting the speaker from damage.
+-   **Dynamic Low-Frequency Attenuation:** To prevent distortion in small speakers at high volumes, this manager includes a **dynamic 4th-order Linkwitz-Riley High-Pass Filter (HPF)**. The filter's cutoff frequency automatically increases with the volume, effectively rolling off problematic bass frequencies only when needed, preserving sound quality at lower volumes.
 -   **Advanced State Management:** Exposes functions to get the current playback state (including `AUDIO_STATE_ERROR`), total duration, and progress.
 -   **Error Handling:** Can detect playback errors (like an SD card being removed) and transition to an `AUDIO_STATE_ERROR` state, allowing the UI to react gracefully.
 -   **Automatic I2S Configuration:** Initializes and tears down the I2S driver automatically based on the WAV file's properties (sample rate, bit depth).
@@ -59,7 +59,7 @@ This component manages audio playback of WAV files using the I2S peripheral. It 
     uint32_t duration_sec = audio_manager_get_duration_s();
     uint32_t progress_sec = audio_manager_get_progress_s();
     
-    // Note: This returns the internal physical volume (e.g., 0-40).
+    // Note: This returns the internal physical volume (e.g., 0-25).
     // The UI is responsible for scaling this to a 0-100% display value.
     uint8_t physical_volume = audio_manager_get_volume(); 
     ```
@@ -75,9 +75,7 @@ This component manages audio playback of WAV files using the I2S peripheral. It 
 
     if (xQueueReceive(viz_queue, &viz_data, 0) == pdPASS) {
         // New data is in viz_data.bar_values, update your LVGL widget.
-        // for (int i = 0; i < VISUALIZER_BAR_COUNT; i++) {
-        //    update_bar(i, viz_data.bar_values[i]);
-        // }
+        // audio_visualizer_set_values(my_visualizer, viz_data.bar_values);
     }
     ```
 

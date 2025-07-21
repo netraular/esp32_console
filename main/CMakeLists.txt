@@ -39,7 +39,7 @@ idf_component_register(SRCS
         "./views/voice_note_view/voice_note_view.cpp"
         "./views/voice_note_player_view/voice_note_player_view.cpp"
         "./views/volume_tester_view/volume_tester_view.cpp"
-        "./views/wifi_stream_view/wifi_stream_view.cpp"           # <<< ADDED
+        "./views/wifi_stream_view/wifi_stream_view.cpp"
 
     INCLUDE_DIRS "."
     EMBED_FILES "./server_certs/groq_api_ca.pem"
