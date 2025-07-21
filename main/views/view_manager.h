@@ -1,3 +1,11 @@
+/**
+ * @file view_manager.h
+ * @brief Manages the application's UI views and transitions between them.
+ *
+ * This manager uses a factory pattern to create and destroy view objects,
+ * ensuring clean state transitions and resource management. It handles the
+ * lifecycle of each view, from creation to destruction.
+ */
 #ifndef VIEW_MANAGER_H
 #define VIEW_MANAGER_H
 
@@ -20,7 +28,7 @@ typedef enum {
     VIEW_ID_CLICK_COUNTER_TEST,
     VIEW_ID_VOICE_NOTE,
     VIEW_ID_VOICE_NOTE_PLAYER,
-    VIEW_ID_VOLUME_TESTER, // <<< ADDED
+    VIEW_ID_VOLUME_TESTER,
     
     // Add other views here as they are converted
     VIEW_ID_COUNT // Total number of views, must be last

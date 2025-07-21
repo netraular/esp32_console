@@ -77,12 +77,16 @@ void audio_manager_volume_down(void);
 
 /**
  * @brief Gets the current physical volume level (0-100), capped by `MAX_VOLUME_PERCENTAGE`.
- * @return The raw physical volume percentage being applied.
+ * 
+ * The UI may display a 0-100% scale for the user, but this function returns the 
+ * actual percentage being applied to the hardware to protect the speaker.
+ * 
+ * @return The raw physical volume percentage (e.g., 0-25 if MAX_VOLUME_PERCENTAGE is 25).
  */
 uint8_t audio_manager_get_volume(void);
 
 /**
- * @brief Sets the physical volume directly, bypassing the UI-step logic.
+ * @brief Sets the physical volume directly, bypassing the UI-step logic and `MAX_VOLUME_PERCENTAGE` cap.
  * @param percentage The raw physical volume to set (0-100).
  */
 void audio_manager_set_volume_physical(uint8_t percentage);
