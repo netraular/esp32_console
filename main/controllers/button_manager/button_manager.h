@@ -1,86 +1,68 @@
+/**
+ * @file button_manager.h
+ * @brief Manages physical button inputs with advanced event handling.
+ *
+ * This controller abstracts the `espressif/button` library to provide a rich
+ * set of events (tap, single/double click, long press) and a two-tier
+ * (default vs. view-specific) callback system. Events are queued and dispatched
+ * in the LVGL context for UI safety.
+ */
 #ifndef BUTTON_MANAGER_H
 #define BUTTON_MANAGER_H
 
 #include "iot_button.h"
 #include "button_gpio.h"
-#include "config.h"
 #include "lvgl.h"
-
-// ... (The rest of the enums and structs remain the same) ...
 
 /**
  * @brief Enum to uniquely identify each physical button.
  */
 typedef enum {
-    BUTTON_LEFT = 0,
-    BUTTON_CANCEL,
-    BUTTON_OK,
-    BUTTON_RIGHT,
-    BUTTON_ON_OFF,
-    BUTTON_COUNT // Total number of buttons, useful for loops
+    BUTTON_LEFT = 0,    //!< Left button.
+    BUTTON_CANCEL,      //!< Cancel/Back button.
+    BUTTON_OK,          //!< OK/Select button.
+    BUTTON_RIGHT,       //!< Right button.
+    BUTTON_ON_OFF,      //!< Power/Special function button.
+    BUTTON_COUNT        //!< Total number of buttons.
 } button_id_t;
 
 /**
  * @brief Enum for the dispatch mode of button events.
  */
 typedef enum {
-    INPUT_DISPATCH_MODE_QUEUED,     // (Default) Events are queued and processed via an LVGL timer. UI-safe.
-    INPUT_DISPATCH_MODE_IMMEDIATE   // Events execute the callback instantly. For low-latency needs (e.g., games).
+    INPUT_DISPATCH_MODE_QUEUED,   //!< (Default) Events are queued and processed via an LVGL timer. UI-safe.
+    INPUT_DISPATCH_MODE_IMMEDIATE //!< Events execute callbacks instantly. For low-latency needs.
 } input_dispatch_mode_t;
 
 /**
- * @brief Enum for the specific, abstracted event types we handle.
+ * @brief Enum for the specific, abstracted event types handled by the manager.
  */
 typedef enum {
-    BUTTON_EVENT_PRESS_DOWN,       // Button is pressed down.
-    BUTTON_EVENT_PRESS_UP,         // Button is released.
-    BUTTON_EVENT_SINGLE_CLICK,     // A single click, fired after double-click timeout has passed.
-    BUTTON_EVENT_DOUBLE_CLICK,     // Two quick clicks.
-    BUTTON_EVENT_LONG_PRESS_START, // The button has been held down for the configured long-press duration.
-    BUTTON_EVENT_LONG_PRESS_HOLD,  // Fired repeatedly while the button is held down after a long-press start.
-    BUTTON_EVENT_TAP,              // A fast click event that fires immediately on press-up (if not a long press).
-    BUTTON_EVENT_COUNT             // Total number of event types.
+    BUTTON_EVENT_PRESS_DOWN,       //!< Button is pressed down.
+    BUTTON_EVENT_PRESS_UP,         //!< Button is released.
+    BUTTON_EVENT_SINGLE_CLICK,     //!< A single click (fired after double-click timeout).
+    BUTTON_EVENT_DOUBLE_CLICK,     //!< Two quick clicks.
+    BUTTON_EVENT_LONG_PRESS_START, //!< Button held for the long-press duration.
+    BUTTON_EVENT_LONG_PRESS_HOLD,  //!< Fired repeatedly while held after a long-press start.
+    BUTTON_EVENT_TAP,              //!< Fires immediately on press-up (if not a long press).
+    BUTTON_EVENT_COUNT             //!< Total number of event types.
 } button_event_type_t;
 
 /**
- * @brief Function pointer type for button event handlers (callbacks).
+ * @brief Function pointer for button event handlers.
  * @param user_data A user-provided pointer passed during handler registration.
  */
 typedef void (*button_handler_t)(void* user_data);
 
-/**
- * @brief Structure to store a handler and its associated user data.
- */
-typedef struct {
-    button_handler_t handler;
-    void* user_data;
-} handler_entry_t;
 
 /**
- * @brief Structure to hold handlers for all possible event types for a button.
- */
-typedef struct {
-    handler_entry_t handlers[BUTTON_EVENT_COUNT];
-} button_event_handlers_t;
-
-/**
- * @brief Main structure to manage default and view-specific handlers for a single button.
- */
-typedef struct {
-    button_event_handlers_t default_handlers;
-    button_event_handlers_t view_handlers;
-} button_handlers_t;
-
-
-/**
- * @brief Initializes the button manager, configures GPIO pins, and registers internal callbacks.
- * This must be called once at application startup. By default, it operates in QUEUED mode.
+ * @brief Initializes the button manager. Must be called once at startup.
  */
 void button_manager_init();
 
 /**
  * @brief Sets the dispatch mode for button events.
- * @param mode The mode to use (QUEUED or IMMEDIATE). QUEUED is recommended for UI interactions.
+ * @param mode The mode to use (QUEUED or IMMEDIATE).
  */
 void button_manager_set_dispatch_mode(input_dispatch_mode_t mode);
 
@@ -89,22 +71,25 @@ void button_manager_set_dispatch_mode(input_dispatch_mode_t mode);
  *
  * @param button The ID of the button.
  * @param event The type of event to handle.
- * @param handler The callback function to execute when the event occurs.
- * @param is_view_handler If true, registers a high-priority view-specific handler. If false, it's a low-priority default handler.
- * @param user_data An optional pointer that will be passed to the handler function when it is executed. Can be used to pass context (e.g., `this`).
+ * @param handler The callback function to execute.
+ * @param is_view_handler If true, registers as a high-priority handler that is cleared
+ *                        by `unregister_view_handlers`. If false, registers as a
+ *                        low-priority default handler.
+ * @param user_data A pointer passed to the handler, for context (e.g., `this`).
  */
 void button_manager_register_handler(button_id_t button, button_event_type_t event, button_handler_t handler, bool is_view_handler, void* user_data);
 
 /**
- * @brief Unregisters all view-specific handlers and clears any pending button events from the queue.
- * This is crucial to call when changing views to prevent stale events and restore default button behaviors.
+ * @brief Unregisters all view-specific handlers and clears the event queue.
+ * Crucial to call when changing views to restore default button behaviors.
  */
 void button_manager_unregister_view_handlers();
 
 /**
  * @brief Temporarily pauses button event processing, ideal for after wake-up.
- * Clears the event queue and enters a paused state. An internal timer will
- * automatically resume processing after the specified duration.
+ *
+ * Clears the event queue and ignores inputs for a specified duration to prevent
+ * spurious events from the button press that woke the device.
  *
  * @param pause_ms The duration in milliseconds to ignore button inputs.
  */

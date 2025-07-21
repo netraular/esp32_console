@@ -1,3 +1,10 @@
+/**
+ * @file data_manager.h
+ * @brief A centralized manager for persistent data storage using NVS.
+ *
+ * Provides a simple, type-safe API to abstract away the underlying
+ * ESP-IDF Non-Volatile Storage (NVS) implementation details.
+ */
 #ifndef DATA_MANAGER_H
 #define DATA_MANAGER_H
 
@@ -27,13 +34,9 @@ bool data_manager_set_u32(const char* key, uint32_t value);
  *
  * @param key The null-terminated string key of the value to retrieve.
  * @param value Pointer to a uint32_t variable where the retrieved value will be stored.
- * @return true if the key was found and value was successfully retrieved, false otherwise (key not found or error).
+ * @return true if key was found and value retrieved, false otherwise (not found or error).
  */
 bool data_manager_get_u32(const char* key, uint32_t* value);
-
-// Future functions for other data types could be added here, for example:
-// bool data_manager_set_string(const char* key, const char* value);
-// bool data_manager_get_string(const char* key, char* out_buffer, size_t* length);
 
 #ifdef __cplusplus
 }

@@ -1,3 +1,10 @@
+/**
+ * @file wifi_streamer.h
+ * @brief Handles real-time audio streaming from the I2S microphone over TCP.
+ *
+ * This controller runs in a dedicated FreeRTOS task, managing the connection
+ * lifecycle to a server and streaming I2S data.
+ */
 #ifndef WIFI_STREAMER_H
 #define WIFI_STREAMER_H
 
@@ -13,35 +20,33 @@ extern "C" {
  * @brief States for the audio streamer.
  */
 typedef enum {
-    WIFI_STREAM_STATE_IDLE,          // The streamer task is inactive.
-    WIFI_STREAM_STATE_CONNECTING,    // Attempting to connect to the TCP server.
-    WIFI_STREAM_STATE_CONNECTED_IDLE,// Connected, but waiting for a START command.
-    WIFI_STREAM_STATE_STREAMING,     // Actively sending audio data.
-    WIFI_STREAM_STATE_STOPPING,      // A stop has been requested, and the task is shutting down.
-    WIFI_STREAM_STATE_ERROR          // An error occurred (e.g., connection failed, I2S error).
+    WIFI_STREAM_STATE_IDLE,           //!< The streamer task is inactive.
+    WIFI_STREAM_STATE_CONNECTING,     //!< Attempting to connect to the TCP server.
+    WIFI_STREAM_STATE_CONNECTED_IDLE, //!< Connected, but waiting for a START command from server.
+    WIFI_STREAM_STATE_STREAMING,      //!< Actively sending audio data.
+    WIFI_STREAM_STATE_STOPPING,       //!< A stop has been requested, task is shutting down.
+    WIFI_STREAM_STATE_ERROR           //!< An error occurred (e.g., connection fail, I2S error).
 } wifi_stream_state_t;
 
 /**
- * @brief Initializes the WiFi streamer module.
+ * @brief Initializes the WiFi streamer module. Must be called once at startup.
  */
 void wifi_streamer_init(void);
 
 /**
  * @brief Starts the audio streaming task.
- * The task will wait for a WiFi connection, then connect to the server and wait for commands.
+ * The task will wait for WiFi, then connect to the server specified in `secret.h`.
  * @return true if the task was started successfully, false if it was already running.
  */
 bool wifi_streamer_start(void);
 
 /**
  * @brief Signals the audio streaming task to stop gracefully.
- * The task will close the connection, clean up resources, and terminate.
  */
 void wifi_streamer_stop(void);
 
 /**
- * @brief Gets the current state of the streamer.
- * @return The current wifi_stream_state_t.
+ * @brief Gets the current state of the streamer for UI feedback.
  */
 wifi_stream_state_t wifi_streamer_get_state(void);
 

@@ -1,3 +1,10 @@
+/**
+ * @file power_manager.h
+ * @brief Manages the device's power states (Light Sleep and Deep Sleep).
+ *
+ * Provides simple functions to enter low-power modes, essential for
+ * battery-powered operation.
+ */
 #ifndef POWER_MANAGER_H
 #define POWER_MANAGER_H
 
@@ -6,21 +13,19 @@ extern "C" {
 #endif
 
 /**
- * @brief Configures the ON/OFF button as a wake-up source and enters Light Sleep mode.
- * 
- * This function performs the following steps:
- * 1. Configures the ON/OFF button pin to wake the ESP32 on a low level.
- * 2. Calls `esp_light_sleep_start()` to put the device into a low-power state.
- * 3. Upon wake-up, logs the cause and disables the GPIO wake-up configuration.
+ * @brief Enters Light Sleep mode, configuring the ON/OFF button as a wake-up source.
+ *
+ * The CPU is paused, but RAM and peripheral states are retained. Execution
+ * resumes from the point of the call after the wake-up button is pressed.
+ * Button inputs are temporarily paused to prevent spurious wake-up events.
  */
 void power_manager_enter_light_sleep(void);
 
 /**
- * @brief Enters Deep Sleep mode indefinitely.
- * 
- * The device will enter its lowest power mode and can only be awakened
- * by an external reset (RST button) or if deep sleep wake sources are
- * configured (not implemented in this function for a "permanent" shutdown).
+ * @brief Enters Deep Sleep mode indefinitely for a "full shutdown".
+ *
+ * The device enters its lowest power state. In this configuration, it can only
+ * be awakened by an external reset (e.g., RST button).
  * This function does not return.
  */
 void power_manager_enter_deep_sleep(void);

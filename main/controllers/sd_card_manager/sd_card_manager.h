@@ -1,3 +1,10 @@
+/**
+ * @file sd_card_manager.h
+ * @brief Manages a Micro SD card on a dedicated SPI bus.
+ *
+ * Handles hardware initialization, FAT filesystem mounting, and provides a
+ * comprehensive interface for file and directory operations.
+ */
 #ifndef SD_CARD_MANAGER_H
 #define SD_CARD_MANAGER_H
 
@@ -9,56 +16,41 @@ extern "C" {
 #endif
 
 /**
- * @brief Initializes the dedicated SPI bus for the SD card.
- * @return true on success, false on failure.
- */
-bool sd_manager_init(void);
-
-/**
- * @brief Mounts the SD card FAT filesystem.
- * @return true if the card is successfully mounted, false otherwise.
- */
-bool sd_manager_mount(void);
-
-/**
- * @brief Unmounts the SD card filesystem.
- */
-void sd_manager_unmount(void);
-
-/**
- * @brief Unmounts the card and deinitializes the SPI bus.
- */
-void sd_manager_deinit(void);
-
-/**
- * @brief Checks if the SD card filesystem is currently mounted.
- * @return true if mounted, false otherwise.
- */
-bool sd_manager_is_mounted(void);
-
-/**
- * @brief Checks if the SD card is ready for use.
- * This will attempt to mount the card if it isn't already. It also performs a basic check to see if the card is responsive.
- * @return true if the card is mounted and accessible, false otherwise.
- */
-bool sd_manager_check_ready(void);
-
-/**
- * @brief Gets the mount point path string.
- * @return A const char* to the mount point (e.g., "/sdcard").
- */
-const char* sd_manager_get_mount_point(void);
-
-/**
- * @brief Callback function type for iterating through files and directories.
+ * @brief Callback function for iterating through files and directories.
  * @param name The name of the file or directory.
  * @param is_dir True if the entry is a directory, false if it is a file.
  * @param user_data A pointer to user data passed to sd_manager_list_files.
  */
 typedef void (*file_iterator_cb_t)(const char* name, bool is_dir, void* user_data);
 
+/** @brief Initializes the dedicated SPI bus for the SD card. */
+bool sd_manager_init(void);
+
+/** @brief Mounts the SD card FAT filesystem at the default mount point. */
+bool sd_manager_mount(void);
+
+/** @brief Unmounts the SD card filesystem. */
+void sd_manager_unmount(void);
+
+/** @brief Unmounts the card and deinitializes the SPI bus. */
+void sd_manager_deinit(void);
+
+/** @brief Checks if the SD card filesystem is currently mounted. */
+bool sd_manager_is_mounted(void);
+
 /**
- * @brief Lists all files and directories in a given path.
+ * @brief Checks if the SD card is ready for use, attempting to mount if necessary.
+ * @return true if the card is mounted and accessible, false otherwise.
+ */
+bool sd_manager_check_ready(void);
+
+/**
+ * @brief Gets the mount point path string (e.g., "/sdcard").
+ */
+const char* sd_manager_get_mount_point(void);
+
+/**
+ * @brief Lists all files and directories in a given path via a callback.
  * @param path The absolute path to the directory to list.
  * @param cb The callback function to be called for each entry found.
  * @param user_data User data to be passed to the callback function.
@@ -69,7 +61,7 @@ bool sd_manager_list_files(const char* path, file_iterator_cb_t cb, void* user_d
 /**
  * @brief Deletes a file or an empty directory.
  * @param path The full path to the item to delete.
- * @return true on success, false on failure (e.g., directory not empty).
+ * @return true on success, false on failure.
  */
 bool sd_manager_delete_item(const char* path);
 
@@ -89,17 +81,13 @@ bool sd_manager_rename_item(const char* old_path, const char* new_path);
 bool sd_manager_create_directory(const char* path);
 
 /**
- * @brief Creates a new, empty file.
- * @param path The full path of the file to create.
- * @return true on success, false on failure.
- */
-bool sd_manager_create_file(const char* path);
-
-/**
  * @brief Reads the entire content of a file into a dynamically allocated buffer.
+ *
+ * @warning The caller is responsible for freeing the allocated `*buffer` with `free()`.
+ *
  * @param path The full path of the file to read.
- * @param buffer A pointer to a char* that will be allocated to store the content. The caller is responsible for freeing this buffer with `free()`.
- * @param size A pointer to a size_t variable where the size of the file will be stored.
+ * @param buffer A pointer to a char* that will be allocated to store the content.
+ * @param size A pointer to a size_t variable where the file size will be stored.
  * @return true on success, false on failure.
  */
 bool sd_manager_read_file(const char* path, char** buffer, size_t* size);
@@ -111,7 +99,6 @@ bool sd_manager_read_file(const char* path, char** buffer, size_t* size);
  * @return true on success, false on error.
  */
 bool sd_manager_write_file(const char* path, const char* content);
-
 
 #ifdef __cplusplus
 }
