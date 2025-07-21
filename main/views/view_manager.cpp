@@ -18,7 +18,8 @@
 #include "pomodoro_view/pomodoro_view.h"
 #include "voice_note_view/voice_note_view.h"
 #include "voice_note_player_view/voice_note_player_view.h"
-#include "volume_tester_view/volume_tester_view.h" // <<< ADDED
+#include "volume_tester_view/volume_tester_view.h"
+#include "wifi_stream_view/wifi_stream_view.h"
 
 
 static const char *TAG = "VIEW_MGR";
@@ -45,7 +46,8 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_POMODORO] = []() { return new PomodoroView(); };
     s_view_factory[VIEW_ID_VOICE_NOTE] = []() { return new VoiceNoteView(); };
     s_view_factory[VIEW_ID_VOICE_NOTE_PLAYER] = []() { return new VoiceNotePlayerView(); };
-    s_view_factory[VIEW_ID_VOLUME_TESTER] = []() { return new VolumeTesterView(); }; // <<< ADDED
+    s_view_factory[VIEW_ID_VOLUME_TESTER] = []() { return new VolumeTesterView(); };
+    s_view_factory[VIEW_ID_WIFI_STREAM_TEST] = []() { return new WifiStreamView(); };
 }
 
 void view_manager_init(void) {
@@ -86,7 +88,7 @@ void view_manager_load_view(view_id_t view_id) {
         s_current_view.reset();
     }
 
-    // 3. Clean the LVGL screen object.
+    // 3. Clean the LVGL screen object. This deletes all widgets from the old view.
     lv_obj_clean(scr);
 
     // 4. Create the new view using the factory.
