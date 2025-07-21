@@ -1,0 +1,9 @@
+Hello from LittleFS!
+
+If you see this text, it means:
+1. The 'storage' partition was created.
+2. The LittleFS driver was mounted.
+3. The embedded 'welcome.txt' file was correctly written to the partition on first boot.
+4. The file was read back successfully.
+
+Success!

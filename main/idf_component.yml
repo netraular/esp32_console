@@ -3,3 +3,4 @@ dependencies:
     version: '>=5.4'
   lvgl/lvgl: ^9.2.2 
   espressif/button: ^4.0.0
+  joltwallet/littlefs: "^1.20.1"

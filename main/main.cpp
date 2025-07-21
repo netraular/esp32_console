@@ -6,19 +6,53 @@
 #include "esp_event.h"
 #include "esp_netif.h" // Required for network initialization
 #include "lvgl.h"
+#include <cstring> // <-- ADDED: Provides memcpy
 
 #include "controllers/screen_manager/screen_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
+#include "controllers/littlefs_manager/littlefs_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
 #include "controllers/audio_recorder/audio_recorder.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/wifi_streamer/wifi_streamer.h"
 #include "controllers/data_manager/data_manager.h"
 #include "controllers/stt_manager/stt_manager.h"
+#include "controllers/power_manager/power_manager.h" // <-- It was missing from your previous file list, but it's good to have it here
 #include "views/view_manager.h"
 
 static const char *TAG = "main";
+
+// This function will write the embedded file to LittleFS if it doesn't exist.
+static void provision_filesystem_data() {
+    if (littlefs_manager_file_exists("welcome.txt")) {
+        ESP_LOGI(TAG, "'welcome.txt' already exists, skipping provisioning.");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Provisioning 'welcome.txt' to LittleFS...");
+    
+    // Symbols created by the build system from the EMBED_FILES directive
+    extern const uint8_t welcome_txt_start[] asm("_binary_welcome_txt_start");
+    extern const uint8_t welcome_txt_end[]   asm("_binary_welcome_txt_end");
+    const size_t welcome_txt_size = welcome_txt_end - welcome_txt_start;
+    
+    // Create a null-terminated string from the binary data
+    char* content = (char*)malloc(welcome_txt_size + 1);
+    if (!content) {
+        ESP_LOGE(TAG, "Failed to allocate memory for provisioning file.");
+        return;
+    }
+    memcpy(content, welcome_txt_start, welcome_txt_size); // This will now compile
+    content[welcome_txt_size] = '\0';
+
+    if (littlefs_manager_write_file("welcome.txt", content)) {
+        ESP_LOGI(TAG, "Successfully wrote 'welcome.txt'");
+    } else {
+        ESP_LOGE(TAG, "Failed to write 'welcome.txt'");
+    }
+    free(content);
+}
 
 extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Starting application");
@@ -30,13 +64,11 @@ extern "C" void app_main(void) {
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-
-    // --- FIX: Initialize network stack and event loop before other managers ---
+    
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_LOGI(TAG, "Default event loop and netif created.");
-    // --- END OF FIX ---
-
+    
     // Initialize Data Manager (depends on NVS)
     data_manager_init();
     ESP_LOGI(TAG, "Data manager initialized.");
@@ -48,7 +80,15 @@ extern "C" void app_main(void) {
         return;
     }
 
-    // Initialize SD card hardware. The filesystem will be mounted on demand.
+    // Initialize LittleFS on the 'storage' partition
+    if (littlefs_manager_init("storage")) {
+        ESP_LOGI(TAG, "LittleFS manager initialized.");
+        provision_filesystem_data(); // Write files on first boot
+    } else {
+        ESP_LOGE(TAG, "Failed to initialize LittleFS manager.");
+    }
+
+    // Initialize SD card hardware.
     if (sd_manager_init()) {
         ESP_LOGI(TAG, "SD Card manager hardware initialized successfully.");
     } else {

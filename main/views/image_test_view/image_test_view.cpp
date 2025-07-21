@@ -1,4 +1,5 @@
 #include "image_test_view.h"
+#include "controllers/littlefs_manager/littlefs_manager.h"
 
 static const char *TAG = "IMAGE_TEST_VIEW";
 
@@ -9,7 +10,6 @@ ImageTestView::ImageTestView() {
 
 ImageTestView::~ImageTestView() {
     ESP_LOGI(TAG, "ImageTestView destructed");
-    // No dynamic resources to clean up. LVGL widgets are handled by the parent.
 }
 
 void ImageTestView::create(lv_obj_t* parent) {
@@ -27,23 +27,27 @@ void ImageTestView::create(lv_obj_t* parent) {
 void ImageTestView::setup_ui(lv_obj_t* parent) {
     // Create a title
     lv_obj_t *title_label = lv_label_create(parent);
-    lv_label_set_text(title_label, "Test Image");
-    lv_obj_set_style_text_font(title_label, &lv_font_montserrat_24, 0);
-    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 20);
+    lv_label_set_text(title_label, "LittleFS Test");
+    lv_obj_set_style_text_font(title_label, &lv_font_montserrat_20, 0);
+    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 10);
 
-    // Create the LVGL image object
-    lv_obj_t *img = lv_img_create(parent);
+    // Create the main text label
+    lv_obj_t* content_label = lv_label_create(parent);
+    lv_obj_set_width(content_label, LV_PCT(90));
+    lv_obj_align(content_label, LV_ALIGN_CENTER, 0, 10);
+    lv_label_set_long_mode(content_label, LV_LABEL_LONG_WRAP);
 
-    // Assign the image source from our .c asset file
-    lv_img_set_src(img, &icon_1);
-    
-    // Center the image on the screen
-    lv_obj_center(img);
-
-    // Create an instruction label
-    lv_obj_t *info_label = lv_label_create(parent);
-    lv_label_set_text(info_label, "Press Cancel to return");
-    lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -20);
+    // Attempt to read the file from LittleFS
+    char* file_content = nullptr;
+    size_t file_size = 0;
+    if (littlefs_manager_read_file("welcome.txt", &file_content, &file_size) && file_content) {
+        ESP_LOGI(TAG, "Successfully read 'welcome.txt'");
+        lv_label_set_text(content_label, file_content);
+        free(file_content); // Free the buffer after LVGL has copied the text
+    } else {
+        ESP_LOGE(TAG, "Failed to read 'welcome.txt'");
+        lv_label_set_text(content_label, "Error:\nCould not read 'welcome.txt' from LittleFS. Check logs.");
+    }
 }
 
 // --- Button Handling ---
@@ -59,6 +63,5 @@ void ImageTestView::on_cancel_press() {
 
 // --- Static Callbacks (Bridges) ---
 void ImageTestView::cancel_press_cb(void* user_data) {
-    // Cast the user_data back to a pointer to our class instance and call the member function.
     static_cast<ImageTestView*>(user_data)->on_cancel_press();
 }

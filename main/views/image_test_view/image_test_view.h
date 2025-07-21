@@ -1,38 +1,22 @@
 #ifndef IMAGE_TEST_VIEW_H
 #define IMAGE_TEST_VIEW_H
 
-#include "../view.h" // Base class
+#include "../view.h"
 #include "../view_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "esp_log.h"
 #include "lvgl.h"
 
-// Forward declare the image data from the C file
-extern "C" const lv_image_dsc_t icon_1;
-
 /**
- * @brief A simple view to display a pre-compiled image asset.
+ * @brief A view to test the LittleFS by reading and displaying a text file.
  *
- * This class demonstrates how to load a static image asset that has been
- * converted to a C array and display it using an LVGL image widget. It provides
- * a single action to return to the main menu.
+ * This class serves as a verification step. It attempts to read 'welcome.txt'
+ * from the internal LittleFS partition and displays its content.
  */
 class ImageTestView : public View {
 public:
-    /**
-     * @brief Constructs the ImageTestView.
-     */
     ImageTestView();
-
-    /**
-     * @brief Destroys the ImageTestView.
-     */
     ~ImageTestView() override;
-
-    /**
-     * @brief Creates the UI widgets for the view.
-     * @param parent The parent LVGL object to create the view on.
-     */
     void create(lv_obj_t* parent) override;
 
 private:
