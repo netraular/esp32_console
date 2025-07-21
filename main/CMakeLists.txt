@@ -36,8 +36,9 @@ idf_component_register(SRCS
         "./views/pomodoro_view/pomodoro_view.cpp"
         "./views/pomodoro_view/components/pomodoro_config_component.cpp"
         "./views/pomodoro_view/components/pomodoro_timer_component.cpp"
-        "./views/voice_note_view/voice_note_view.cpp"                         # <<< ADDED
-        "./views/voice_note_player_view/voice_note_player_view.cpp"           # <<< ADDED
+        "./views/voice_note_view/voice_note_view.cpp"
+        "./views/voice_note_player_view/voice_note_player_view.cpp"
+        "./views/volume_tester_view/volume_tester_view.cpp"           # <<< ADDED
 
     INCLUDE_DIRS "."
     EMBED_FILES "./server_certs/groq_api_ca.pem"

@@ -16,8 +16,9 @@
 #include "speaker_test_view/speaker_test_view.h"
 #include "mic_test_view/mic_test_view.h"
 #include "pomodoro_view/pomodoro_view.h"
-#include "voice_note_view/voice_note_view.h"                   // <<< ADDED
-#include "voice_note_player_view/voice_note_player_view.h"     // <<< ADDED
+#include "voice_note_view/voice_note_view.h"
+#include "voice_note_player_view/voice_note_player_view.h"
+#include "volume_tester_view/volume_tester_view.h" // <<< ADDED
 
 
 static const char *TAG = "VIEW_MGR";
@@ -42,8 +43,9 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_SPEAKER_TEST] = []() { return new SpeakerTestView(); };
     s_view_factory[VIEW_ID_MIC_TEST] = []() { return new MicTestView(); };
     s_view_factory[VIEW_ID_POMODORO] = []() { return new PomodoroView(); };
-    s_view_factory[VIEW_ID_VOICE_NOTE] = []() { return new VoiceNoteView(); };                 // <<< ADDED
-    s_view_factory[VIEW_ID_VOICE_NOTE_PLAYER] = []() { return new VoiceNotePlayerView(); };   // <<< ADDED
+    s_view_factory[VIEW_ID_VOICE_NOTE] = []() { return new VoiceNoteView(); };
+    s_view_factory[VIEW_ID_VOICE_NOTE_PLAYER] = []() { return new VoiceNotePlayerView(); };
+    s_view_factory[VIEW_ID_VOLUME_TESTER] = []() { return new VolumeTesterView(); }; // <<< ADDED
 }
 
 void view_manager_init(void) {
