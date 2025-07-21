@@ -59,28 +59,26 @@ void ImageTestView::show_file_explorer() {
 }
 
 void ImageTestView::display_image_from_path(const char* path) {
-    const char* mount_point = sd_manager_get_mount_point();
-    const char* relative_path = strstr(path, mount_point);
-    if (relative_path) {
-        relative_path += strlen(mount_point);
-    } else {
-        relative_path = path;
-    }
-    
+    // --- MODIFIED: Simplified and corrected path handling ---
+    // The 'path' from the file explorer is the full absolute path (e.g., "/sdcard/test_image.png").
+    // We just need to prepend LVGL's drive letter 'S' to it.
     char lvgl_path[260];
-    snprintf(lvgl_path, sizeof(lvgl_path), "S:%s", relative_path);
+    snprintf(lvgl_path, sizeof(lvgl_path), "S:%s", path);
     ESP_LOGI(TAG, "Attempting to load image from LVGL path: %s", lvgl_path);
 
     lv_obj_clean(container);
     image_widget = lv_img_create(container);
     lv_img_set_src(image_widget, lvgl_path);
 
+    // After lv_img_set_src, LVGL tries to open the file. If it fails, the widget will have 0 width/height.
     if(lv_obj_get_width(image_widget) == 0 || lv_obj_get_height(image_widget) == 0) {
         ESP_LOGE(TAG, "Failed to load or decode image. Displaying error.");
-        create_initial_view();
+        create_initial_view(); // Revert to the initial prompt screen
         lv_label_set_text(info_label, "Error: Failed to load image.\nCheck file or console for errors.");
         return;
     }
+
+    // --- End of modification ---
 
     lv_obj_center(image_widget);
     current_image_path = path;
@@ -89,6 +87,8 @@ void ImageTestView::display_image_from_path(const char* path) {
     lv_label_set_text(info_label_local, "Press Cancel to return");
     lv_obj_align(info_label_local, LV_ALIGN_BOTTOM_MID, 0, -20);
     
+    // Unregister old handlers and register just the cancel handler for the image view
+    button_manager_unregister_view_handlers();
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, initial_cancel_press_cb, true, this);
 }
 
@@ -108,8 +108,10 @@ void ImageTestView::on_initial_ok_press() {
 
 void ImageTestView::on_initial_cancel_press() {
     if (current_image_path.empty()) {
+        // If no image is displayed, cancel returns to the main menu
         view_manager_load_view(VIEW_ID_MENU);
     } else {
+        // If an image is displayed, cancel returns to the file selection prompt
         create_initial_view();
     }
 }
@@ -120,7 +122,8 @@ void ImageTestView::on_file_selected(const char* path) {
         ESP_LOGI(TAG, "PNG file selected: %s. Displaying...", path);
         display_image_from_path(path);
     } else {
-        ESP_LOGW(TAG, "Non-PNG file selected: %s", path);
+        ESP_LOGW(TAG, "Non-PNG file selected: %s. Ignoring.", path);
+        // We could show a message here, but for now, just stay in the explorer
         file_explorer_refresh();
     }
 }
@@ -130,6 +133,7 @@ void ImageTestView::on_explorer_exit() {
     create_initial_view();
 }
 
+// Static C-style callbacks that bridge to the C++ instance methods
 void ImageTestView::initial_ok_press_cb(void* user_data) { static_cast<ImageTestView*>(user_data)->on_initial_ok_press(); }
 void ImageTestView::initial_cancel_press_cb(void* user_data) { static_cast<ImageTestView*>(user_data)->on_initial_cancel_press(); }
 void ImageTestView::file_selected_cb_c(const char* path, void* user_data) { if (user_data) static_cast<ImageTestView*>(user_data)->on_file_selected(path); }

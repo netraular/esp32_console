@@ -4,9 +4,9 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
-#include "esp_netif.h" // Required for network initialization
+#include "esp_netif.h"
 #include "lvgl.h"
-#include <cstring> // <-- ADDED: Provides memcpy
+#include <cstring>
 
 #include "controllers/screen_manager/screen_manager.h"
 #include "controllers/button_manager/button_manager.h"
@@ -18,8 +18,12 @@
 #include "controllers/wifi_streamer/wifi_streamer.h"
 #include "controllers/data_manager/data_manager.h"
 #include "controllers/stt_manager/stt_manager.h"
-#include "controllers/power_manager/power_manager.h" // <-- It was missing from your previous file list, but it's good to have it here
+#include "controllers/power_manager/power_manager.h"
 #include "views/view_manager.h"
+
+// --- CORRECTED INCLUDE: Use the correct header for LVGL v9 filesystem drivers ---
+// This path is relative to the component's `src` directory.
+#include "libs/fsdrv/lv_fsdrv.h"
 
 static const char *TAG = "main";
 
@@ -43,7 +47,7 @@ static void provision_filesystem_data() {
         ESP_LOGE(TAG, "Failed to allocate memory for provisioning file.");
         return;
     }
-    memcpy(content, welcome_txt_start, welcome_txt_size); // This will now compile
+    memcpy(content, welcome_txt_start, welcome_txt_size);
     content[welcome_txt_size] = '\0';
 
     if (littlefs_manager_write_file("welcome.txt", content)) {
@@ -94,6 +98,15 @@ extern "C" void app_main(void) {
     } else {
         ESP_LOGE(TAG, "Failed to initialize SD Card manager hardware.");
     }
+
+    // --- MODIFIED: Simplified driver registration for LVGL v9 ---
+    // This allows LVGL to open files from the SD card using a drive letter (e.g., "S:").
+    // IMPORTANT: This requires LV_USE_FS_POSIX to be enabled in LVGL's configuration.
+    ESP_LOGI(TAG, "Registering POSIX filesystem with LVGL");
+    lv_fs_posix_init(); // This single call registers the driver.
+                        // The drive letter defaults to 'S' via LV_FS_POSIX_LETTER in lv_conf.h
+    ESP_LOGI(TAG, "LVGL VFS registered for drive 'S'");
+    // --- END OF MODIFICATION ---
 
     // Initialize buttons
     button_manager_init();
