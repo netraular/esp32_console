@@ -12,8 +12,9 @@ extern "C" {
  *
  * @param success true if the transcription was successful.
  * @param result Pointer to the transcribed text or an error message. The receiver of this callback is responsible for freeing this buffer with `free()`.
+ * @param user_data A user-provided pointer, passed during the transcribe call.
  */
-typedef void (*stt_result_callback_t)(bool success, char* result);
+typedef void (*stt_result_callback_t)(bool success, char* result, void* user_data);
 
 /**
  * @brief Initializes the Speech-to-Text manager.
@@ -26,9 +27,10 @@ void stt_manager_init(void);
  *
  * @param file_path Full path of the .wav file to transcribe.
  * @param cb The callback that will be executed upon completion or failure.
+ * @param user_data A user-defined pointer that will be passed to the callback.
  * @return true if the transcription task was successfully started, false otherwise.
  */
-bool stt_manager_transcribe(const char* file_path, stt_result_callback_t cb);
+bool stt_manager_transcribe(const char* file_path, stt_result_callback_t cb, void* user_data);
 
 #ifdef __cplusplus
 }

@@ -24,18 +24,13 @@ private:
     lv_obj_t* info_label_widget = nullptr;
     lv_obj_t* action_menu_container = nullptr;
     lv_obj_t* text_viewer_obj = nullptr;
-    lv_obj_t* file_explorer_host_container = nullptr; // A container to host the explorer
+    lv_obj_t* file_explorer_host_container = nullptr;
 
     // --- State ---
     lv_group_t* action_menu_group = nullptr;
     lv_style_t style_action_menu_focused;
     bool styles_initialized = false;
     char selected_item_path[256] = {0};
-
-    // --- Singleton-like instance for C-style callbacks ---
-    // NOTE: This is a workaround because some C-style components (file_explorer, text_viewer)
-    // in this project do not support passing a `user_data` context pointer in their callbacks.
-    static SdTestView* s_instance;
 
     // --- UI Setup & Logic ---
     void create_initial_view();
@@ -69,20 +64,12 @@ private:
     static void action_menu_left_cb(void* user_data);
     static void action_menu_right_cb(void* user_data);
 
-    // --- Static Callbacks for C Components (Workaround using s_instance) ---
-    static void file_selected_cb_c(const char* path);
-    static void file_long_pressed_cb_c(const char* path);
-    static void create_action_cb_c(file_item_type_t action_type, const char* current_path);
-    static void explorer_exit_cb_c();
-    static void text_viewer_exit_cb_c();
-
-    /**
-     * @brief LVGL event callback to ensure file_explorer_destroy() is called.
-     * 
-     * When the container hosting the file explorer is deleted (by lv_obj_clean or lv_obj_del),
-     * this event is triggered, allowing the file_explorer component to clean up its internal
-     * resources like timers and memory.
-     */
+    // --- Static Callbacks for C Components (Bridge to instance methods) ---
+    static void file_selected_cb_c(const char* path, void* user_data);
+    static void file_long_pressed_cb_c(const char* path, void* user_data);
+    static void create_action_cb_c(file_item_type_t type, const char* path, void* user_data);
+    static void explorer_exit_cb_c(void* user_data);
+    static void text_viewer_exit_cb_c(void* user_data);
     static void explorer_cleanup_event_cb(lv_event_t * e);
 };
 

@@ -10,6 +10,7 @@
 typedef struct {
     bool success;
     char* result_text;
+    void* user_data; // Pass context back to the UI thread
 } transcription_result_t;
 
 
@@ -28,9 +29,6 @@ private:
     char selected_item_path[256] = {0};
     lv_style_t style_action_menu_focused;
     bool styles_initialized = false;
-
-    // Singleton-like instance for C-style callbacks without user_data
-    static VoiceNotePlayerView* s_instance;
 
     // --- UI Setup & Logic ---
     void show_file_explorer();
@@ -60,13 +58,13 @@ private:
     static void action_menu_left_cb(void* user_data);
     static void action_menu_right_cb(void* user_data);
 
-    // --- Static Callbacks for C Components (using s_instance) ---
-    static void audio_file_selected_cb_c(const char* path);
-    static void file_long_pressed_cb_c(const char* path);
-    static void explorer_exit_cb_c();
-    static void player_exit_cb_c();
-    static void viewer_exit_cb_c();
-    static void stt_callback_c(bool success, char* result);
+    // --- Static Callbacks for C Components (Bridge to instance methods) ---
+    static void audio_file_selected_cb_c(const char* path, void* user_data);
+    static void file_long_pressed_cb_c(const char* path, void* user_data);
+    static void explorer_exit_cb_c(void* user_data);
+    static void player_exit_cb_c(void* user_data);
+    static void viewer_exit_cb_c(void* user_data);
+    static void stt_callback_c(bool success, char* result, void* user_data);
 
     // --- Static LVGL Callbacks ---
     static void explorer_cleanup_cb(lv_event_t * e);

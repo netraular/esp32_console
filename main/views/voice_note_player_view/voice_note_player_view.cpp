@@ -12,30 +12,21 @@
 static const char *TAG = "VOICE_NOTE_PLAYER_VIEW";
 static const char *NOTES_DIR = "/sdcard/notes";
 
-// Initialize static member
-VoiceNotePlayerView* VoiceNotePlayerView::s_instance = nullptr;
-
-
 // --- Lifecycle Methods ---
 VoiceNotePlayerView::VoiceNotePlayerView() {
     ESP_LOGI(TAG, "VoiceNotePlayerView constructed");
-    s_instance = this;
 }
 
 VoiceNotePlayerView::~VoiceNotePlayerView() {
     ESP_LOGI(TAG, "VoiceNotePlayerView destructed");
-    destroy_action_menu(false); // Clean up menu resources
-    reset_action_menu_styles(); // Clean up styles
-    hide_loading_indicator();   // Ensure loading indicator is removed
-
-    if (s_instance == this) {
-        s_instance = nullptr;
-    }
+    destroy_action_menu(false); 
+    reset_action_menu_styles(); 
+    hide_loading_indicator();
 }
 
 void VoiceNotePlayerView::create(lv_obj_t* parent) {
     ESP_LOGI(TAG, "Creating Voice Note Player View");
-    container = parent; // Use the parent directly as it's managed by view_manager
+    container = parent;
     show_file_explorer();
 }
 
@@ -74,18 +65,20 @@ void VoiceNotePlayerView::show_file_explorer() {
         lv_label_set_text(label, "No voice notes found.\n\nPress Cancel to go back.");
         lv_obj_center(label);
         button_manager_unregister_view_handlers();
-        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, [](void* d){ if(s_instance) s_instance->on_explorer_exit(); }, true, nullptr);
+        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, [](void* user_data){ 
+            if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_explorer_exit(); 
+        }, true, this);
         return;
     }
 
     file_explorer_host_container = lv_obj_create(container);
     lv_obj_remove_style_all(file_explorer_host_container);
     lv_obj_set_size(file_explorer_host_container, lv_pct(100), lv_pct(100));
-    lv_obj_add_event_cb(file_explorer_host_container, explorer_cleanup_cb, LV_EVENT_DELETE, nullptr);
+    lv_obj_add_event_cb(file_explorer_host_container, explorer_cleanup_cb, LV_EVENT_DELETE, this);
 
     file_explorer_create(file_explorer_host_container, NOTES_DIR, 
                          audio_file_selected_cb_c, file_long_pressed_cb_c, 
-                         nullptr, explorer_exit_cb_c);
+                         nullptr, explorer_exit_cb_c, this);
 }
 
 // --- Action Menu ---
@@ -109,9 +102,9 @@ void VoiceNotePlayerView::create_action_menu(const char* path) {
     lv_obj_center(list);
 
     action_menu_group = lv_group_create();
-    const char* actions[][2] = {{LV_SYMBOL_TRASH, "Delete"}, {LV_SYMBOL_EDIT, "Transcribe"}};
+    const char* actions[][2] = {{"Delete", LV_SYMBOL_TRASH}, {"Transcribe", LV_SYMBOL_EDIT}};
     for (auto const& action : actions) {
-        lv_obj_t* btn = lv_list_add_button(list, action[0], action[1]);
+        lv_obj_t* btn = lv_list_add_button(list, action[1], action[0]);
         lv_obj_add_style(btn, &style_action_menu_focused, LV_STATE_FOCUSED);
         lv_group_add_obj(action_menu_group, btn);
     }
@@ -158,7 +151,7 @@ void VoiceNotePlayerView::reset_action_menu_styles() {
 
 void VoiceNotePlayerView::on_audio_file_selected(const char* path) {
     lv_obj_clean(container);
-    audio_player_component_create(container, path, player_exit_cb_c);
+    audio_player_component_create(container, path, player_exit_cb_c, this);
 }
 
 void VoiceNotePlayerView::on_file_long_pressed(const char* path) {
@@ -178,7 +171,7 @@ void VoiceNotePlayerView::on_viewer_exit() {
 }
 
 void VoiceNotePlayerView::on_transcription_complete(bool success, char* result) {
-    auto* result_data = new transcription_result_t{success, result};
+    auto* result_data = new transcription_result_t{success, result, this};
     if (result_data) {
         lv_async_call(on_transcription_complete_ui_thread, result_data);
     } else {
@@ -204,7 +197,7 @@ void VoiceNotePlayerView::on_action_menu_ok() {
         }
         destroy_action_menu(false);
         show_loading_indicator("Transcribing...");
-        if (!stt_manager_transcribe(selected_item_path, stt_callback_c)) {
+        if (!stt_manager_transcribe(selected_item_path, stt_callback_c, this)) {
             hide_loading_indicator();
             ESP_LOGE(TAG, "Failed to start transcription task.");
             show_file_explorer();
@@ -232,38 +225,45 @@ void VoiceNotePlayerView::action_menu_cancel_cb(void* user_data) { static_cast<V
 void VoiceNotePlayerView::action_menu_left_cb(void* user_data) { static_cast<VoiceNotePlayerView*>(user_data)->on_action_menu_nav(false); }
 void VoiceNotePlayerView::action_menu_right_cb(void* user_data) { static_cast<VoiceNotePlayerView*>(user_data)->on_action_menu_nav(true); }
 
-void VoiceNotePlayerView::audio_file_selected_cb_c(const char* path) { if (s_instance) s_instance->on_audio_file_selected(path); }
-void VoiceNotePlayerView::file_long_pressed_cb_c(const char* path) { if (s_instance) s_instance->on_file_long_pressed(path); }
-void VoiceNotePlayerView::explorer_exit_cb_c() { if (s_instance) s_instance->on_explorer_exit(); }
-void VoiceNotePlayerView::player_exit_cb_c() { if (s_instance) s_instance->on_player_exit(); }
-void VoiceNotePlayerView::viewer_exit_cb_c() { if (s_instance) s_instance->on_viewer_exit(); }
-void VoiceNotePlayerView::stt_callback_c(bool success, char* result) { if (s_instance) s_instance->on_transcription_complete(success, result); }
+void VoiceNotePlayerView::audio_file_selected_cb_c(const char* path, void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_audio_file_selected(path); }
+void VoiceNotePlayerView::file_long_pressed_cb_c(const char* path, void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_file_long_pressed(path); }
+void VoiceNotePlayerView::explorer_exit_cb_c(void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_explorer_exit(); }
+void VoiceNotePlayerView::player_exit_cb_c(void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_player_exit(); }
+void VoiceNotePlayerView::viewer_exit_cb_c(void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_viewer_exit(); }
+void VoiceNotePlayerView::stt_callback_c(bool success, char* result, void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_transcription_complete(success, result); }
 
 void VoiceNotePlayerView::explorer_cleanup_cb(lv_event_t * e) {
     ESP_LOGD(TAG, "Explorer host container deleted. Calling file_explorer_destroy().");
     file_explorer_destroy();
-    if (s_instance) s_instance->file_explorer_host_container = nullptr;
+    
+    // --- FIX: Use the correct accessor function ---
+    void* user_data = lv_event_get_user_data(e);
+    if(user_data) {
+        static_cast<VoiceNotePlayerView*>(user_data)->file_explorer_host_container = nullptr;
+    }
 }
 
 void VoiceNotePlayerView::on_transcription_complete_ui_thread(void *user_data) {
     auto* result_data = static_cast<transcription_result_t*>(user_data);
-    if (!s_instance) {
+    auto* instance = static_cast<VoiceNotePlayerView*>(result_data->user_data);
+
+    if (!instance) {
         ESP_LOGE(TAG, "Player view instance is null, cannot process transcription result.");
         free(result_data->result_text);
         delete result_data;
         return;
     }
 
-    s_instance->hide_loading_indicator();
+    instance->hide_loading_indicator();
     
     if(result_data->success) {
         ESP_LOGI(TAG, "UI THREAD: Transcription success. Showing result.");
-        lv_obj_clean(s_instance->container);
-        text_viewer_create(s_instance->container, "Transcription", result_data->result_text, viewer_exit_cb_c);
+        lv_obj_clean(instance->container);
+        text_viewer_create(instance->container, "Transcription", result_data->result_text, viewer_exit_cb_c, instance);
     } else {
         ESP_LOGE(TAG, "UI THREAD: Transcription failed: %s", result_data->result_text);
         free(result_data->result_text);
-        s_instance->show_file_explorer();
+        instance->show_file_explorer();
     }
     delete result_data;
 }

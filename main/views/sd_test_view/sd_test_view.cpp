@@ -9,31 +9,16 @@
 
 static const char *TAG = "SD_TEST_VIEW";
 
-// --- Static Member Initialization ---
-SdTestView* SdTestView::s_instance = nullptr;
-
 // --- Lifecycle Methods ---
 SdTestView::SdTestView() {
     ESP_LOGI(TAG, "SdTestView constructed");
-    s_instance = this; // Set the singleton instance for C callbacks
 }
 
 SdTestView::~SdTestView() {
     ESP_LOGI(TAG, "SdTestView destructed, cleaning up resources.");
     
-    // Destroy the action menu if it's open to clean up its group and handlers.
-    // This is important if the view is switched while the menu is active.
     destroy_action_menu(false);
-    
     reset_action_menu_styles();
-
-    // The file explorer and text viewer are LVGL objects and will be deleted by
-    // the view manager's lv_obj_clean. The explorer_cleanup_event_cb ensures
-    // the file_explorer C component gets properly destroyed.
-    
-    if (s_instance == this) {
-        s_instance = nullptr; // Clear the singleton instance
-    }
 }
 
 void SdTestView::create(lv_obj_t* parent) {
@@ -70,7 +55,7 @@ void SdTestView::create_initial_view() {
 }
 
 void SdTestView::show_file_explorer() {
-    lv_obj_clean(container); // Clear the initial view widgets
+    lv_obj_clean(container);
 
     lv_obj_t* main_cont = lv_obj_create(container);
     lv_obj_remove_style_all(main_cont);
@@ -81,21 +66,18 @@ void SdTestView::show_file_explorer() {
     lv_label_set_text(title_label, "SD Explorer");
     lv_obj_set_style_text_font(title_label, &lv_font_montserrat_20, 0);
 
-    // This container hosts the explorer. We attach the cleanup callback to it.
     file_explorer_host_container = lv_obj_create(main_cont);
     lv_obj_remove_style_all(file_explorer_host_container);
     lv_obj_set_size(file_explorer_host_container, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_grow(file_explorer_host_container, 1);
     lv_obj_clear_flag(file_explorer_host_container, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Register the cleanup callback on the container's delete event.
-    // When lv_obj_clean() removes this container, explorer_cleanup_event_cb will be called.
-    lv_obj_add_event_cb(file_explorer_host_container, explorer_cleanup_event_cb, LV_EVENT_DELETE, NULL);
+    lv_obj_add_event_cb(file_explorer_host_container, explorer_cleanup_event_cb, LV_EVENT_DELETE, this);
 
-    // Create the file explorer, passing our static C-style callbacks.
+    // --- MODIFIED --- Pass `this` as user_data.
     file_explorer_create(file_explorer_host_container, sd_manager_get_mount_point(), 
                          file_selected_cb_c, file_long_pressed_cb_c, 
-                         create_action_cb_c, explorer_exit_cb_c);
+                         create_action_cb_c, explorer_exit_cb_c, this);
 }
 
 void SdTestView::create_action_menu(const char* path) {
@@ -104,10 +86,10 @@ void SdTestView::create_action_menu(const char* path) {
     ESP_LOGI(TAG, "Creating action menu for: %s", path);
     strncpy(this->selected_item_path, path, sizeof(this->selected_item_path) - 1);
 
-    file_explorer_set_input_active(false); // Deactivate explorer input
+    file_explorer_set_input_active(false);
     init_action_menu_styles();
 
-    action_menu_container = lv_obj_create(lv_screen_active()); // Create as overlay
+    action_menu_container = lv_obj_create(lv_screen_active());
     lv_obj_remove_style_all(action_menu_container);
     lv_obj_set_size(action_menu_container, LV_PCT(100), LV_PCT(100));
     lv_obj_set_style_bg_color(action_menu_container, lv_color_hex(0x000000), 0);
@@ -118,9 +100,9 @@ void SdTestView::create_action_menu(const char* path) {
     lv_obj_center(list);
 
     action_menu_group = lv_group_create();
-    const char* actions[][2] = {{LV_SYMBOL_EYE_OPEN, "Read"}, {LV_SYMBOL_EDIT, "Rename"}, {LV_SYMBOL_TRASH, "Delete"}};
+    const char* actions[][2] = {{"View", LV_SYMBOL_EYE_OPEN}, {"Rename", LV_SYMBOL_EDIT}, {"Delete", LV_SYMBOL_TRASH}};
     for (auto const& action : actions) {
-        lv_obj_t* btn = lv_list_add_button(list, action[0], action[1]);
+        lv_obj_t* btn = lv_list_add_button(list, action[1], action[0]);
         lv_obj_add_style(btn, &style_action_menu_focused, LV_STATE_FOCUSED);
         lv_group_add_obj(action_menu_group, btn);
     }
@@ -138,7 +120,7 @@ void SdTestView::create_action_menu(const char* path) {
 void SdTestView::destroy_action_menu(bool refresh_explorer) {
     if (!action_menu_container) return;
 
-    ESP_LOGI(TAG, "Destroying action menu.");
+    ESP_LOGD(TAG, "Destroying action menu.");
     if (action_menu_group) {
         lv_group_del(action_menu_group);
         action_menu_group = nullptr;
@@ -177,8 +159,8 @@ void SdTestView::on_file_selected(const char* path) {
         if (sd_manager_read_file(path, &file_content, &file_size)) {
             destroy_action_menu(false);
             lv_obj_clean(container);
-            // text_viewer takes ownership of file_content
-            text_viewer_obj = text_viewer_create(container, filename, file_content, text_viewer_exit_cb_c);
+            // --- MODIFIED --- Pass `this` as user_data.
+            text_viewer_obj = text_viewer_create(container, filename, file_content, text_viewer_exit_cb_c, this);
         } else {
             ESP_LOGE(TAG, "Failed to read file: %s", path);
             if (file_content) free(file_content);
@@ -226,7 +208,7 @@ void SdTestView::on_action_menu_ok() {
     const char* action_text = lv_list_get_button_text(lv_obj_get_parent(focused_btn), focused_btn);
     ESP_LOGI(TAG, "Action '%s' selected for: %s", action_text, selected_item_path);
 
-    if (strcmp(action_text, "Read") == 0) {
+    if (strcmp(action_text, "View") == 0) {
         on_file_selected(selected_item_path);
     } else if (strcmp(action_text, "Delete") == 0) {
         sd_manager_delete_item(selected_item_path);
@@ -261,11 +243,10 @@ void SdTestView::on_action_menu_nav(bool is_next) {
 }
 
 void SdTestView::on_text_viewer_exit() {
-    text_viewer_obj = nullptr; // The viewer is auto-deleted, just clear pointer.
+    text_viewer_obj = nullptr;
     show_file_explorer();
 }
 
-// --- Style Management ---
 void SdTestView::init_action_menu_styles() {
     if (styles_initialized) return;
     lv_style_init(&style_action_menu_focused);
@@ -279,7 +260,7 @@ void SdTestView::reset_action_menu_styles() {
     styles_initialized = false;
 }
 
-// --- Static Callback Bridges ---
+// --- Static Callbacks for Button Manager (Pass `this`) ---
 void SdTestView::initial_ok_press_cb(void* user_data) { static_cast<SdTestView*>(user_data)->on_initial_ok_press(); }
 void SdTestView::initial_cancel_press_cb(void* user_data) { static_cast<SdTestView*>(user_data)->on_initial_cancel_press(); }
 void SdTestView::action_menu_ok_cb(void* user_data) { static_cast<SdTestView*>(user_data)->on_action_menu_ok(); }
@@ -287,16 +268,18 @@ void SdTestView::action_menu_cancel_cb(void* user_data) { static_cast<SdTestView
 void SdTestView::action_menu_left_cb(void* user_data) { static_cast<SdTestView*>(user_data)->on_action_menu_nav(false); }
 void SdTestView::action_menu_right_cb(void* user_data) { static_cast<SdTestView*>(user_data)->on_action_menu_nav(true); }
 
-// --- Static Callbacks for C-Style Components ---
-void SdTestView::file_selected_cb_c(const char* path) { if (s_instance) s_instance->on_file_selected(path); }
-void SdTestView::file_long_pressed_cb_c(const char* path) { if (s_instance) s_instance->on_file_long_pressed(path); }
-void SdTestView::create_action_cb_c(file_item_type_t type, const char* path) { if (s_instance) s_instance->on_create_action(type, path); }
-void SdTestView::explorer_exit_cb_c() { if (s_instance) s_instance->on_explorer_exit(); }
-void SdTestView::text_viewer_exit_cb_c() { if (s_instance) s_instance->on_text_viewer_exit(); }
+// --- Static Callbacks for C Components (Use `user_data` to get `this`) ---
+void SdTestView::file_selected_cb_c(const char* path, void* user_data) { if (user_data) static_cast<SdTestView*>(user_data)->on_file_selected(path); }
+void SdTestView::file_long_pressed_cb_c(const char* path, void* user_data) { if (user_data) static_cast<SdTestView*>(user_data)->on_file_long_pressed(path); }
+void SdTestView::create_action_cb_c(file_item_type_t type, const char* path, void* user_data) { if (user_data) static_cast<SdTestView*>(user_data)->on_create_action(type, path); }
+void SdTestView::explorer_exit_cb_c(void* user_data) { if (user_data) static_cast<SdTestView*>(user_data)->on_explorer_exit(); }
+void SdTestView::text_viewer_exit_cb_c(void* user_data) { if (user_data) static_cast<SdTestView*>(user_data)->on_text_viewer_exit(); }
+
 void SdTestView::explorer_cleanup_event_cb(lv_event_t * e) {
-    ESP_LOGI(TAG, "Explorer host container deleted. Calling file_explorer_destroy().");
+    ESP_LOGD(TAG, "Explorer host container deleted. Calling file_explorer_destroy().");
     file_explorer_destroy();
-    if (s_instance) {
-        s_instance->file_explorer_host_container = nullptr; // Clear the dangling pointer
+    auto* instance = static_cast<SdTestView*>(lv_event_get_user_data(e));
+    if (instance) {
+        instance->file_explorer_host_container = nullptr;
     }
 }
