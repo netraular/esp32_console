@@ -7,13 +7,14 @@ idf_component_register(SRCS
         "./controllers/audio_recorder/audio_recorder.cpp"
         "./controllers/button_manager/button_manager.cpp"
         "./controllers/data_manager/data_manager.cpp"
-        "./controllers/littlefs_manager/littlefs_manager.cpp" # <-- ADDED
+        "./controllers/littlefs_manager/littlefs_manager.cpp"
         "./controllers/power_manager/power_manager.cpp"
         "./controllers/screen_manager/screen_manager.cpp"
         "./controllers/sd_card_manager/sd_card_manager.cpp"
         "./controllers/stt_manager/stt_manager.cpp"
         "./controllers/wifi_manager/wifi_manager.cpp"
         "./controllers/wifi_streamer/wifi_streamer.cpp"
+        "./controllers/lvgl_vfs_driver/lvgl_fs_driver.cpp"
 
         # --- Reusable UI Components ---
         "./components/audio_player_component/audio_player_component.cpp"
@@ -43,9 +44,10 @@ idf_component_register(SRCS
         "./views/wifi_stream_view/wifi_stream_view.cpp"
 
     INCLUDE_DIRS "."
+        "../managed_components/lvgl__lvgl/src/libs/lodepng"
     EMBED_FILES 
         "./server_certs/groq_api_ca.pem"
-        "./fs_image/welcome.txt" # <-- ADDED
+        "./fs_image/welcome.txt"
 )
 
 idf_build_set_property(PARTITION_TABLE_FILENAME partitions.csv)

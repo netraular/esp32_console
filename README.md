@@ -10,3 +10,5 @@ FAT Filesystem support -> Long filename support with heap
 Partition table -> Custom partition table
 Max WiFi TX power (dBm) -> 10
 LVGL -> 3rd Party Libraries -> PNG decoder library -> LV_USE_LODEPNG
+LVGL -> File system on top of littlefs API
+LVGL -> Enable system monitor component

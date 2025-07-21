@@ -13,8 +13,9 @@
  * @brief A view to select and display a PNG image from the SD card using LVGL's built-in decoder.
  *
  * This class provides a user interface to browse the SD card for .png files.
- * It leverages LVGL's integrated LodePNG decoder and VFS support to directly
- * load an image from a file path.
+ * It leverages LVGL's integrated lodepng decoder and VFS support to directly
+ * load an image from a file path. It also includes diagnostics for VFS operations
+ * and displays image dimensions upon successful loading.
  */
 class ImageTestView : public View {
 public:
@@ -24,23 +25,56 @@ public:
 
 private:
     // --- UI Widgets ---
-    lv_obj_t* info_label = nullptr;
-    lv_obj_t* image_widget = nullptr;
-    lv_obj_t* file_explorer_host_container = nullptr;
+    lv_obj_t* info_label = nullptr;               //!< Label for displaying general information or error messages.
+    lv_obj_t* image_widget = nullptr;             //!< The LVGL image object for displaying the PNG.
+    lv_obj_t* file_explorer_host_container = nullptr; //!< A temporary container for the file explorer component.
 
     // --- State ---
-    std::string current_image_path;
+    std::string current_image_path; //!< Stores the path of the currently displayed image.
     
     // --- UI Setup & Logic ---
+    /**
+     * @brief Creates the initial UI state (welcome message and prompts).
+     */
     void create_initial_view();
+    /**
+     * @brief Clears the current screen and displays the file explorer.
+     */
     void show_file_explorer();
+    /**
+     * @brief Loads and displays a PNG image from the given path.
+     * @param path The full path to the PNG file on the SD card (e.g., "/sdcard/image.png").
+     */
     void display_image_from_path(const char* path);
+    /**
+     * @brief Sets up button handlers for the initial view state.
+     */
     void setup_initial_button_handlers();
 
-    // --- Instance Methods for Actions ---
+    // --- Diagnostic functions ---
+    /**
+     * @brief Performs a diagnostic read test using LVGL's VFS to verify file accessibility.
+     * @param path The full path to the file on the SD card.
+     */
+    void perform_vfs_read_test(const char* path);
+
+    // --- Instance Methods for Actions (called by static callbacks) ---
+    /**
+     * @brief Handles the OK button press in the initial state (launches file explorer).
+     */
     void on_initial_ok_press();
+    /**
+     * @brief Handles the Cancel button press (returns to menu or initial view).
+     */
     void on_initial_cancel_press();
+    /**
+     * @brief Callback invoked when a file is selected in the file explorer.
+     * @param path The full path of the selected file.
+     */
     void on_file_selected(const char* path);
+    /**
+     * @brief Callback invoked when the file explorer is exited.
+     */
     void on_explorer_exit();
 
     // --- Static Callbacks for Button Manager & C Components (Bridge to instance methods) ---
@@ -48,6 +82,10 @@ private:
     static void initial_cancel_press_cb(void* user_data);
     static void file_selected_cb_c(const char* path, void* user_data);
     static void explorer_exit_cb_c(void* user_data);
+    /**
+     * @brief Event callback for cleaning up the file explorer component when its parent is deleted.
+     * This is registered to the `file_explorer_host_container`'s LV_EVENT_DELETE event.
+     */
     static void explorer_cleanup_event_cb(lv_event_t * e);
 };
 

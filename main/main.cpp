@@ -21,9 +21,10 @@
 #include "controllers/power_manager/power_manager.h"
 #include "views/view_manager.h"
 
-// --- CORRECTED INCLUDE: Use the correct header for LVGL v9 filesystem drivers ---
-// This path is relative to the component's `src` directory.
-#include "libs/fsdrv/lv_fsdrv.h"
+// --- Use our new custom driver and the PNG decoder ---
+#include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
+#include "libs/lodepng/lv_lodepng.h"
+
 
 static const char *TAG = "main";
 
@@ -84,6 +85,11 @@ extern "C" void app_main(void) {
         return;
     }
 
+    // Explicitly initialize LVGL's image decoders
+    ESP_LOGI(TAG, "Initializing LVGL image decoders...");
+    lv_lodepng_init();
+    ESP_LOGI(TAG, "LodePNG decoder initialized.");
+
     // Initialize LittleFS on the 'storage' partition
     if (littlefs_manager_init("storage")) {
         ESP_LOGI(TAG, "LittleFS manager initialized.");
@@ -99,14 +105,9 @@ extern "C" void app_main(void) {
         ESP_LOGE(TAG, "Failed to initialize SD Card manager hardware.");
     }
 
-    // --- MODIFIED: Simplified driver registration for LVGL v9 ---
-    // This allows LVGL to open files from the SD card using a drive letter (e.g., "S:").
-    // IMPORTANT: This requires LV_USE_FS_POSIX to be enabled in LVGL's configuration.
-    ESP_LOGI(TAG, "Registering POSIX filesystem with LVGL");
-    lv_fs_posix_init(); // This single call registers the driver.
-                        // The drive letter defaults to 'S' via LV_FS_POSIX_LETTER in lv_conf.h
-    ESP_LOGI(TAG, "LVGL VFS registered for drive 'S'");
-    // --- END OF MODIFICATION ---
+    // Use the custom VFS driver to bridge LVGL and the ESP-IDF VFS
+    // This replaces lv_fs_posix_init()
+    lvgl_fs_driver_init('S');
 
     // Initialize buttons
     button_manager_init();
