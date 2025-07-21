@@ -12,6 +12,7 @@
 #include "multi_click_test_view/multi_click_test_view.h"
 #include "click_counter_view/click_counter_view.h"
 #include "image_test_view/image_test_view.h"
+#include "littlefs_test_view/littlefs_test_view.h"
 #include "sd_test_view/sd_test_view.h"
 #include "speaker_test_view/speaker_test_view.h"
 #include "mic_test_view/mic_test_view.h"
@@ -40,6 +41,7 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_MULTI_CLICK_TEST] = []() { return new MultiClickTestView(); };
     s_view_factory[VIEW_ID_CLICK_COUNTER_TEST] = []() { return new ClickCounterView(); };
     s_view_factory[VIEW_ID_IMAGE_TEST] = []() { return new ImageTestView(); };
+    s_view_factory[VIEW_ID_LITTLEFS_TEST] = []() { return new LittlefsTestView(); };
     s_view_factory[VIEW_ID_SD_TEST] = []() { return new SdTestView(); };
     s_view_factory[VIEW_ID_SPEAKER_TEST] = []() { return new SpeakerTestView(); };
     s_view_factory[VIEW_ID_MIC_TEST] = []() { return new MicTestView(); };

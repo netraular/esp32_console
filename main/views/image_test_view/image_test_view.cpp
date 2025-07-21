@@ -1,5 +1,6 @@
 #include "image_test_view.h"
-#include "controllers/littlefs_manager/littlefs_manager.h"
+#include "controllers/sd_card_manager/sd_card_manager.h"
+#include <cstring>
 
 static const char *TAG = "IMAGE_TEST_VIEW";
 
@@ -13,55 +14,129 @@ ImageTestView::~ImageTestView() {
 }
 
 void ImageTestView::create(lv_obj_t* parent) {
-    ESP_LOGI(TAG, "Creating Image Test view UI");
-    container = lv_obj_create(parent);
-    lv_obj_remove_style_all(container);
-    lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
-    lv_obj_center(container);
-    
-    setup_ui(container);
-    setup_button_handlers();
+    ESP_LOGI(TAG, "Creating Image Test View");
+    container = parent;
+    create_initial_view();
 }
 
-// --- UI Setup ---
-void ImageTestView::setup_ui(lv_obj_t* parent) {
-    // Create a title
-    lv_obj_t *title_label = lv_label_create(parent);
-    lv_label_set_text(title_label, "LittleFS Test");
-    lv_obj_set_style_text_font(title_label, &lv_font_montserrat_20, 0);
-    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 10);
+// --- UI & State Management ---
 
-    // Create the main text label
-    lv_obj_t* content_label = lv_label_create(parent);
-    lv_obj_set_width(content_label, LV_PCT(90));
-    lv_obj_align(content_label, LV_ALIGN_CENTER, 0, 10);
-    lv_label_set_long_mode(content_label, LV_LABEL_LONG_WRAP);
+void ImageTestView::create_initial_view() {
+    current_image_path.clear();
+    lv_obj_clean(container);
 
-    // Attempt to read the file from LittleFS
-    char* file_content = nullptr;
-    size_t file_size = 0;
-    if (littlefs_manager_read_file("welcome.txt", &file_content, &file_size) && file_content) {
-        ESP_LOGI(TAG, "Successfully read 'welcome.txt'");
-        lv_label_set_text(content_label, file_content);
-        free(file_content); // Free the buffer after LVGL has copied the text
+    lv_obj_t* title_label = lv_label_create(container);
+    lv_obj_set_style_text_font(title_label, &lv_font_montserrat_24, 0);
+    lv_label_set_text(title_label, "PNG Image Test (SD)");
+    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 20);
+
+    info_label = lv_label_create(container);
+    lv_obj_set_style_text_align(info_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_center(info_label);
+    lv_label_set_text(info_label, "Press OK to select a .png file\nfrom the SD Card.");
+
+    image_widget = nullptr;
+    setup_initial_button_handlers();
+}
+
+void ImageTestView::show_file_explorer() {
+    lv_obj_clean(container);
+
+    file_explorer_host_container = lv_obj_create(container);
+    lv_obj_remove_style_all(file_explorer_host_container);
+    lv_obj_set_size(file_explorer_host_container, LV_PCT(100), LV_PCT(100));
+    lv_obj_add_event_cb(file_explorer_host_container, explorer_cleanup_event_cb, LV_EVENT_DELETE, this);
+
+    file_explorer_create(
+        file_explorer_host_container,
+        sd_manager_get_mount_point(),
+        file_selected_cb_c,
+        nullptr, 
+        nullptr, 
+        explorer_exit_cb_c,
+        this
+    );
+}
+
+void ImageTestView::display_image_from_path(const char* path) {
+    const char* mount_point = sd_manager_get_mount_point();
+    const char* relative_path = strstr(path, mount_point);
+    if (relative_path) {
+        relative_path += strlen(mount_point);
     } else {
-        ESP_LOGE(TAG, "Failed to read 'welcome.txt'");
-        lv_label_set_text(content_label, "Error:\nCould not read 'welcome.txt' from LittleFS. Check logs.");
+        relative_path = path;
+    }
+    
+    char lvgl_path[260];
+    snprintf(lvgl_path, sizeof(lvgl_path), "S:%s", relative_path);
+    ESP_LOGI(TAG, "Attempting to load image from LVGL path: %s", lvgl_path);
+
+    lv_obj_clean(container);
+    image_widget = lv_img_create(container);
+    lv_img_set_src(image_widget, lvgl_path);
+
+    if(lv_obj_get_width(image_widget) == 0 || lv_obj_get_height(image_widget) == 0) {
+        ESP_LOGE(TAG, "Failed to load or decode image. Displaying error.");
+        create_initial_view();
+        lv_label_set_text(info_label, "Error: Failed to load image.\nCheck file or console for errors.");
+        return;
+    }
+
+    lv_obj_center(image_widget);
+    current_image_path = path;
+
+    lv_obj_t *info_label_local = lv_label_create(container);
+    lv_label_set_text(info_label_local, "Press Cancel to return");
+    lv_obj_align(info_label_local, LV_ALIGN_BOTTOM_MID, 0, -20);
+    
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, initial_cancel_press_cb, true, this);
+}
+
+// --- Button Handling & Callbacks ---
+void ImageTestView::setup_initial_button_handlers() {
+    button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, initial_ok_press_cb, true, this);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, initial_cancel_press_cb, true, this);
+}
+
+void ImageTestView::on_initial_ok_press() {
+    if (sd_manager_check_ready()) {
+        show_file_explorer();
+    } else if (info_label) {
+        lv_label_set_text(info_label, "Failed to read SD card.\nCheck card and press OK to retry.");
     }
 }
 
-// --- Button Handling ---
-void ImageTestView::setup_button_handlers() {
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, ImageTestView::cancel_press_cb, true, this);
+void ImageTestView::on_initial_cancel_press() {
+    if (current_image_path.empty()) {
+        view_manager_load_view(VIEW_ID_MENU);
+    } else {
+        create_initial_view();
+    }
 }
 
-// --- Instance Methods for Button Actions ---
-void ImageTestView::on_cancel_press() {
-    ESP_LOGI(TAG, "Cancel pressed, returning to menu.");
-    view_manager_load_view(VIEW_ID_MENU);
+void ImageTestView::on_file_selected(const char* path) {
+    const char* ext = strrchr(path, '.');
+    if (ext && (strcasecmp(ext, ".png") == 0)) {
+        ESP_LOGI(TAG, "PNG file selected: %s. Displaying...", path);
+        display_image_from_path(path);
+    } else {
+        ESP_LOGW(TAG, "Non-PNG file selected: %s", path);
+        file_explorer_refresh();
+    }
 }
 
-// --- Static Callbacks (Bridges) ---
-void ImageTestView::cancel_press_cb(void* user_data) {
-    static_cast<ImageTestView*>(user_data)->on_cancel_press();
+void ImageTestView::on_explorer_exit() {
+    ESP_LOGI(TAG, "Exited file explorer. Returning to initial view.");
+    create_initial_view();
+}
+
+void ImageTestView::initial_ok_press_cb(void* user_data) { static_cast<ImageTestView*>(user_data)->on_initial_ok_press(); }
+void ImageTestView::initial_cancel_press_cb(void* user_data) { static_cast<ImageTestView*>(user_data)->on_initial_cancel_press(); }
+void ImageTestView::file_selected_cb_c(const char* path, void* user_data) { if (user_data) static_cast<ImageTestView*>(user_data)->on_file_selected(path); }
+void ImageTestView::explorer_exit_cb_c(void* user_data) { if (user_data) static_cast<ImageTestView*>(user_data)->on_explorer_exit(); }
+void ImageTestView::explorer_cleanup_event_cb(lv_event_t * e) {
+    ESP_LOGD(TAG, "Explorer host container deleted. Calling file_explorer_destroy().");
+    file_explorer_destroy();
+    auto* instance = static_cast<ImageTestView*>(lv_event_get_user_data(e));
+    if (instance) instance->file_explorer_host_container = nullptr;
 }

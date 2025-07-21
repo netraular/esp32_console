@@ -30,6 +30,7 @@ idf_component_register(SRCS
         "./views/click_counter_view/click_counter_view.cpp"
         "./views/click_counter_view/assets/coin_pile.c"
         "./views/image_test_view/image_test_view.cpp"
+        "./views/littlefs_test_view/littlefs_test_view.cpp"
         "./views/sd_test_view/sd_test_view.cpp"
         "./views/speaker_test_view/speaker_test_view.cpp"
         "./views/mic_test_view/mic_test_view.cpp"
