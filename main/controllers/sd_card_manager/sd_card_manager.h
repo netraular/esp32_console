@@ -81,6 +81,13 @@ bool sd_manager_rename_item(const char* old_path, const char* new_path);
 bool sd_manager_create_directory(const char* path);
 
 /**
+ * @brief Creates a new, empty file.
+ * @param path The full path of the file to create.
+ * @return true on success, false if the file already exists or on error.
+ */
+bool sd_manager_create_file(const char* path);
+
+/**
  * @brief Reads the entire content of a file into a dynamically allocated buffer.
  *
  * @warning The caller is responsible for freeing the allocated `*buffer` with `free()`.

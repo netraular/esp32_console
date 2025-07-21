@@ -12,6 +12,25 @@
 
 static const char *TAG = "BTN_MGR";
 
+// --- Internal Data Structures (FIX) ---
+// A single entry for a handler function and its user data
+typedef struct {
+    button_handler_t handler;
+    void* user_data;
+} handler_entry_t;
+
+// A collection of handlers for all possible event types
+typedef struct {
+    handler_entry_t handlers[BUTTON_EVENT_COUNT];
+} button_event_handlers_t;
+
+// Contains both the view-specific and default handlers for a single button
+typedef struct {
+    button_event_handlers_t view_handlers;
+    button_event_handlers_t default_handlers;
+} button_handlers_t;
+// --- End of FIX ---
+
 // --- State Variables ---
 static button_handle_t buttons[BUTTON_COUNT];
 static button_handlers_t button_handlers[BUTTON_COUNT];
@@ -48,8 +67,7 @@ typedef struct {
     button_event_t raw_event_type;
 } button_cb_user_data_t;
 
-// --- FIX: Statically allocated user data to prevent memory leaks ---
-// We have BUTTON_COUNT buttons and we register for 6 different raw event types for each.
+// Statically allocated user data to prevent memory leaks
 #define NUM_RAW_EVENTS 6
 static button_cb_user_data_t s_button_cb_user_data[BUTTON_COUNT][NUM_RAW_EVENTS];
 
@@ -195,7 +213,6 @@ void button_manager_init() {
         
         for (int j = 0; j < NUM_RAW_EVENTS; j++) {
             button_event_t event = events_to_register[j];
-            // --- FIX: Use the statically allocated array for user data ---
             s_button_cb_user_data[i][j] = {(button_id_t)i, event};
             iot_button_register_cb(buttons[i], event, NULL, generic_button_event_cb, &s_button_cb_user_data[i][j]);
         }

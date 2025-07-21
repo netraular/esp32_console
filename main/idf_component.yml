@@ -1,7 +1,5 @@
-## IDF Component Manager Manifest File for ESP32-S3 N16R8
 dependencies:
-  ## Required IDF version
   idf:
     version: '>=5.4'
-  lvgl/lvgl: ^9.2.2 # Very important to keep the LVGL version in mind for code implementation, as LVGL v9 has breaking changes from v8.
+  lvgl/lvgl: ^9.2.2 
   espressif/button: ^4.0.0
