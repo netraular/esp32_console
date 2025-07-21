@@ -1,88 +1,38 @@
-# Audio Manager
+# Power Manager
 
 ## Description
-This component manages audio playback of WAV files using the I2S peripheral. It is designed to run in a dedicated FreeRTOS task, allowing for non-blocking audio playback control from the main application or UI. It incorporates robust error handling and advanced task synchronization for stable performance.
+This component manages the device's power states, specifically light sleep and deep sleep. It provides simple functions to reduce power consumption, making it essential for battery-powered operation.
 
 ## Features
--   Plays `.wav` files from a filesystem (e.g., SD card).
--   Supports basic playback controls: Play, Pause, Resume, and Stop.
--   **Robust Volume Control:** Implements a safe volume limit. It intelligently maps a user-facing 0-100% scale to a pre-configured physical maximum (e.g., 25%), protecting the speaker from damage.
--   **Dynamic Low-Frequency Attenuation:** To prevent distortion in small speakers at high volumes, this manager includes a **dynamic 4th-order Linkwitz-Riley High-Pass Filter (HPF)**. The filter's cutoff frequency automatically increases with the volume, effectively rolling off problematic bass frequencies only when needed, preserving sound quality at lower volumes.
--   **Advanced State Management:** Exposes functions to get the current playback state (including `AUDIO_STATE_ERROR`), total duration, and progress.
--   **Error Handling:** Can detect playback errors (like an SD card being removed) and transition to an `AUDIO_STATE_ERROR` state, allowing the UI to react gracefully.
--   **Automatic I2S Configuration:** Initializes and tears down the I2S driver automatically based on the WAV file's properties (sample rate, bit depth).
--   **Real-time Audio Visualizer Data:** Processes the audio stream and sends peak data for **32 frequency bars** to a FreeRTOS queue, enabling a detailed spectrum display in the UI.
+-   **Light Sleep:** Provides a function (`power_manager_enter_light_sleep`) that puts the device into a low-power state where the CPU is paused, but RAM and peripherals are retained.
+    -   It configures a GPIO pin (the ON/OFF button) as the wake-up source.
+    -   It automatically pauses button input before sleeping and for a short period after waking to prevent spurious events.
+-   **Deep Sleep:** Provides a function (`power_manager_enter_deep_sleep`) to put the device into its lowest power state. In this implementation, it's used for a "full shutdown" as the only way to wake up is via an external reset.
 
 ## How to Use
 
-1.  **Initialize the Manager:**
-    Call this function once at application startup.
+1.  **Enter Light Sleep (Standby):**
+    Call this function to put the device to sleep. The code execution will pause and resume from the same point after the wake-up button is pressed.
     ```cpp
-    #include "controllers/audio_manager/audio_manager.h"
+    #include "controllers/power_manager/power_manager.h"
     
-    audio_manager_init();
-    ```
-
-2.  **Play a File:**
-    To start playback, provide the full path to a `.wav` file.
-    ```cpp
-    if (!audio_manager_play("/sdcard/music/my_song.wav")) {
-        // Handle error, e.g., previous task didn't stop in time
-    }
-    ```
-
-3.  **Control Playback:**
-    Use these functions from your UI or event handlers.
-    ```cpp
-    audio_manager_pause();
-    audio_manager_resume();
-    audio_manager_stop(); // Stops playback and cleans up resources
-    ```
-
-4.  **Control Volume:**
-    Adjust the volume in predefined steps. The manager handles the mapping to the safe physical limit.
-    ```cpp
-    audio_manager_volume_up();
-    audio_manager_volume_down();
-    ```
-
-5.  **Get Status Information:**
-    These are essential for updating a user interface.
-    ```cpp
-    audio_player_state_t state = audio_manager_get_state();
-
-    if (state == AUDIO_STATE_ERROR) {
-        // The player stopped due to an error (e.g., SD card removed)
-        // Update UI to show an error message and disable playback controls.
-    }
-
-    uint32_t duration_sec = audio_manager_get_duration_s();
-    uint32_t progress_sec = audio_manager_get_progress_s();
+    // Typically called from a view when the user presses the power button
+    power_manager_enter_light_sleep();
     
-    // Note: This returns the internal physical volume (e.g., 0-25).
-    // The UI is responsible for scaling this to a 0-100% display value.
-    uint8_t physical_volume = audio_manager_get_volume(); 
+    // Code resumes here after waking up
+    ESP_LOGI(TAG, "Woke up!");
     ```
 
-6.  **Using the Audio Visualizer:**
-    Read the visualizer data from the queue provided by the manager.
+2.  **Enter Deep Sleep (Shutdown):**
+    Call this to turn the device off. **This function does not return.** The device will need to be powered off and on, or reset using the RST button.
     ```cpp
-    #include "controllers/audio_manager/audio_manager.h"
-
-    // In your UI update task or timer:
-    QueueHandle_t viz_queue = audio_manager_get_visualizer_queue();
-    visualizer_data_t viz_data;
-
-    if (xQueueReceive(viz_queue, &viz_data, 0) == pdPASS) {
-        // New data is in viz_data.bar_values, update your LVGL widget.
-        // audio_visualizer_set_values(my_visualizer, viz_data.bar_values);
-    }
+    // Called when the user confirms they want to shut down the device
+    power_manager_enter_deep_sleep();
+    
+    // This part of the code will not be reached
     ```
 
 ## Dependencies
--   Requires an I2S-compatible audio codec/amplifier (e.g., MAX98357A).
--   Depends on a mounted filesystem (like the `sd_card_manager`).
-
-## Limitations
--   Currently supports only WAV file format (16-bit or 8-bit PCM).
--   The WAV parser is basic and expects standard `fmt ` and `data` chunks.
+-   `esp_sleep` component from ESP-IDF.
+-   `button_manager` to pause input during the wake-up transition.
+-   Requires the wake-up pin (`BUTTON_ON_OFF_PIN`) to be defined in `config.h`.
