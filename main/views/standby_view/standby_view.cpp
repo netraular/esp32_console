@@ -20,23 +20,33 @@ StandbyView::StandbyView() {
 StandbyView::~StandbyView() {
     ESP_LOGI(TAG, "StandbyView destructed");
 
-    // --- FIX ---
-    // Manually clean up any resources that are not LVGL widgets parented to the screen,
-    // as they won't be deleted by lv_obj_clean() in the ViewManager.
-    // DO NOT call functions that re-register button handlers (like destroy_shutdown_popup).
-    
+    // The ViewManager will automatically unregister all view-specific button handlers.
+    // We only need to clean up resources created by this view that are not
+    // children of the view's main container.
+
     // Delete timers
-    if (update_timer) { lv_timer_del(update_timer); update_timer = nullptr; }
-    if (volume_up_timer) { lv_timer_del(volume_up_timer); volume_up_timer = nullptr; }
-    if (volume_down_timer) { lv_timer_del(volume_down_timer); volume_down_timer = nullptr; }
+    if (update_timer) {
+        lv_timer_del(update_timer);
+        update_timer = nullptr;
+    }
+    if (volume_up_timer) {
+        lv_timer_del(volume_up_timer);
+        volume_up_timer = nullptr;
+    }
+    if (volume_down_timer) {
+        lv_timer_del(volume_down_timer);
+        volume_down_timer = nullptr;
+    }
     
-    // Delete LVGL group used for the popup
+    // The shutdown popup is an LVGL object (and its children) parented to the screen.
+    // If it exists when the view is destroyed, ViewManager's lv_obj_clean() will
+    // delete it. We just need to ensure its non-widget resources (group, styles) are freed.
     if (shutdown_popup_group) {
         lv_group_del(shutdown_popup_group);
         shutdown_popup_group = nullptr;
     }
 
-    // Reset styles
+    // Reset styles to free any allocated memory.
     reset_popup_styles();
 }
 
@@ -185,11 +195,18 @@ void StandbyView::create_shutdown_popup() {
     lv_obj_set_style_bg_color(shutdown_popup_container, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(shutdown_popup_container, LV_OPA_70, 0);
 
+    // --- FIX: LVGL v9 Message Box Creation ---
+    // 1. Create the base message box object
     lv_obj_t* msgbox = lv_msgbox_create(shutdown_popup_container);
+
+    // 2. Add content to it
     lv_msgbox_add_title(msgbox, "Turn Off Device");
     lv_msgbox_add_text(msgbox, "Reset button will be needed to start the device again.");
+    
+    // 3. Add footer buttons and capture their pointers
     lv_obj_t* btn_cancel_obj = lv_msgbox_add_footer_button(msgbox, "Cancel");
     lv_obj_t* btn_ok_obj = lv_msgbox_add_footer_button(msgbox, "Turn Off");
+    // --- End of FIX ---
     
     lv_obj_center(msgbox);
     lv_obj_set_width(msgbox, 200);
@@ -225,7 +242,9 @@ void StandbyView::destroy_shutdown_popup() {
 }
 
 void StandbyView::on_popup_ok() {
+    if (!shutdown_popup_group) return;
     lv_obj_t* focused_btn = lv_group_get_focused(shutdown_popup_group);
+    if (!focused_btn) return;
     const char* action_text = lv_label_get_text(lv_obj_get_child(focused_btn, 0));
     if (strcmp(action_text, "Turn Off") == 0) {
         ESP_LOGI(TAG, "User confirmed shutdown. Entering deep sleep.");
