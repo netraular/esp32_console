@@ -5,7 +5,7 @@ A reusable LVGL component that provides a fully functional file and directory br
 
 ## Features
 -   **Filesystem Navigation:** Navigate directory structures, including moving to parent directories.
--   **Callback-driven:** Interacts with the parent view via callbacks for file selection, long-press actions, creation actions, and exiting.
+-   **Callback-driven:** Interacts with the parent view via callbacks for file selection, long-press actions, creation actions, and exiting. All callbacks now support a `void* user_data` parameter for passing context.
 -   **Dynamic Content:** Reads and displays the contents of a given path from a mounted VFS (e.g., SD card).
 -   **Sorting:** Automatically sorts entries, displaying directories first, then files, both in case-insensitive alphabetical order.
 -   **Input Handling:** Manages its own button input for navigation (Up/Down/Select/Back) and can be activated or deactivated.
@@ -15,7 +15,7 @@ A reusable LVGL component that provides a fully functional file and directory br
 ## How to Use
 
 1.  **Create the Component:**
-    Instantiate the explorer within a container object in your view. Provide callbacks to handle user actions.
+    Instantiate the explorer within a container object in your view. Provide callbacks to handle user actions and a `user_data` pointer (like `this`) to be passed to them.
     ```cpp
     #include "components/file_explorer/file_explorer.h"
 
@@ -29,28 +29,29 @@ A reusable LVGL component that provides a fully functional file and directory br
         my_on_file_selected_callback,       // Func for TAP on a file
         my_on_file_long_press_callback,     // Func for LONG PRESS on a file (can be NULL)
         my_on_action_callback,              // Func for actions like "Create" (can be NULL)
-        my_on_exit_callback                 // Func for when user exits the explorer
+        my_on_exit_callback,                // Func for when user exits the explorer
+        this                                // Context pointer passed to all callbacks
     );
     ```
 
 2.  **Implement Callbacks:**
-    Define the functions that will react to the explorer's events.
+    Define the functions that will react to the explorer's events. They now all receive the `user_data` pointer.
     ```cpp
-    void my_on_file_selected_callback(const char* file_path) {
+    void my_on_file_selected_callback(const char* file_path, void* user_data) {
         printf("File selected: %s\n", file_path);
         // User selected a file, e.g., open it in a player or viewer.
     }
     
-    void my_on_file_long_press_callback(const char* file_path) {
+    void my_on_file_long_press_callback(const char* file_path, void* user_data) {
         printf("File long-pressed: %s\n", file_path);
         // User long-pressed a file, e.g., show a delete confirmation popup.
     }
 
-    void my_on_action_callback(file_item_type_t action, const char* current_path) {
+    void my_on_action_callback(file_item_type_t action, const char* current_path, void* user_data) {
         // User wants to create a new file or folder in current_path.
     }
 
-    void my_on_exit_callback(void) {
+    void my_on_exit_callback(void* user_data) {
         // User wants to close the explorer.
         // Your view should now destroy the explorer and restore its own UI.
     }

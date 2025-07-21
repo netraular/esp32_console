@@ -8,15 +8,17 @@ static const char *TAG = "COMP_TEXT_VIEWER";
 typedef struct {
     char* content_to_free;
     text_viewer_exit_callback_t on_exit_cb;
+    void* exit_cb_user_data; // --- NEW --- Store user data for the callback
 } text_viewer_data_t;
 
 // --- Internal event and button handlers ---
 
-// MODIFIED: Now uses user_data to get the context, which is more robust.
+// The handler now gets the data struct, which contains the real callback and its user_data.
 static void handle_exit_press(void* user_data) {
     text_viewer_data_t* data = (text_viewer_data_t*)user_data;
     if (data && data->on_exit_cb) {
-        data->on_exit_cb();
+        // --- MODIFIED --- Pass the stored user_data to the callback.
+        data->on_exit_cb(data->exit_cb_user_data);
     }
 }
 
@@ -40,7 +42,7 @@ static void viewer_container_delete_cb(lv_event_t * e) {
 
 // --- Public Functions ---
 
-lv_obj_t* text_viewer_create(lv_obj_t* parent, const char* title, char* content, text_viewer_exit_callback_t on_exit) {
+lv_obj_t* text_viewer_create(lv_obj_t* parent, const char* title, char* content, text_viewer_exit_callback_t on_exit, void* exit_cb_user_data) {
     ESP_LOGI(TAG, "Creating text viewer for: %s", title);
 
     // Create the data structure for the component
@@ -52,6 +54,7 @@ lv_obj_t* text_viewer_create(lv_obj_t* parent, const char* title, char* content,
     }
     data->content_to_free = content;
     data->on_exit_cb = on_exit;
+    data->exit_cb_user_data = exit_cb_user_data; // --- NEW --- Store user data
 
     // Main container
     lv_obj_t* main_cont = lv_obj_create(parent);
@@ -74,7 +77,7 @@ lv_obj_t* text_viewer_create(lv_obj_t* parent, const char* title, char* content,
 
     // Register button handlers
     button_manager_unregister_view_handlers(); // Clear previous handlers
-    // MODIFIED: We pass the 'data' pointer as user_data to the handler.
+    // Pass the 'data' pointer as user_data to the button handler.
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_exit_press, true, data);
     // Nullify other buttons to prevent unwanted actions
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, NULL, true, nullptr);

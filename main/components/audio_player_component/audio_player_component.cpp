@@ -9,10 +9,11 @@
 
 static const char *TAG = "AUDIO_PLAYER_COMP";
 
-// Estructura de datos para el estado del componente
+// Component state data structure
 typedef struct {
     char current_song_path[256];
     audio_player_exit_callback_t on_exit_cb;
+    void* exit_cb_user_data; // --- NEW --- Store user data for the callback
     bool is_exiting;
     bool is_playing_active;
     bool viz_data_received;
@@ -29,12 +30,12 @@ typedef struct {
 } audio_player_data_t;
 
 
-// --- Prototipos Internos ---
+// --- Internal Prototypes ---
 static void ui_update_timer_cb(lv_timer_t *timer);
 static void player_container_delete_cb(lv_event_t * e);
 static const char* get_filename_from_path(const char* path);
 
-// --- Manejadores de botones (ahora usan el user_data del componente) ---
+// --- Button Handlers (now use the component's user_data) ---
 static void handle_ok_press(void* user_data) {
     audio_player_data_t* data = (audio_player_data_t*)user_data;
     audio_player_state_t state = audio_manager_get_state();
@@ -84,8 +85,8 @@ static void handle_volume_down(void* user_data) {
     }
 }
 
-// --- Función Principal de Creación ---
-lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path, audio_player_exit_callback_t on_exit) {
+// --- Main Create Function (MODIFIED) ---
+lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path, audio_player_exit_callback_t on_exit, void* exit_cb_user_data) {
     ESP_LOGI(TAG, "Creating for file: %s", file_path);
     
     audio_player_data_t* data = (audio_player_data_t*)lv_malloc(sizeof(audio_player_data_t));
@@ -95,6 +96,7 @@ lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path,
 
     strncpy(data->current_song_path, file_path, sizeof(data->current_song_path) - 1);
     data->on_exit_cb = on_exit;
+    data->exit_cb_user_data = exit_cb_user_data; // --- NEW --- Store user data
 
     lv_obj_t *main_cont = lv_obj_create(parent);
     lv_obj_remove_style_all(main_cont);
@@ -104,7 +106,7 @@ lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path,
     lv_obj_add_event_cb(main_cont, player_container_delete_cb, LV_EVENT_DELETE, data);
     lv_obj_set_user_data(main_cont, data);
 
-    // --- UI de la parte superior (Título y Volumen) ---
+    // --- Top UI (Title & Volume) ---
     lv_obj_t *top_cont = lv_obj_create(main_cont);
     lv_obj_remove_style_all(top_cont);
     lv_obj_set_size(top_cont, lv_pct(95), LV_SIZE_CONTENT);
@@ -121,11 +123,11 @@ lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path,
     lv_obj_set_style_text_font(data->volume_label_widget, &lv_font_montserrat_16, 0);
     handle_volume_up(data); // Call once to set initial value
 
-    // --- Visualizador ---
+    // --- Visualizer ---
     data->visualizer_widget = audio_visualizer_create(main_cont, VISUALIZER_BAR_COUNT);
     lv_obj_set_size(data->visualizer_widget, lv_pct(100), lv_pct(40));
     
-    // --- Barra de Progreso ---
+    // --- Progress Bar ---
     lv_obj_t *progress_cont = lv_obj_create(main_cont);
     lv_obj_remove_style_all(progress_cont);
     lv_obj_set_size(progress_cont, lv_pct(95), LV_SIZE_CONTENT);
@@ -140,12 +142,12 @@ lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path,
     lv_label_set_text(data->time_total_label_widget, "??:??");
     lv_obj_align_to(data->time_total_label_widget, data->slider_widget, LV_ALIGN_OUT_BOTTOM_RIGHT, 0, 5);
 
-    // --- Botón de Play/Pause ---
+    // --- Play/Pause Button ---
     lv_obj_t *play_pause_btn = lv_button_create(main_cont);
     data->play_pause_btn_label = lv_label_create(play_pause_btn);
     lv_obj_set_style_text_font(data->play_pause_btn_label, &lv_font_montserrat_28, 0);
     
-    // --- Iniciar Lógica ---
+    // --- Logic Start ---
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true, data);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, data);
     button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_volume_down, true, data);
@@ -163,7 +165,7 @@ lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path,
     return main_cont;
 }
 
-// --- Lógica del Timer y Limpieza ---
+// --- Timer Logic and Cleanup ---
 static void ui_update_timer_cb(lv_timer_t *timer) {
     audio_player_data_t* data = (audio_player_data_t*)lv_timer_get_user_data(timer);
 
@@ -171,7 +173,8 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
 
     if ((data->is_exiting && state == AUDIO_STATE_STOPPED) || state == AUDIO_STATE_ERROR) {
         if (data->on_exit_cb) {
-            data->on_exit_cb();
+            // --- MODIFIED --- Pass user data to the callback
+            data->on_exit_cb(data->exit_cb_user_data); 
         }
         return; 
     }
@@ -208,7 +211,7 @@ static void player_container_delete_cb(lv_event_t * e) {
         if (data->ui_update_timer) {
             lv_timer_delete(data->ui_update_timer);
         }
-        // Asegurarse de que el audio se detiene si no se ha hecho ya
+        // Ensure audio stops if it hasn't already
         if (audio_manager_get_state() != AUDIO_STATE_STOPPED) {
             audio_manager_stop();
         }

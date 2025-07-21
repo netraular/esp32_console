@@ -6,7 +6,7 @@ This component provides an interface to transcribe audio files using a remote ST
 ## Features
 -   **Asynchronous Transcription:** Performs API requests in a dedicated FreeRTOS task to avoid blocking the main application or UI.
 -   **Groq API Integration:** Handles the `multipart/form-data` request format required by the Groq audio transcription endpoint.
--   **Callback-driven:** Notifies the calling module of the transcription result (success or failure) via a callback function.
+-   **Callback-driven:** Notifies the calling module of the transcription result (success or failure) via a callback function. The callback now supports a `void* user_data` parameter for passing context.
 -   **Secure Communication:** Uses the embedded CA certificate for HTTPS and retrieves the API key from `secret.h` to keep it out of source control.
 -   **Efficient Streaming:** Sends the audio file in chunks directly from the filesystem to the server, avoiding the need to load the entire file into RAM.
 -   **Prerequisite Checks:** Automatically waits for a WiFi connection and time synchronization before starting the request.
@@ -29,10 +29,13 @@ This component provides an interface to transcribe audio files using a remote ST
     ```
 
 3.  **Start a Transcription:**
-    Provide a file path and a callback function to handle the result.
+    Provide a file path, a callback function, and a context pointer to handle the result.
     ```cpp
     // Define the callback function
-    void on_transcription_complete(bool success, char* result) {
+    void on_transcription_complete(bool success, char* result, void* user_data) {
+        // You can use the context if needed:
+        // MyView* self = static_cast<MyView*>(user_data);
+
         if (success) {
             printf("Transcription: %s\n", result);
             // The receiver of this callback is responsible for freeing the 'result' buffer.
@@ -44,7 +47,7 @@ This component provides an interface to transcribe audio files using a remote ST
     }
 
     // Call the manager to start the process
-    if (!stt_manager_transcribe("/sdcard/notes/my_note.wav", on_transcription_complete)) {
+    if (!stt_manager_transcribe("/sdcard/notes/my_note.wav", on_transcription_complete, this)) {
         // Handle error, e.g., task creation failed
     }
     ```

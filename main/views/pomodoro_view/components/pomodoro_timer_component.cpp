@@ -57,7 +57,7 @@ static void handle_cancel_press(void* user_data) {
     }
 }
 
-// --- REFACTOR: Helper function to switch between WORK and BREAK modes ---
+// --- Helper function to switch between WORK and BREAK modes ---
 static void start_next_mode(timer_component_state_t* state) {
     if (state->mode == POMO_MODE_WORK) {
         // --- Transition from WORK to BREAK ---
@@ -85,6 +85,7 @@ static void start_next_mode(timer_component_state_t* state) {
     }
 
     uint32_t new_total_seconds = (state->mode == POMO_MODE_WORK) ? state->settings.work_seconds : state->settings.break_seconds;
+    if (new_total_seconds == 0) new_total_seconds = 1; // Prevent division by zero if time is 0
     lv_arc_set_range(state->progress_arc, 0, new_total_seconds);
     lv_arc_set_value(state->progress_arc, 0);
 }
@@ -99,10 +100,7 @@ static void timer_update_cb(lv_timer_t *timer) {
     
     // Update display labels and arc
     uint32_t total_seconds_in_mode = (state->mode == POMO_MODE_WORK) ? state->settings.work_seconds : state->settings.break_seconds;
-    uint32_t h = state->remaining_seconds / 3600;
-    uint32_t m = (state->remaining_seconds % 3600) / 60;
-    uint32_t s = state->remaining_seconds % 60;
-    lv_label_set_text_fmt(state->time_label, "%02lu:%02lu:%02lu", h, m, s);
+    lv_label_set_text_fmt(state->time_label, "%02lu:%02lu", state->remaining_seconds / 60, state->remaining_seconds % 60);
     lv_arc_set_value(state->progress_arc, total_seconds_in_mode - state->remaining_seconds);
 
     // Check if the current mode has finished
@@ -132,7 +130,7 @@ lv_obj_t* pomodoro_timer_component_create(lv_obj_t* parent, const pomodoro_setti
     state->status = POMO_STATUS_RUNNING;
     state->mode = POMO_MODE_WORK;
     state->current_iteration = 1;
-    state->remaining_seconds = settings.work_seconds;
+    state->remaining_seconds = settings.work_seconds > 0 ? settings.work_seconds : 1;
 
     state->main_container = lv_obj_create(parent);
     lv_obj_remove_style_all(state->main_container);
@@ -146,29 +144,30 @@ lv_obj_t* pomodoro_timer_component_create(lv_obj_t* parent, const pomodoro_setti
     lv_obj_set_size(state->progress_arc, 200, 200);
     lv_obj_center(state->progress_arc);
     lv_obj_remove_flag(state->progress_arc, LV_OBJ_FLAG_CLICKABLE);
-    lv_arc_set_range(state->progress_arc, 0, state->settings.work_seconds);
+    lv_arc_set_range(state->progress_arc, 0, state->remaining_seconds);
     lv_arc_set_value(state->progress_arc, 0);
     lv_obj_set_style_arc_color(state->progress_arc, lv_palette_main(LV_PALETTE_BLUE), LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(state->progress_arc, 10, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(state->progress_arc, 10, LV_PART_INDICATOR);
     
     state->time_label = lv_label_create(state->main_container);
-    lv_obj_set_style_text_font(state->time_label, &lv_font_montserrat_40, 0);
+    lv_obj_set_style_text_font(state->time_label, &lv_font_montserrat_48, 0);
     lv_obj_center(state->time_label);
 
     state->status_label = lv_label_create(state->main_container);
     lv_label_set_text(state->status_label, "WORK");
-    lv_obj_align(state->status_label, LV_ALIGN_CENTER, 0, -45);
+    lv_obj_set_style_text_font(state->status_label, &lv_font_montserrat_24, 0);
+    lv_obj_align(state->status_label, LV_ALIGN_CENTER, 0, -55);
 
     state->iteration_label = lv_label_create(state->main_container);
     lv_label_set_text_fmt(state->iteration_label, "Round: %lu / %lu", state->current_iteration, state->settings.iterations);
-    lv_obj_align(state->iteration_label, LV_ALIGN_CENTER, 0, 45);
+    lv_obj_align(state->iteration_label, LV_ALIGN_CENTER, 0, 55);
 
     state->timer = lv_timer_create(timer_update_cb, 1000, state);
     timer_update_cb(state->timer); // Initial update to show correct time immediately
 
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true, state);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, state);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, NULL, true, nullptr);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, NULL, true, nullptr);
-
+    
     return state->main_container;
 }

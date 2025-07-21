@@ -14,6 +14,7 @@
     "single view": "c",
     "random": "cpp",
     "cstring": "cpp",
-    "cstdlib": "cpp"
+    "cstdlib": "cpp",
+    "functional": "cpp"
   }
 }

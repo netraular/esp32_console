@@ -20,11 +20,12 @@ static char current_path[256];
 static char mount_point[32];
 static bool in_error_state = false;
 
-// --- External Callbacks ---
+// --- External Callbacks and User Data ---
 static file_select_callback_t on_file_select_cb = NULL;
-static file_long_press_callback_t on_file_long_press_cb = NULL; // NUEVO
+static file_long_press_callback_t on_file_long_press_cb = NULL;
 static file_action_callback_t on_action_cb = NULL;
 static file_explorer_exit_callback_t on_exit_cb = NULL;
+static void* s_user_data = nullptr; // --- NEW: Store the user_data passed on creation.
 
 // --- Internal Data Types ---
 typedef struct {
@@ -51,21 +52,19 @@ static void collect_fs_entries_cb(const char *name, bool is_dir, void *user_data
 static void focus_changed_cb(lv_group_t * group);
 static void handle_cancel_press(void* user_data);
 
-// --- BUTTON HANDLERS (MODIFIED: with new signature) ---
+// --- MODIFIED BUTTON HANDLERS ---
+// The user_data passed to these handlers is now the global context `s_user_data`.
 static void handle_right_press(void* user_data) {
-    ESP_LOGD(TAG, "Right Press (Tap)");
     if (in_error_state) return;
     if (explorer_group) lv_group_focus_next(explorer_group);
 }
 
 static void handle_left_press(void* user_data) {
-    ESP_LOGD(TAG, "Left Press (Tap)");
     if (in_error_state) return;
     if (explorer_group) lv_group_focus_prev(explorer_group);
 }
 
 static void handle_ok_press(void* user_data) {
-    ESP_LOGD(TAG, "OK Press (Tap)");
     if (in_error_state) return;
     
     lv_obj_t * focused_obj = lv_group_get_focused(explorer_group);
@@ -78,7 +77,6 @@ static void handle_ok_press(void* user_data) {
 
     switch (item_data->type) {
         case ITEM_TYPE_DIR:
-            ESP_LOGI(TAG, "Entering directory: %s", entry_name);
             if (strlen(current_path) > 0 && current_path[strlen(current_path) - 1] != '/') {
                  strcat(current_path, "/");
             }
@@ -86,29 +84,25 @@ static void handle_ok_press(void* user_data) {
             schedule_repopulate_list();
             break;
         case ITEM_TYPE_PARENT_DIR:
-            handle_cancel_press(nullptr); // Same action as going back
+            handle_cancel_press(user_data); // Same action as going back
             break;
         case ITEM_TYPE_FILE:
-            ESP_LOGI(TAG, "File selected: %s", entry_name);
             if (on_file_select_cb) {
                 char full_path[300];
                 snprintf(full_path, sizeof(full_path), "%s/%s", current_path, entry_name);
-                on_file_select_cb(full_path);
+                on_file_select_cb(full_path, user_data);
             }
             break;
         case ITEM_TYPE_ACTION_CREATE_FILE:
         case ITEM_TYPE_ACTION_CREATE_FOLDER:
-            ESP_LOGI(TAG, "Action selected: %d", item_data->type);
             if (on_action_cb) {
-                on_action_cb(item_data->type, current_path);
+                on_action_cb(item_data->type, current_path, user_data);
             }
             break;
     }
 }
 
-// NUEVO: Manejador para la pulsación larga del botón OK
 static void handle_ok_long_press(void* user_data) {
-    ESP_LOGD(TAG, "OK Press (Long)");
     if (in_error_state || !on_file_long_press_cb) return;
 
     lv_obj_t * focused_obj = lv_group_get_focused(explorer_group);
@@ -117,23 +111,18 @@ static void handle_ok_long_press(void* user_data) {
     list_item_data_t* item_data = static_cast<list_item_data_t*>(lv_obj_get_user_data(focused_obj));
     if (!item_data) return;
 
-    // Solo actuar sobre archivos, no sobre directorios o acciones
     if (item_data->type == ITEM_TYPE_FILE) {
         const char* entry_name = lv_list_get_button_text(list_widget, focused_obj);
-        ESP_LOGI(TAG, "File long-pressed: %s", entry_name);
         char full_path[300];
         snprintf(full_path, sizeof(full_path), "%s/%s", current_path, entry_name);
-        on_file_long_press_cb(full_path);
+        on_file_long_press_cb(full_path, user_data);
     }
 }
 
 static void handle_cancel_press(void* user_data) {
-    ESP_LOGD(TAG, "Cancel Press (Tap)");
     if (in_error_state || strcmp(current_path, mount_point) == 0) {
-        ESP_LOGI(TAG, "Exiting file explorer.");
-        if (on_exit_cb) on_exit_cb();
+        if (on_exit_cb) on_exit_cb(user_data);
     } else {
-        ESP_LOGI(TAG, "Navigating to parent directory from: %s", current_path);
         char *last_slash = strrchr(current_path, '/');
         if (last_slash && last_slash > current_path) {
             *last_slash = '\0';
@@ -145,7 +134,7 @@ static void handle_cancel_press(void* user_data) {
 }
 
 
-// --- UI Logic ---
+// --- UI Logic (largely unchanged) ---
 
 static void focus_changed_cb(lv_group_t * group) {
     lv_obj_t * focused_obj = lv_group_get_focused(group);
@@ -174,8 +163,8 @@ static void repopulate_list_cb(lv_timer_t *timer) {
         add_file_context_t context = { .list = list_widget, .group = explorer_group };
 
         if (on_action_cb) {
-            add_list_entry(&context, "Crear Archivo", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FILE);
-            add_list_entry(&context, "Crear Carpeta", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FOLDER);
+            add_list_entry(&context, "Create File", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FILE);
+            add_list_entry(&context, "Create Folder", LV_SYMBOL_PLUS, ITEM_TYPE_ACTION_CREATE_FOLDER);
         }
 
         if (strcmp(current_path, mount_point) != 0) {
@@ -199,7 +188,7 @@ static void repopulate_list_cb(lv_timer_t *timer) {
 
     } else {
         in_error_state = true;
-        lv_list_add_text(list_widget, "Error: No se pudo leer la SD");
+        lv_list_add_text(list_widget, "Error: SD Card not readable");
     }
 
     if (explorer_group && lv_group_get_obj_count(explorer_group) > 0) {
@@ -253,9 +242,10 @@ void file_explorer_destroy(void) {
     
     list_widget = nullptr;
     on_file_select_cb = NULL;
-    on_file_long_press_cb = NULL; // NUEVO
+    on_file_long_press_cb = NULL;
     on_action_cb = NULL;
     on_exit_cb = NULL;
+    s_user_data = nullptr; // Clear user data
     in_error_state = false;
     ESP_LOGI(TAG, "File explorer destroyed.");
 }
@@ -264,12 +254,12 @@ void file_explorer_set_input_active(bool active) {
     if (active) {
         ESP_LOGD(TAG, "Re-activating file explorer input handlers.");
         button_manager_set_dispatch_mode(INPUT_DISPATCH_MODE_QUEUED);
-        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
-        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true, nullptr);
-        button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press, true, nullptr);
-        button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press, true, nullptr);
-        // NUEVO: Registrar el manejador de pulsación larga
-        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_LONG_PRESS_START, handle_ok_long_press, true, nullptr);
+        // --- MODIFIED --- All handlers now pass `s_user_data`
+        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, s_user_data);
+        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, handle_ok_press, true, s_user_data);
+        button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, handle_right_press, true, s_user_data);
+        button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, handle_left_press, true, s_user_data);
+        button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_LONG_PRESS_START, handle_ok_long_press, true, s_user_data);
 
         if (explorer_group) {
             lv_group_set_default(explorer_group);
@@ -283,13 +273,15 @@ void file_explorer_set_input_active(bool active) {
     }
 }
 
-void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_select_callback_t on_select, file_long_press_callback_t on_long_press, file_action_callback_t on_action, file_explorer_exit_callback_t on_exit) {
+// --- MODIFIED: `create` function now accepts user_data ---
+void file_explorer_create(lv_obj_t *parent, const char *initial_path, file_select_callback_t on_select, file_long_press_callback_t on_long_press, file_action_callback_t on_action, file_explorer_exit_callback_t on_exit, void* user_data) {
     ESP_LOGI(TAG, "Creating file explorer at path: %s", initial_path);
     
     on_file_select_cb = on_select;
-    on_file_long_press_cb = on_long_press; // NUEVO
+    on_file_long_press_cb = on_long_press;
     on_action_cb = on_action;
     on_exit_cb = on_exit;
+    s_user_data = user_data; // --- NEW: Store user data
     strncpy(current_path, initial_path, sizeof(current_path) - 1);
     current_path[sizeof(current_path) - 1] = '\0';
     strncpy(mount_point, initial_path, sizeof(mount_point) - 1);

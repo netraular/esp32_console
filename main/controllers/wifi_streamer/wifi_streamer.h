@@ -13,11 +13,12 @@ extern "C" {
  * @brief States for the audio streamer.
  */
 typedef enum {
-    WIFI_STREAM_STATE_IDLE,       // The streamer is inactive.
-    WIFI_STREAM_STATE_CONNECTING, // The streamer is attempting to connect to the TCP server.
-    WIFI_STREAM_STATE_STREAMING,  // The streamer is actively sending audio data.
-    WIFI_STREAM_STATE_STOPPING,   // A stop has been requested, and the task is shutting down.
-    WIFI_STREAM_STATE_ERROR       // An error occurred (e.g., connection failed, I2S error).
+    WIFI_STREAM_STATE_IDLE,          // The streamer task is inactive.
+    WIFI_STREAM_STATE_CONNECTING,    // Attempting to connect to the TCP server.
+    WIFI_STREAM_STATE_CONNECTED_IDLE,// Connected, but waiting for a START command.
+    WIFI_STREAM_STATE_STREAMING,     // Actively sending audio data.
+    WIFI_STREAM_STATE_STOPPING,      // A stop has been requested, and the task is shutting down.
+    WIFI_STREAM_STATE_ERROR          // An error occurred (e.g., connection failed, I2S error).
 } wifi_stream_state_t;
 
 /**
@@ -27,7 +28,7 @@ void wifi_streamer_init(void);
 
 /**
  * @brief Starts the audio streaming task.
- * The task will wait for a WiFi connection, then attempt to connect to the server and stream audio.
+ * The task will wait for a WiFi connection, then connect to the server and wait for commands.
  * @return true if the task was started successfully, false if it was already running.
  */
 bool wifi_streamer_start(void);

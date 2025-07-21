@@ -21,6 +21,7 @@ extern const char groq_api_ca_pem_end[]   asm("_binary_groq_api_ca_pem_end");
 typedef struct {
     char* file_path;
     stt_result_callback_t callback;
+    void* user_data; // --- NEW ---
     char* response_buffer;
     int response_len;
 } stt_task_params_t;
@@ -123,8 +124,7 @@ static void stt_transcription_task(void *pvParameters) {
         config.method = HTTP_METHOD_POST;
         config.timeout_ms = 30000;
         config.cert_pem = groq_api_ca_pem_start;
-        // --- CORRECCIÓN FINAL: Aumentar el tamaño del búfer de recepción ---
-        config.buffer_size = 2048; // Aumentar de 512 (por defecto) a 2KB
+        config.buffer_size = 2048;
 
         client = esp_http_client_init(&config);
         if (!client) {
@@ -179,8 +179,6 @@ static void stt_transcription_task(void *pvParameters) {
     stream_error:
         if (result_text) break;
 
-        // Ahora, en lugar de llamar a fetch_headers, que lee solo las cabeceras,
-        // llamamos a perform, que se encarga de todo el proceso de recibir el cuerpo.
         err = esp_http_client_perform(client);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "HTTP client perform failed: %s", esp_err_to_name(err));
@@ -192,7 +190,7 @@ static void stt_transcription_task(void *pvParameters) {
         ESP_LOGI(TAG, "HTTP Status = %d", status_code);
         
         if (params->response_buffer) {
-            ESP_LOGI(TAG, "Raw Response Body:\n%.*s", params->response_len, params->response_buffer);
+            ESP_LOGD(TAG, "Raw Response Body:\n%.*s", params->response_len, params->response_buffer);
         }
 
         if (status_code == 200) {
@@ -224,7 +222,8 @@ static void stt_transcription_task(void *pvParameters) {
         if (!result_text) {
              result_text = strdup("Unknown transcription error");
         }
-        params->callback(success, result_text);
+        // --- MODIFIED: Pass user_data to the callback
+        params->callback(success, result_text, params->user_data);
     } else {
         if(result_text) free(result_text);
     }
@@ -238,7 +237,7 @@ void stt_manager_init(void) {
     ESP_LOGI(TAG, "STT Manager Initialized.");
 }
 
-bool stt_manager_transcribe(const char* file_path, stt_result_callback_t cb) {
+bool stt_manager_transcribe(const char* file_path, stt_result_callback_t cb, void* user_data) {
     if (!file_path || !cb) {
         ESP_LOGE(TAG, "Invalid arguments for transcription.");
         return false;
@@ -252,6 +251,7 @@ bool stt_manager_transcribe(const char* file_path, stt_result_callback_t cb) {
     memset(params, 0, sizeof(stt_task_params_t));
     params->file_path = strdup(file_path);
     params->callback = cb;
+    params->user_data = user_data; // --- NEW ---
 
     BaseType_t result = xTaskCreate(stt_transcription_task, "stt_task", 8192, params, 5, NULL);
     if (result != pdPASS) {

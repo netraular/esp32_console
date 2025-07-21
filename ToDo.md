@@ -1,43 +1,3 @@
-
-### **Propuesta de Arquitectura: Un Modelo de Vistas Basado en Clases**
-
-**Problema Actual:**
-Nuestra gestión de vistas es manual y frágil. Cada vista es responsable de su propia limpieza de recursos (timers, tareas), lo que puede llevar a fugas de memoria y fallos si algo se olvida.
-
-**Solución Propuesta:**
-Adoptaremos un modelo orientado a objetos estandarizado. Crearemos una clase **"plantilla" base (`View`)** que definirá el ciclo de vida de cada pantalla.
-
-**¿Cómo funciona?**
-
-1.  **Cada vista será una clase** que hereda de la plantilla `View`.
-2.  El `ViewManager` usará un **registro central** para crear y destruir las vistas.
-3.  Al cambiar de pantalla, el `ViewManager` **destruirá automáticamente** la vista anterior y creará la nueva.
-
-**Beneficios Clave:**
-
-*   **Robustez:** La limpieza de recursos se vuelve **automática y garantizada**, eliminando las fugas de memoria.
-*   **Organización:** Cada vista **encapsula su propio estado y lógica** en una clase, haciendo el código más limpio y fácil de entender.
-*   **Escalabilidad:** Añadir una nueva vista consistirá en **crear su clase y registrarla en un único lugar**, sin modificar la lógica principal del sistema.
-
----
-
-### **Mejoras Adicionales sobre la Nueva Arquitectura**
-
-Una vez establecida esta estructura base, podremos implementar fácilmente funcionalidades adicionales en la clase `View` para potenciar todas las vistas de forma centralizada:
-
-1.  **Identificación Clara de Vistas:**
-    Cada vista declarará un **nombre de cadena legible** (ej. "MenuView") además de su ID numérico. Esto hará que los logs de depuración sean mucho más claros (`Cargando vista 'MenuView'` en lugar de `Cargando vista 5`).
-
-2.  **Notificaciones y Pop-ups Estándar:**
-    Se añadirán métodos de ayuda en la clase base como `show_error_popup("Mensaje")`. Esto nos permitirá mostrar diálogos y notificaciones con un **estilo consistente en toda la aplicación** y con una sola línea de código, reduciendo la duplicación y simplificando la lógica de las vistas.
-
-3.  **Registro de Botones Simplificado:**
-    La clase base ofrecerá un método para **registrar los manejadores de botones de forma más limpia y segura**. Esto reducirá el código repetitivo y la posibilidad de errores al conectar un botón con la acción específica de cada vista.
-
-En resumen, pasamos de un sistema manual propenso a errores a una arquitectura **automatizada, robusta y escalable**, que además nos servirá como cimiento para futuras mejoras.
-
----
-
 ### **Resumen (TL;DR) Personalizado para tu Refactorización de Vistas**
 
 1.  **Sincroniza `main`**: Asegúrate de partir de la última versión del proyecto.
@@ -77,10 +37,7 @@ Este método te da la total libertad y seguridad para construir tu nueva **arqui
 ---
 
 
-
-
-
-
+Estandarizar algun ejemplo de notificación y de pop-up. Se añadirán métodos de ayuda en la clase base como `show_error_popup("Mensaje")`. Esto nos permitirá mostrar diálogos y notificaciones con un **estilo consistente en toda la aplicación** y con una sola línea de código, reduciendo la duplicación y simplificando la lógica de las vistas.
 
 
 
