@@ -1,10 +1,10 @@
 #include "status_bar_component.h"
-#include "config.h" // Para MAX_VOLUME_PERCENTAGE
+#include "config.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
 #include "esp_log.h"
 #include <time.h>
-#include <cstring> // <-- CORRECCIÓN: Añadir este include para memset
+#include <cstring>
 
 static const char *TAG = "STATUS_BAR";
 
@@ -16,12 +16,12 @@ typedef struct {
     lv_timer_t* update_timer;
 } status_bar_ui_t;
 
-// Puntero estático para acceder a la UI desde la función pública
+// Static pointer to access the UI from the public function
 static status_bar_ui_t* g_ui = NULL;
 
-// Implementación de la función de actualización de volumen
+// Implementation of the volume update function
 void status_bar_update_volume_display(void) {
-    if (g_ui == NULL) { // Comprobación de seguridad
+    if (g_ui == NULL) { // Safety check
         return;
     }
     
@@ -60,7 +60,7 @@ static void update_task(lv_timer_t *timer) {
         }
     }
 
-    // El timer también actualiza el volumen para mantener la consistencia en caso de que cambie por otra vía.
+    // The timer also updates the volume to maintain consistency in case it changes elsewhere.
     status_bar_update_volume_display();
 }
 
@@ -72,7 +72,7 @@ static void cleanup_event_cb(lv_event_t *e) {
         if (ui) {
             if (ui->update_timer) lv_timer_del(ui->update_timer);
             free(ui);
-            g_ui = NULL; // Limpiar el puntero global
+            g_ui = NULL; // Clear the global pointer
         }
     }
 }
@@ -85,7 +85,7 @@ lv_obj_t* status_bar_create(lv_obj_t* parent) {
         ESP_LOGE(TAG, "Failed to allocate memory for status bar UI");
         return NULL;
     }
-    // Asegurarse de que los punteros internos estén inicializados a NULL
+    // Ensure internal pointers are initialized to NULL
     memset(g_ui, 0, sizeof(status_bar_ui_t));
 
     lv_obj_t* background_bar = lv_obj_create(parent);
@@ -97,7 +97,7 @@ lv_obj_t* status_bar_create(lv_obj_t* parent) {
     lv_obj_set_style_border_width(background_bar, 0, 0);
     lv_obj_align(background_bar, LV_ALIGN_TOP_MID, 0, 0);
     
-    // --- SECCIÓN IZQUIERDA (FECHA Y HORA) ---
+    // --- LEFT SECTION (DATE & TIME) ---
     g_ui->datetime_label = lv_label_create(background_bar);
     lv_obj_set_style_text_color(g_ui->datetime_label, lv_color_black(), 0);
     lv_obj_set_style_text_font(g_ui->datetime_label, &lv_font_montserrat_14, 0);
@@ -108,7 +108,7 @@ lv_obj_t* status_bar_create(lv_obj_t* parent) {
     lv_obj_set_style_radius(g_ui->datetime_label, 3, 0);
     lv_obj_align(g_ui->datetime_label, LV_ALIGN_LEFT_MID, 5, 0);
 
-    // --- SECCIÓN DERECHA (WIFI Y VOLUMEN) ---
+    // --- RIGHT SECTION (WIFI & VOLUME) ---
     lv_obj_t* right_panel = lv_obj_create(background_bar);
     lv_obj_remove_style_all(right_panel);
     lv_obj_set_style_bg_color(right_panel, lv_palette_lighten(LV_PALETTE_ORANGE, 2), 0);

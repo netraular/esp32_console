@@ -4,7 +4,7 @@
 #include "esp_log.h"
 
 static const char* TAG = "DATA_MGR";
-static const char* NVS_NAMESPACE = "storage"; // Namespace para organizar los datos en NVS
+static const char* NVS_NAMESPACE = "storage"; // Namespace to organize data in NVS
 
 static bool s_is_initialized = false;
 
@@ -13,7 +13,7 @@ void data_manager_init(void) {
         ESP_LOGW(TAG, "Data manager already initialized.");
         return;
     }
-    // Asumimos que nvs_flash_init() ya fue llamado en main.cpp
+    // We assume nvs_flash_init() was already called in main.cpp
     s_is_initialized = true;
     ESP_LOGI(TAG, "Data Manager initialized.");
 }

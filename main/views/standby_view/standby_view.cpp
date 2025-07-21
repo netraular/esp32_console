@@ -184,15 +184,12 @@ void StandbyView::create_shutdown_popup() {
     lv_obj_set_style_bg_color(shutdown_popup_container, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(shutdown_popup_container, LV_OPA_70, 0);
 
-    // --- CORRECTED LVGL v9 Message Box Button Creation ---
-    // 1. Create the base message box object
+    // 1. Create the base message box with only the parent
     lv_obj_t* msgbox = lv_msgbox_create(shutdown_popup_container);
-
-    // 2. Add content to it
+    
+    // 2. Add title, text, and buttons using separate functions
     lv_msgbox_add_title(msgbox, "Turn Off Device");
     lv_msgbox_add_text(msgbox, "The device will need to be restarted with the RST button.");
-    
-    // 3. Add footer buttons one by one and capture their object pointers
     lv_obj_t* btn_cancel_obj = lv_msgbox_add_footer_button(msgbox, "Cancel");
     lv_obj_t* btn_ok_obj = lv_msgbox_add_footer_button(msgbox, "Turn Off");
     // --- End of Correction ---
