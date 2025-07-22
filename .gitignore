@@ -1,4 +1,5 @@
 build/
+sdkconfig.old
 managed_components/
 secret.h
 .vscode/prompt-my-repo-templates/*
