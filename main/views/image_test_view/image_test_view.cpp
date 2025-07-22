@@ -70,46 +70,17 @@ void ImageTestView::display_image_from_path(const char* path) {
     lv_obj_clean(container); // Clear the screen before displaying the image
 
 
-    lv_obj_t * img;
-    img = lv_image_create(lv_screen_active());
-    lv_image_set_src(img, lvgl_path);
-    lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_t * image_widget;
+    image_widget = lv_image_create(lv_screen_active());
+    lv_image_set_src(image_widget, lvgl_path);
+    lv_obj_align(image_widget, LV_ALIGN_CENTER, 0, 0);
 
-
-
-    /*
-    image_widget = lv_img_create(container);
-    lv_img_set_src(image_widget, lvgl_path); // Attempt to load the image
-
-    lv_coord_t img_width = lv_obj_get_width(image_widget);
-    lv_coord_t img_height = lv_obj_get_height(image_widget);
-
-    if (img_width == 0 || img_height == 0) {
-        // CORRECTED: Use %ld for lv_coord_t
-        ESP_LOGE(TAG, "Failed to load or decode image (width: %ld, height: %ld). Displaying error.", (long)img_width, (long)img_height);
-        // Clean up the partially created image widget
-        lv_obj_del(image_widget); 
-        image_widget = nullptr;
-        // Return to the initial state with an error message
-        create_initial_view();
-        lv_label_set_text(info_label, "Error: Failed to decode PNG.\nCheck file integrity or memory.\nPress OK to retry.");
-        return;
-    }
-
-    ESP_LOGI(TAG, "Image loaded successfully. Dimensions: %ldx%ld pixels", (long)img_width, (long)img_height);
-    lv_obj_center(image_widget); // Center the image on the screen
     current_image_path = path; // Store the path for potential re-display or context
 
-    // Display image dimensions and instructions
-    lv_obj_t *dims_label = lv_label_create(container);
-    // CORRECTED: Use %ld for lv_coord_t
-    lv_label_set_text_fmt(dims_label, "Dimensions: %ldx%ld px", (long)img_width, (long)img_height);
-    lv_obj_align(dims_label, LV_ALIGN_TOP_MID, 0, 10); // Position above the image
-
+    // Display image instructions
     lv_obj_t *instruction_label = lv_label_create(container);
     lv_label_set_text(instruction_label, "Press Cancel to return");
     lv_obj_align(instruction_label, LV_ALIGN_BOTTOM_MID, 0, -20);
-    */
     
     // Update button handlers for the image display state
     button_manager_unregister_view_handlers(); // Clear file explorer handlers
@@ -155,21 +126,6 @@ void ImageTestView::perform_vfs_read_test(const char* path) {
     char buf[65]; // Read a snippet
     uint32_t bytes_read = 0;
     res = lv_fs_read(&f, buf, 64, &bytes_read); // Read up to 64 bytes
-    
-    if (res == LV_FS_RES_OK) {
-        buf[bytes_read] = '\0'; // Null-terminate the buffer
-        ESP_LOGI(TAG, "Read %" PRIu32 " bytes successfully. Content snippet:", bytes_read);
-        // Print content in hex and as string for better debugging of binary files
-        char hex_dump[193]; // 64 bytes * 3 chars/byte + 1 for null
-        hex_dump[0] = '\0';
-        for (uint32_t i = 0; i < bytes_read; ++i) {
-            snprintf(hex_dump + strlen(hex_dump), sizeof(hex_dump) - strlen(hex_dump), "%02X ", (unsigned char)buf[i]);
-        }
-        ESP_LOGI(TAG, "Hex: %s", hex_dump);
-        ESP_LOGI(TAG, "ASCII: \n---\n%s\n---", buf);
-    } else {
-        ESP_LOGE(TAG, "lv_fs_read FAILED. Result code: %d", res);
-    }
     
     lv_fs_close(&f);
     ESP_LOGW(TAG, "--- LVGL VFS DIAGNOSTIC TEST FINISHED ---");
