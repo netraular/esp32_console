@@ -1,6 +1,6 @@
 /**
  * @file main.cpp
- * @brief Aplicación consolidada que gestiona la pantalla, LVGL y la tarjeta SD.
+ * @brief Aplicación consolidada que gestiona la pantalla, LVGL, la tarjeta SD y muestra una imagen.
  */
 
 // --- HEADERS NECESARIOS ---
@@ -137,6 +137,92 @@ static bool sd_read_file(const char* path, char** buffer, size_t* size) {
 // --- FIN SECCIÓN DE GESTIÓN DE TARJETA SD ---
 
 
+// --- SECCIÓN DRIVER VFS DE LVGL ---
+// Este driver actúa como un puente entre LVGL y el sistema de archivos VFS de ESP-IDF (FAT).
+// LVGL usa una letra de unidad (ej. 'S') para acceder a los archivos.
+static const char *TAG_LVGL_VFS = "LVGL_VFS";
+
+static void * fs_open_cb(lv_fs_drv_t * drv, const char * path, lv_fs_mode_t mode) {
+    const char * mode_str;
+    if (mode == LV_FS_MODE_WR) mode_str = "wb";
+    else if (mode == LV_FS_MODE_RD) mode_str = "rb";
+    else if (mode == (LV_FS_MODE_WR | LV_FS_MODE_RD)) mode_str = "rb+";
+    else {
+        ESP_LOGE(TAG_LVGL_VFS, "Unknown file open mode: %d", mode);
+        return NULL;
+    }
+    // LVGL elimina la letra de la unidad, por lo que 'path' es la ruta completa (ej. "/sdcard/image.png")
+    FILE * f = fopen(path, mode_str);
+    if (f == NULL) {
+        ESP_LOGE(TAG_LVGL_VFS, "Failed to open file: %s (mode: %s)", path, mode_str);
+        return NULL;
+    }
+    return f;
+}
+
+static lv_fs_res_t fs_close_cb(lv_fs_drv_t * drv, void * file_p) {
+    FILE * f = (FILE *)file_p;
+    if (f) fclose(f);
+    return LV_FS_RES_OK;
+}
+
+static lv_fs_res_t fs_read_cb(lv_fs_drv_t * drv, void * file_p, void * buf, uint32_t btr, uint32_t * br) {
+    FILE * f = (FILE *)file_p;
+    *br = fread(buf, 1, btr, f);
+    return LV_FS_RES_OK;
+}
+
+static lv_fs_res_t fs_write_cb(lv_fs_drv_t * drv, void * file_p, const void * buf, uint32_t btw, uint32_t * bw) {
+    FILE * f = (FILE *)file_p;
+    *bw = fwrite(buf, 1, btw, f);
+    return LV_FS_RES_OK;
+}
+
+static lv_fs_res_t fs_seek_cb(lv_fs_drv_t * drv, void * file_p, uint32_t pos, lv_fs_whence_t whence) {
+    FILE * f = (FILE *)file_p;
+    int seek_mode;
+    switch (whence) {
+        case LV_FS_SEEK_SET: seek_mode = SEEK_SET; break;
+        case LV_FS_SEEK_CUR: seek_mode = SEEK_CUR; break;
+        case LV_FS_SEEK_END: seek_mode = SEEK_END; break;
+        default: return LV_FS_RES_INV_PARAM;
+    }
+    return (fseek(f, pos, seek_mode) == 0) ? LV_FS_RES_OK : LV_FS_RES_FS_ERR;
+}
+
+static lv_fs_res_t fs_tell_cb(lv_fs_drv_t * drv, void * file_p, uint32_t * pos_p) {
+    FILE * f = (FILE *)file_p;
+    long pos = ftell(f);
+    if (pos == -1) return LV_FS_RES_FS_ERR;
+    *pos_p = (uint32_t)pos;
+    return LV_FS_RES_OK;
+}
+
+/** @brief Inicializa y registra el driver del sistema de archivos para LVGL. */
+static void lvgl_fs_driver_init(char drive_letter) {
+    static lv_fs_drv_t fs_drv; // Debe ser estática o global
+    lv_fs_drv_init(&fs_drv);
+
+    fs_drv.letter = drive_letter;
+    fs_drv.open_cb = fs_open_cb;
+    fs_drv.close_cb = fs_close_cb;
+    fs_drv.read_cb = fs_read_cb;
+    fs_drv.write_cb = fs_write_cb;
+    fs_drv.seek_cb = fs_seek_cb;
+    fs_drv.tell_cb = fs_tell_cb;
+    
+    // Estos callbacks son opcionales y solo necesarios si usas las funciones de directorio de LVGL
+    fs_drv.dir_open_cb = NULL;
+    fs_drv.dir_read_cb = NULL;
+    fs_drv.dir_close_cb = NULL;
+
+    lv_fs_drv_register(&fs_drv);
+    ESP_LOGI(TAG_LVGL_VFS, "Driver de sistema de archivos LVGL registrado para la unidad '%c'", drive_letter);
+}
+
+// --- FIN SECCIÓN DRIVER VFS DE LVGL ---
+
+
 // --- SECCIÓN PANTALLA Y LVGL ---
 
 static const char *TAG_MAIN = "MAIN_APP"; // Tag para los logs principales
@@ -214,6 +300,11 @@ static screen_t* screen_init() {
     gpio_set_level(TFT_BL, 1);
 
     lv_init();
+    
+    // >>> NUEVO: Inicializar el driver VFS para que LVGL pueda leer desde la SD
+    // Usamos 'S' como la letra de unidad para la tarjeta SD.
+    lvgl_fs_driver_init('S');
+
     screen_init_lvgl_tick();
 
     screen->lvgl_buf1 = (lv_color_t*)heap_caps_malloc(SCREEN_WIDTH * 40 * sizeof(lv_color_t), MALLOC_CAP_DMA);
@@ -232,12 +323,34 @@ static screen_t* screen_init() {
 
 static lv_obj_t* counter_label;
 
-static void create_counter_ui(lv_obj_t* parent) {
+// >>> MODIFICADO: Ahora crea el contador y la imagen
+static void create_main_ui(lv_obj_t* parent) {
+    // --- 1. Crear y posicionar la etiqueta del contador ---
     counter_label = lv_label_create(parent);
     lv_label_set_text(counter_label, "0");
     lv_obj_set_style_text_font(counter_label, &lv_font_montserrat_48, 0);
-    lv_obj_center(counter_label);
+    // Alinear en la parte superior central con un margen de 20px
+    lv_obj_align(counter_label, LV_ALIGN_TOP_MID, 0, 20);
     ESP_LOGI(TAG_MAIN, "UI del contador creada.");
+
+    // --- 2. Crear y posicionar el widget de la imagen ---
+    // LVGL necesita una ruta con una letra de unidad. La hemos registrado como 'S'.
+    // El formato es "S:<punto_de_montaje>/<nombre_archivo>"
+    // NOTA: Asegúrate de que tu componente LVGL esté compilado con soporte para PNG.
+    // Esto se suele activar en menuconfig -> Component config -> LVGL -> LVGL libraries -> Image decoder -> Enable PNG decoder
+    char img_path[256];
+    snprintf(img_path, sizeof(img_path), "S:%s/image.png", MOUNT_POINT);
+
+    ESP_LOGI(TAG_MAIN, "Intentando cargar la imagen desde: %s", img_path);
+
+    lv_obj_t* img = lv_image_create(parent);
+    lv_image_set_src(img, img_path);
+    // Alinear la imagen debajo de la etiqueta del contador, con un margen de 10px
+    lv_obj_align_to(img, counter_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+
+    // Si la imagen no se puede cargar (no existe, formato incorrecto, etc.),
+    // LVGL mostrará un símbolo de "archivo roto".
+    // Puedes comprobar si el archivo existe antes si quieres un manejo de errores más robusto.
 }
 
 // --- FIN SECCIÓN PANTALLA Y LVGL ---
@@ -247,27 +360,22 @@ static void create_counter_ui(lv_obj_t* parent) {
 extern "C" void app_main(void) {
     ESP_LOGI(TAG_MAIN, "--- Iniciando aplicación ---");
 
-    // --- 1. Inicializar la tarjeta SD y leer el archivo text.txt ---
+    // --- 1. Inicializar la tarjeta SD ---
+    // Esto es crucial y debe hacerse ANTES de crear la UI que depende de la SD.
     if (sd_init() && sd_mount()) {
+        ESP_LOGI(TAG_MAIN, "Tarjeta SD inicializada y montada correctamente.");
+        // Opcional: podemos seguir leyendo el text.txt como prueba
         char file_path[256];
         snprintf(file_path, sizeof(file_path), "%s/text.txt", MOUNT_POINT);
-        
-        ESP_LOGI(TAG_MAIN, "Intentando leer el archivo: %s", file_path);
-
         char* file_content = NULL;
         size_t file_size = 0;
-
         if (sd_read_file(file_path, &file_content, &file_size)) {
-            ESP_LOGI(TAG_MAIN, "Lectura de archivo exitosa (%zu bytes).", file_size);
-            ESP_LOGI(TAG_MAIN, "================== CONTENIDO DE text.txt ==================");
-            printf("%s\n", file_content);
-            ESP_LOGI(TAG_MAIN, "==========================================================");
+            ESP_LOGI(TAG_MAIN, "Prueba de lectura de text.txt exitosa.");
             free(file_content);
-        } else {
-            ESP_LOGE(TAG_MAIN, "Fallo al leer el archivo '%s'.", file_path);
         }
     } else {
-        ESP_LOGE(TAG_MAIN, "Fallo al inicializar o montar la tarjeta SD.");
+        ESP_LOGE(TAG_MAIN, "Fallo al inicializar o montar la tarjeta SD. La imagen no se cargará.");
+        // La aplicación puede continuar, pero la imagen no aparecerá.
     }
 
     // --- 2. Inicializar la pantalla y LVGL ---
@@ -277,8 +385,8 @@ extern "C" void app_main(void) {
         while(1) { vTaskDelay(pdMS_TO_TICKS(1000)); }
     }
 
-    // --- 3. Crear la interfaz de usuario ---
-    create_counter_ui(lv_screen_active());
+    // --- 3. Crear la interfaz de usuario (contador e imagen) ---
+    create_main_ui(lv_screen_active());
 
     // --- 4. Bucle principal ---
     ESP_LOGI(TAG_MAIN, "Entrando en el bucle principal.");
@@ -287,8 +395,15 @@ extern "C" void app_main(void) {
 
     while (true) {
         snprintf(buf, sizeof(buf), "%d", counter++);
-        lv_label_set_text(counter_label, buf);
+        // Actualizar el texto de la etiqueta en el bucle
+        if(counter_label) {
+             lv_label_set_text(counter_label, buf);
+        }
+       
+        // Dejar que LVGL gestione sus tareas (renderizado, eventos, etc.)
         lv_timer_handler(); 
+        
+        // Un pequeño retardo para ceder el control a otras tareas
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
