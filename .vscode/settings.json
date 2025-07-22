@@ -17,6 +17,7 @@
     "cstdlib": "cpp",
     "functional": "cpp",
     "cassert": "cpp",
-    "lodepng.h": "c"
+    "lodepng.h": "c",
+    "string.h": "c"
   }
 }

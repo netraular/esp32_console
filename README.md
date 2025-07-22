@@ -12,3 +12,12 @@ Max WiFi TX power (dBm) -> 10
 LVGL -> 3rd Party Libraries -> PNG decoder library -> LV_USE_LODEPNG
 LVGL -> File system on top of littlefs API
 LVGL -> Enable system monitor component
+
+To use libpng as the decoder library you need to edit the lvgl component managed_components\lvgl__lvgl\idf_component.yml and append the following text:
+```
+dependencies:
+  idf: ">=4.1"
+  # --- ADD THIS DEPENDENCY ---
+  espressif/libpng: ">=1.6.0" 
+```
+And also add "espressif/libpng: ^1.6.39~1" component to main\idf_component.yml

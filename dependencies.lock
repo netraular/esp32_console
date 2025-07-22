@@ -23,6 +23,30 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 1.1.1
+  espressif/libpng:
+    component_hash: d2fb0a8234e65fa7dd0bd80841e955c53557b70ef405dbb2290303ae2f4219bd
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4'
+    - name: espressif/zlib
+      registry_url: https://components.espressif.com
+      require: private
+      version: ^1.2.13
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.6.39~1
+  espressif/zlib:
+    component_hash: d901723af51f13fc8e5824f39f32239c847956e8fd951a05266588dc5cfbb9ae
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.3.1
   idf:
     source:
       type: idf
@@ -46,9 +70,10 @@ dependencies:
     version: 9.3.0
 direct_dependencies:
 - espressif/button
+- espressif/libpng
 - idf
 - joltwallet/littlefs
 - lvgl/lvgl
-manifest_hash: 4d31282b3170c72708e82feb7467bcade93ac6db1716e3f86d253f0bde6ca429
+manifest_hash: 7a9bb7a79daf29ca512a5a612b511a7dbf6c438d2f561a20c0b1224c0498b7df
 target: esp32s3
 version: 2.0.0
