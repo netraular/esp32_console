@@ -1,142 +1,80 @@
-#include <stdio.h>
+/**
+ * @file main.cpp
+ * @brief Aplicación que muestra un contador en la pantalla.
+ */
+
+// --- HEADERS NECESARIOS ---
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "nvs_flash.h"
-#include "esp_event.h"
-#include "esp_netif.h"
+#include <stdio.h> // Para snprintf
+
+// extern "C" es necesario para incluir headers de C (como LVGL) en un archivo C++
+extern "C" {
 #include "lvgl.h"
-#include <cstring>
-
-#include "controllers/screen_manager/screen_manager.h"
-#include "controllers/button_manager/button_manager.h"
-#include "controllers/sd_card_manager/sd_card_manager.h"
-#include "controllers/littlefs_manager/littlefs_manager.h"
-#include "controllers/audio_manager/audio_manager.h"
-#include "controllers/audio_recorder/audio_recorder.h"
-#include "controllers/wifi_manager/wifi_manager.h"
-#include "controllers/wifi_streamer/wifi_streamer.h"
-#include "controllers/data_manager/data_manager.h"
-#include "controllers/stt_manager/stt_manager.h"
-#include "controllers/power_manager/power_manager.h"
-#include "views/view_manager.h"
-
-// --- Use our new custom driver and the PNG decoder ---
-#include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
-#include "libs/lodepng/lv_lodepng.h"
-
-
-static const char *TAG = "main";
-
-// This function will write the embedded file to LittleFS if it doesn't exist.
-static void provision_filesystem_data() {
-    if (littlefs_manager_file_exists("welcome.txt")) {
-        ESP_LOGI(TAG, "'welcome.txt' already exists, skipping provisioning.");
-        return;
-    }
-
-    ESP_LOGI(TAG, "Provisioning 'welcome.txt' to LittleFS...");
-    
-    // Symbols created by the build system from the EMBED_FILES directive
-    extern const uint8_t welcome_txt_start[] asm("_binary_welcome_txt_start");
-    extern const uint8_t welcome_txt_end[]   asm("_binary_welcome_txt_end");
-    const size_t welcome_txt_size = welcome_txt_end - welcome_txt_start;
-    
-    // Create a null-terminated string from the binary data
-    char* content = (char*)malloc(welcome_txt_size + 1);
-    if (!content) {
-        ESP_LOGE(TAG, "Failed to allocate memory for provisioning file.");
-        return;
-    }
-    memcpy(content, welcome_txt_start, welcome_txt_size);
-    content[welcome_txt_size] = '\0';
-
-    if (littlefs_manager_write_file("welcome.txt", content)) {
-        ESP_LOGI(TAG, "Successfully wrote 'welcome.txt'");
-    } else {
-        ESP_LOGE(TAG, "Failed to write 'welcome.txt'");
-    }
-    free(content);
 }
 
+// Incluimos solo el controlador de la pantalla
+#include "controllers/screen_manager/screen_manager.h"
+
+static const char *TAG = "CONTADOR_MAIN";
+
+// Puntero global a la etiqueta del contador para poder actualizarla
+static lv_obj_t* counter_label;
+
+/**
+ * @brief Crea la etiqueta del contador en la pantalla.
+ */
+void create_counter_ui(lv_obj_t* parent) {
+    counter_label = lv_label_create(parent);
+    lv_label_set_text(counter_label, "0");
+    lv_obj_set_style_text_font(counter_label, &lv_font_montserrat_48, 0);
+    lv_obj_center(counter_label);
+    ESP_LOGI(TAG, "UI del contador creada.");
+}
+
+
+// --- PUNTO DE ENTRADA DE LA APLICACIÓN ---
 extern "C" void app_main(void) {
-    ESP_LOGI(TAG, "Starting application");
+    ESP_LOGI(TAG, "--- Iniciando aplicación 'Contador' ---");
 
-    // Initialize NVS (Non-Volatile Storage), required for WiFi
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-    
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    ESP_LOGI(TAG, "Default event loop and netif created.");
-    
-    // Initialize Data Manager (depends on NVS)
-    data_manager_init();
-    ESP_LOGI(TAG, "Data manager initialized.");
-
-    // Initialize display (hardware and LVGL)
+    // --- 1. Inicializar la pantalla y LVGL ---
     screen_t* screen = screen_init();
     if (!screen) {
-        ESP_LOGE(TAG, "Failed to initialize screen, halting.");
-        return;
+        ESP_LOGE(TAG, "Fallo al inicializar la pantalla. Deteniendo.");
+        while(1) { vTaskDelay(pdMS_TO_TICKS(1000)); }
     }
+    ESP_LOGI(TAG, "Controlador de pantalla inicializado.");
 
-    // Explicitly initialize LVGL's image decoders
-    ESP_LOGI(TAG, "Initializing LVGL image decoders...");
-    lv_lodepng_init();
-    ESP_LOGI(TAG, "LodePNG decoder initialized.");
+    // --- 2. Crear la interfaz de usuario ---
+    create_counter_ui(lv_screen_active());
 
-    // Initialize LittleFS on the 'storage' partition
-    if (littlefs_manager_init("storage")) {
-        ESP_LOGI(TAG, "LittleFS manager initialized.");
-        provision_filesystem_data(); // Write files on first boot
-    } else {
-        ESP_LOGE(TAG, "Failed to initialize LittleFS manager.");
-    }
+    // --- 3. Bucle principal con la lógica del contador ---
+    ESP_LOGI(TAG, "Entrando en el bucle principal.");
+    
+    static int counter = 0;
+    char buf[16];
 
-    // Initialize SD card hardware.
-    if (sd_manager_init()) {
-        ESP_LOGI(TAG, "SD Card manager hardware initialized successfully.");
-    } else {
-        ESP_LOGE(TAG, "Failed to initialize SD Card manager hardware.");
-    }
-
-    // Use the custom VFS driver to bridge LVGL and the ESP-IDF VFS
-    // This replaces lv_fs_posix_init()
-    lvgl_fs_driver_init('S');
-
-    // Initialize buttons
-    button_manager_init();
-    ESP_LOGI(TAG, "Button manager initialized.");
-
-    // Initialize audio managers
-    audio_manager_init();
-    ESP_LOGI(TAG, "Audio manager (playback) initialized.");
-    audio_recorder_init();
-    ESP_LOGI(TAG, "Audio recorder initialized.");
-
-    // Initialize network managers
-    wifi_manager_init_sta();
-    ESP_LOGI(TAG, "WiFi manager initialized.");
-    wifi_streamer_init();
-    ESP_LOGI(TAG, "WiFi streamer initialized.");
-
-    // Initialize the Speech-to-Text manager
-    stt_manager_init();
-    ESP_LOGI(TAG, "STT manager initialized.");
-
-    // Initialize the view manager, which creates the main UI.
-    view_manager_init();
-    ESP_LOGI(TAG, "View manager initialized and main view loaded.");
-
-    // Main loop for LVGL handling
-    ESP_LOGI(TAG, "Entering main loop");
     while (true) {
-        lv_timer_handler();
+        // Actualizar el texto del contador
+        snprintf(buf, sizeof(buf), "%d", counter);
+        lv_label_set_text(counter_label, buf);
+        
+        // Incrementar el contador
+        counter++;
+
+        // Procesar tareas de LVGL (muy importante para redibujar)
+        // Usamos un delay más corto aquí para que la UI sea más fluida
+        // si se añaden más elementos en el futuro.
+        lv_timer_handler(); 
         vTaskDelay(pdMS_TO_TICKS(10));
+        
+        // Actualizamos el contador solo una vez por segundo
+        static uint32_t last_update = 0;
+        if (esp_log_timestamp() - last_update > 1000) {
+            last_update = esp_log_timestamp();
+            // La lógica del contador ya no necesita estar aquí,
+            // podemos simplificar el bucle.
+        }
     }
 }
