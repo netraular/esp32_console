@@ -24,3 +24,7 @@ And also add "espressif/libpng: ^1.6.39~1" component to main\idf_component.yml
 
 CONFIG_LV_CACHE_DEF_SIZE=65536 #cache de png decoder
 LV_IMAGE_HEADER_CACHE_DEF_CNT = 1 (número de imagenes en cache)
+
+SPI RAM config -> SPI RAM access method -> Make RAM allocatable using malloc() as well
+LVGL->Memory Settings->Malloc functions source->Standard C functions malloc/realloc/free
+

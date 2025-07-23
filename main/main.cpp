@@ -2,7 +2,7 @@
  * @file main.cpp
  * @brief Aplicación consolidada que gestiona la pantalla, LVGL, la tarjeta SD y muestra una imagen.
  * 
- * @note Este proyecto está desarrollado para un ESP32 utilizando ESP-IDF v5.4 y la librería gráfica LVGL v9.3.
+ * @note Este proyecto está desarrollado para un ESP32 n16r8 utilizando ESP-IDF v5.4 y la librería gráfica LVGL v9.3.
  */
 
 // --- HEADERS NECESARIOS ---
@@ -164,8 +164,7 @@ static screen_t* screen_init() {
     return screen;
 }
 
-// --- INICIO DE LA SECCIÓN DE LOGS CORREGIDA ---
-
+// --- SECCIÓN DE LOGS ---
 // Función para loguear SOLO la memoria del sistema (RAM/PSRAM). Es segura para llamar en cualquier momento.
 static void log_system_memory(const char* context) {
     ESP_LOGI(TAG_MEMORY, "--- Estado de Memoria del Sistema: %s ---", context);
@@ -184,11 +183,9 @@ static void log_system_memory(const char* context) {
     }
     ESP_LOGI(TAG_MEMORY, "---------------------------------------------");
 }
-
 // Función que consolida TODOS los logs. SOLO debe llamarse DESPUÉS de que lv_init() haya sido ejecutado.
 static void log_full_memory_status(const char* context) {
     ESP_LOGI(TAG_MEMORY, "--- Estado de Memoria COMPLETO: %s ---", context);
-
     // 1. Información de la RAM Interna y PSRAM
     size_t total_ram = heap_caps_get_total_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     size_t free_ram = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
@@ -202,7 +199,6 @@ static void log_full_memory_status(const char* context) {
         float psram_usage_percent = (total_psram > 0) ? ((float)used_psram / total_psram * 100.0f) : 0;
         ESP_LOGI(TAG_MEMORY, "PSRAM:       Usado %zu de %zu bytes (%.2f%%)", used_psram, total_psram, psram_usage_percent);
     }
-
     // 2. Información del pool de memoria de LVGL
     lv_mem_monitor_t monitor;
     lv_mem_monitor(&monitor);
@@ -211,41 +207,57 @@ static void log_full_memory_status(const char* context) {
              (unsigned int)monitor.total_size,
              monitor.used_pct,
              monitor.frag_pct);
-             
     ESP_LOGI(TAG_MEMORY, "---------------------------------------------");
 }
-// --- FIN DE LA SECCIÓN DE LOGS CORREGIDA ---
 
+// --- INICIO DE LA SECCIÓN DE UI MODIFICADA ---
 static lv_obj_t* counter_label;
-static void create_main_ui(lv_obj_t* parent) {
-    counter_label = lv_label_create(parent);
-    lv_label_set_text(counter_label, "0");
-    lv_obj_set_style_text_font(counter_label, &lv_font_montserrat_48, 0);
-    lv_obj_align(counter_label, LV_ALIGN_TOP_MID, 0, 20);
-    ESP_LOGI(TAG_MAIN, "UI del contador creada.");
 
+static void create_main_ui(lv_obj_t* parent) {
+    // --- PASO 1: Crear la imagen de fondo PRIMERO ---
+    // En LVGL, los objetos creados más tarde se dibujan encima de los creados antes.
+    // Por eso, creamos la imagen que servirá de fondo antes que la etiqueta del contador.
+    
     char img_path[256];
     snprintf(img_path, sizeof(img_path), "S:%s/image.png", MOUNT_POINT);
     ESP_LOGI(TAG_MAIN, "Intentando cargar la imagen desde: %s", img_path);
 
+    // Crear el objeto imagen
     lv_obj_t* img = lv_image_create(parent);
 
-    // <-- CAMBIO: Usamos la función de log consolidada aquí, porque LVGL ya está inicializado.
     log_full_memory_status("Antes de cargar la imagen");
-
     lv_image_set_src(img, img_path);
-    lv_timer_handler(); // Forzar procesamiento de la imagen
-
-    // <-- CAMBIO: Y la usamos de nuevo aquí.
+    lv_timer_handler(); // Forzar procesamiento de la imagen para que el log de memoria sea preciso
     log_full_memory_status("Después de PROCESAR la imagen");
 
-    lv_obj_align_to(img, counter_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+    // --- PASO 2: Centrar la imagen en la pantalla ---
+    // Dado que la imagen y la pantalla son de 240x240, alinearla al centro
+    // hará que ocupe todo el espacio visible.
+    lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
+    ESP_LOGI(TAG_MAIN, "Imagen configurada para centrarse en la pantalla.");
+
+    // --- PASO 3: Crear el contador DESPUÉS de la imagen ---
+    // Esto asegura que la etiqueta del contador se renderice encima de la imagen.
+    counter_label = lv_label_create(parent);
+    lv_label_set_text(counter_label, "0");
+    lv_obj_set_style_text_font(counter_label, &lv_font_montserrat_48, 0);
+    
+    // Opcional: Añadir una sombra o un fondo a la etiqueta para mejorar la legibilidad
+    lv_obj_set_style_bg_color(counter_label, lv_color_hex(0x000000), 0); // Fondo negro
+    lv_obj_set_style_bg_opa(counter_label, LV_OPA_50, 0); // Opacidad al 50%
+    lv_obj_set_style_text_color(counter_label, lv_color_hex(0xFFFFFF), 0); // Texto blanco
+    lv_obj_set_style_pad_all(counter_label, 5, 0); // Un poco de padding
+
+    // --- PASO 4: Alinear el contador en la parte superior central de la pantalla ---
+    // Se alineará con respecto al padre (la pantalla), apareciendo sobre la imagen.
+    lv_obj_align(counter_label, LV_ALIGN_TOP_MID, 0, 20); // 20 píxeles desde el borde superior
+    ESP_LOGI(TAG_MAIN, "UI del contador creada y posicionada sobre la imagen.");
 }
+// --- FIN DE LA SECCIÓN DE UI MODIFICADA ---
 
 extern "C" void app_main(void) {
     ESP_LOGI(TAG_MAIN, "--- Iniciando aplicación ---");
 
-    // <-- CAMBIO CRÍTICO: Llamamos solo al log del sistema ANTES de inicializar LVGL.
     log_system_memory("Inicio de app_main");
 
     if (sd_init() && sd_mount()) {
