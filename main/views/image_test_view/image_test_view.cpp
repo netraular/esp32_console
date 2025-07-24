@@ -124,6 +124,15 @@ void ImageTestView::display_image_from_path(const char* path) {
         lv_label_set_long_mode(image_info_label, LV_LABEL_LONG_WRAP);
         lv_obj_set_width(image_info_label, lv_pct(90));
         lv_obj_set_style_text_align(image_info_label, LV_TEXT_ALIGN_CENTER, 0);
+        
+        // --- MODIFICACIÓN: Añadir estilo para el fondo de la etiqueta de información ---
+        lv_obj_set_style_bg_color(image_info_label, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(image_info_label, LV_OPA_70, 0); // 70% de opacidad
+        lv_obj_set_style_text_color(image_info_label, lv_color_white(), 0);
+        lv_obj_set_style_pad_all(image_info_label, 5, 0);
+        lv_obj_set_style_radius(image_info_label, 5, 0);
+        // --- FIN DE LA MODIFICACIÓN ---
+
         lv_obj_align(image_info_label, LV_ALIGN_BOTTOM_MID, 0, -5);
         lv_label_set_text_fmt(image_info_label, "%s\n%" PRIi32 " x %" PRIi32, path, width, height);
         // 6. Log the "after" state. Memory usage should now be higher.
