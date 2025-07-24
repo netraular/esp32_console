@@ -26,6 +26,10 @@ void ImageTestView::create_initial_view() {
     current_image_path.clear();
     lv_obj_clean(container); // Clear any existing widgets on the screen
 
+    // Reset widget pointers
+    image_widget = nullptr;
+    image_info_label = nullptr;
+
     lv_obj_t* title_label = lv_label_create(container);
     lv_obj_set_style_text_font(title_label, &lv_font_montserrat_24, 0);
     lv_label_set_text(title_label, "PNG Image Test (SD)");
@@ -34,9 +38,8 @@ void ImageTestView::create_initial_view() {
     info_label = lv_label_create(container);
     lv_obj_set_style_text_align(info_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(info_label);
-    lv_label_set_text(info_label, "Press OK to select a file\nfrom the SD Card (PNG only).");
+    lv_label_set_text(info_label, "Press OK to select a file\nfrom the SD Card (.png only).");
 
-    image_widget = nullptr; // Ensure no stale pointer
     setup_initial_button_handlers();
 }
 
@@ -62,74 +65,48 @@ void ImageTestView::show_file_explorer() {
 }
 
 void ImageTestView::display_image_from_path(const char* path) {
+    lv_obj_clean(container); // Clear the screen before displaying the image
+    current_image_path = path; // Store the path for context
+
     char lvgl_path[260];
     // LVGL's VFS driver expects a drive letter prefix (e.g., "S:/sdcard/image.png")
     snprintf(lvgl_path, sizeof(lvgl_path), "S:%s", path);
     ESP_LOGI(TAG, "Attempting to load image from LVGL path: %s", lvgl_path);
 
-    lv_obj_clean(container); // Clear the screen before displaying the image
-
-
-    lv_obj_t * image_widget;
-    image_widget = lv_image_create(lv_screen_active());
+    // Create the image widget and assign it to our member variable
+    image_widget = lv_image_create(container);
     lv_image_set_src(image_widget, lvgl_path);
-    lv_obj_align(image_widget, LV_ALIGN_CENTER, 0, 0);
+    
+    // Check if the image was loaded successfully by checking its dimensions.
+    // If the decoder fails, width/height will be 0.
+    // MODIFIED: Use the correct LVGL v9 functions as suggested by the compiler.
+    int32_t width = lv_image_get_src_width(image_widget);
+    int32_t height = lv_image_get_src_height(image_widget);
 
-    current_image_path = path; // Store the path for potential re-display or context
+    if (width > 0 && height > 0) {
+        ESP_LOGI(TAG, "Image loaded successfully! Dimensions: %" PRIi32 "x%" PRIi32, width, height);
+        lv_obj_align(image_widget, LV_ALIGN_CENTER, 0, 0);
 
-    // Display image instructions
-    lv_obj_t *instruction_label = lv_label_create(container);
-    lv_label_set_text(instruction_label, "Press Cancel to return");
-    lv_obj_align(instruction_label, LV_ALIGN_BOTTOM_MID, 0, -20);
+        // Create a label to display image info
+        image_info_label = lv_label_create(container);
+        lv_label_set_long_mode(image_info_label, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(image_info_label, lv_pct(90));
+        lv_obj_set_style_text_align(image_info_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(image_info_label, LV_ALIGN_BOTTOM_MID, 0, -5);
+        lv_label_set_text_fmt(image_info_label, "%s\n%" PRIi32 " x %" PRIi32, path, width, height);
+
+    } else {
+        ESP_LOGE(TAG, "Failed to decode or load image. Dimensions are 0x0.");
+        create_initial_view(); // Go back to the initial view
+        lv_label_set_text(info_label, "Error: Failed to load PNG.\nIs the file valid?\nPress OK to try again.");
+        return;
+    }
     
     // Update button handlers for the image display state
     button_manager_unregister_view_handlers(); // Clear file explorer handlers
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, initial_cancel_press_cb, true, this);
 }
 
-// --- Diagnostic function to test LVGL's VFS ---
-void ImageTestView::perform_vfs_read_test(const char* path) {
-    ESP_LOGW(TAG, "--- STARTING LVGL VFS DIAGNOSTIC TEST ---");
-    
-    char lvgl_path[260];
-    snprintf(lvgl_path, sizeof(lvgl_path), "S:%s", path);
-    ESP_LOGI(TAG, "Testing path: %s", lvgl_path);
-
-    lv_fs_file_t f;
-    lv_fs_res_t res = lv_fs_open(&f, lvgl_path, LV_FS_MODE_RD);
-
-    if (res != LV_FS_RES_OK) {
-        ESP_LOGE(TAG, "lv_fs_open FAILED. Result code: %d", res);
-        switch(res) {
-            case LV_FS_RES_HW_ERR: ESP_LOGE(TAG, "Reason: Hardware error"); break;
-            case LV_FS_RES_FS_ERR: ESP_LOGE(TAG, "Reason: Filesystem error"); break;
-            case LV_FS_RES_NOT_EX: ESP_LOGE(TAG, "Reason: File does not exist"); break; 
-            case LV_FS_RES_FULL: ESP_LOGE(TAG, "Reason: Filesystem is full"); break;
-            case LV_FS_RES_LOCKED: ESP_LOGE(TAG, "Reason: File is locked"); break;
-            case LV_FS_RES_DENIED: ESP_LOGE(TAG, "Reason: Permission denied"); break;
-            case LV_FS_RES_TOUT: ESP_LOGE(TAG, "Reason: Timeout"); break;
-            case LV_FS_RES_NOT_IMP: ESP_LOGE(TAG, "Reason: Not implemented"); break;
-            default: ESP_LOGE(TAG, "Reason: Unknown error"); break;
-        }
-        ESP_LOGW(TAG, "--- LVGL VFS DIAGNOSTIC TEST FAILED ---");
-        return;
-    }
-
-    ESP_LOGI(TAG, "lv_fs_open SUCCEEDED!");
-
-    uint32_t file_size = 0;
-    lv_fs_seek(&f, 0, LV_FS_SEEK_END);
-    lv_fs_tell(&f, &file_size);
-    lv_fs_seek(&f, 0, LV_FS_SEEK_SET);
-    ESP_LOGI(TAG, "File size reported by lv_fs_tell: %" PRIu32 " bytes", file_size);
-
-    char buf[65]; // Read a snippet
-    uint32_t bytes_read = 0;
-    res = lv_fs_read(&f, buf, 64, &bytes_read); // Read up to 64 bytes
-    
-    lv_fs_close(&f);
-    ESP_LOGW(TAG, "--- LVGL VFS DIAGNOSTIC TEST FINISHED ---");
-}
 
 // --- Button Handling & Callbacks ---
 void ImageTestView::setup_initial_button_handlers() {
@@ -157,8 +134,6 @@ void ImageTestView::on_initial_cancel_press() {
 }
 
 void ImageTestView::on_file_selected(const char* path) {
-    perform_vfs_read_test(path); // Run diagnostic test for any selected file
-
     const char* ext = strrchr(path, '.'); // Get file extension
     if (ext && (strcasecmp(ext, ".png") == 0)) {
         ESP_LOGI(TAG, "Selected file is a PNG, attempting to display...");

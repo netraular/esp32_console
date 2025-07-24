@@ -10,12 +10,13 @@
 #include <string>
 
 /**
- * @brief A view to select and display a PNG image from the SD card using LVGL's built-in decoder.
+ * @brief A view to select and display a PNG image from the SD card using the libpng decoder.
  *
  * This class provides a user interface to browse the SD card for .png files.
- * It leverages LVGL's integrated lodepng decoder and VFS support to directly
- * load an image from a file path. It also includes diagnostics for VFS operations
- * and displays image dimensions upon successful loading.
+ * It leverages LVGL's VFS support to directly load an image from a file path.
+ * Upon successful loading, it displays the image dimensions.
+ * @note For large images, ensure PSRAM is enabled and configured for LVGL memory
+ * and libpng decompression buffers in menuconfig for optimal performance.
  */
 class ImageTestView : public View {
 public:
@@ -27,6 +28,7 @@ private:
     // --- UI Widgets ---
     lv_obj_t* info_label = nullptr;               //!< Label for displaying general information or error messages.
     lv_obj_t* image_widget = nullptr;             //!< The LVGL image object for displaying the PNG.
+    lv_obj_t* image_info_label = nullptr;         //!< A label to show the loaded image's properties (path, dimensions).
     lv_obj_t* file_explorer_host_container = nullptr; //!< A temporary container for the file explorer component.
 
     // --- State ---
@@ -50,13 +52,6 @@ private:
      * @brief Sets up button handlers for the initial view state.
      */
     void setup_initial_button_handlers();
-
-    // --- Diagnostic functions ---
-    /**
-     * @brief Performs a diagnostic read test using LVGL's VFS to verify file accessibility.
-     * @param path The full path to the file on the SD card.
-     */
-    void perform_vfs_read_test(const char* path);
 
     // --- Instance Methods for Actions (called by static callbacks) ---
     /**

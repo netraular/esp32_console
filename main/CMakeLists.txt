@@ -44,7 +44,6 @@ idf_component_register(SRCS
         "./views/wifi_stream_view/wifi_stream_view.cpp"
 
     INCLUDE_DIRS "."
-        "../managed_components/lvgl__lvgl/src/libs/lodepng"
     EMBED_FILES 
         "./server_certs/groq_api_ca.pem"
         "./littlefs/welcome.txt"

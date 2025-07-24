@@ -20,10 +20,8 @@
 #include "controllers/stt_manager/stt_manager.h"
 #include "controllers/power_manager/power_manager.h"
 #include "views/view_manager.h"
-
-// --- Use our new custom driver and the PNG decoder ---
 #include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
-#include "libs/lodepng/lv_lodepng.h"
+
 
 
 static const char *TAG = "main";
@@ -85,6 +83,9 @@ extern "C" void app_main(void) {
         return;
     }
 
+
+
+
     // Initialize LittleFS on the 'storage' partition
     if (littlefs_manager_init("storage")) {
         ESP_LOGI(TAG, "LittleFS manager initialized.");
@@ -101,7 +102,6 @@ extern "C" void app_main(void) {
     }
 
     // Use the custom VFS driver to bridge LVGL and the ESP-IDF VFS
-    // This replaces lv_fs_posix_init()
     lvgl_fs_driver_init('S');
 
     // Initialize buttons
