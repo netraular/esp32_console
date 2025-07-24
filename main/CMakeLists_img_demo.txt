@@ -1,0 +1,23 @@
+# CMakeLists.txt para el componente principal 'main'
+
+idf_component_register(
+    # --- 1. Archivos fuente a compilar ---
+    SRCS
+       
+
+    # --- 2. Directorios donde buscar archivos de cabecera (.h) ---
+    INCLUDE_DIRS
+        "."
+
+    # --- 3. Dependencias de otros componentes ---
+    # Estas dependencias son necesarias para la pantalla, LVGL y la SD
+    PRIV_REQUIRES
+        heap
+        log
+        freertos
+        lvgl
+        esp_lcd
+        driver
+        sdmmc
+        fatfs
+)
