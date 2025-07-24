@@ -5,27 +5,33 @@
 #include "esp_heap_caps.h" // For memory monitoring functions
 
 static const char *TAG = "IMAGE_TEST_VIEW";
-static const char *TAG_PSRAM = "PSRAM_MONITOR";
 
 /**
- * @brief Logs the current usage of the SPIRAM (PSRAM).
- * @param context A string describing when the log is being taken (e.g., "Before image load").
+ * @brief Logs the current usage of internal RAM and PSRAM in a single line.
+ * @param context A string describing when the log is being taken.
  */
-static void log_psram_status(const char* context) {
+static void log_memory_status(const char* context) {
+    // --- RAM Calculations ---
+    size_t total_ram = heap_caps_get_total_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t free_ram = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t used_ram = total_ram - free_ram;
+    float ram_usage_percent = (total_ram > 0) ? ((float)used_ram / total_ram * 100.0f) : 0;
+
+    // --- PSRAM Calculations ---
     size_t total_psram = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-    if (total_psram == 0) {
-        ESP_LOGI(TAG_PSRAM, "No PSRAM available.");
-        return;
+    
+    // --- Formatted Logging ---
+    if (total_psram > 0) {
+        size_t free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        size_t used_psram = total_psram - free_psram;
+        float psram_usage_percent = (float)used_psram / total_psram * 100.0f;
+        
+        ESP_LOGI(TAG, "[Mem Status: %s] RAM: %6zu B (%5.2f%%) | PSRAM: %7zu B (%5.2f%%)", 
+                 context, used_ram, ram_usage_percent, used_psram, psram_usage_percent);
+    } else {
+        ESP_LOGI(TAG, "[Mem Status: %s] RAM: %6zu B (%5.2f%%) | PSRAM: N/A",
+                 context, used_ram, ram_usage_percent);
     }
-
-    size_t free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-    size_t used_psram = total_psram - free_psram;
-    float usage_percent = (total_psram > 0) ? ((float)used_psram / total_psram * 100.0f) : 0;
-
-    ESP_LOGI(TAG_PSRAM, "--- PSRAM Status: %s ---", context);
-    ESP_LOGI(TAG_PSRAM, "Used: %zu bytes | Free: %zu bytes | Total: %zu bytes (%.2f%% used)",
-             used_psram, free_psram, total_psram, usage_percent);
-    ESP_LOGI(TAG_PSRAM, "----------------------------------------------------");
 }
 
 
@@ -50,11 +56,9 @@ void ImageTestView::create_initial_view() {
     current_image_path.clear();
     lv_obj_clean(container); // Mark old objects for deletion
 
-    // --- ADDED: Process deletions and log memory recovery ---
-    // This call forces LVGL to actually delete the old image widget and free its PSRAM.
+    // This call forces LVGL to actually delete the old image widget and free its memory.
     lv_timer_handler();
-    log_psram_status("In initial view (after cleanup)");
-    // ---
+    log_memory_status("In initial view (after cleanup)");
 
     image_widget = nullptr;
     image_info_label = nullptr;
@@ -90,25 +94,24 @@ void ImageTestView::show_file_explorer() {
 void ImageTestView::display_image_from_path(const char* path) {
     current_image_path = path;
     
-    // --- MODIFIED SECTION FOR CORRECT MEMORY LOGGING ---
-    lv_obj_clean(container); // 1. Mark old widgets for deletion.
+    // 1. Mark old widgets for deletion.
+    lv_obj_clean(container); 
     
     // 2. Force LVGL to process the deletion and free the memory from the previous image.
     lv_timer_handler(); 
+
+    // 3. Log memory status *after* cleanup but *before* new allocation.
+    log_memory_status("Before new image load");
     
-    // 3. Create the new image widget and set its source. This allocates new PSRAM.
+    // 4. Create the new image widget and set its source. This allocates new memory (likely in PSRAM).
     char lvgl_path[260];
     snprintf(lvgl_path, sizeof(lvgl_path), "S:%s", path);
     ESP_LOGI(TAG, "Attempting to load image from LVGL path: %s", lvgl_path);
     image_widget = lv_image_create(container);
     lv_image_set_src(image_widget, lvgl_path);
 
-    // 4. Force LVGL to process the new image allocation.
+    // 5. Force LVGL to process the new image allocation.
     lv_timer_handler();
-
-    // 5. Log the "after" state. PSRAM usage should now be high.
-    log_psram_status("After image load");
-    // --- END OF MODIFIED SECTION ---
 
     int32_t width = lv_image_get_src_width(image_widget);
     int32_t height = lv_image_get_src_height(image_widget);
@@ -123,6 +126,8 @@ void ImageTestView::display_image_from_path(const char* path) {
         lv_obj_set_style_text_align(image_info_label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(image_info_label, LV_ALIGN_BOTTOM_MID, 0, -5);
         lv_label_set_text_fmt(image_info_label, "%s\n%" PRIi32 " x %" PRIi32, path, width, height);
+        // 6. Log the "after" state. Memory usage should now be higher.
+        log_memory_status("After image load");
 
     } else {
         ESP_LOGE(TAG, "Failed to decode or load image. Dimensions are 0x0.");
