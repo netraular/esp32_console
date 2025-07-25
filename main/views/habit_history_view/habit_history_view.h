@@ -46,7 +46,6 @@ private:
     lv_obj_t* history_color_indicator = nullptr; 
     lv_obj_t* history_title_label = nullptr;
     lv_obj_t* history_content_container = nullptr; // This will hold the calendar grid and indicators
-    // --- MODIFIED: Replaced streak_label with a container and value label ---
     lv_obj_t* streak_container = nullptr;
     lv_obj_t* streak_value_label = nullptr;
 
@@ -55,6 +54,8 @@ private:
     lv_style_t style_category_header;
     lv_style_t style_calendar_cell;
     lv_style_t style_calendar_cell_today; // Style for the current day's cell
+    // --- MODIFIED: Added style for the first day of the month ---
+    lv_style_t style_calendar_cell_first_day; 
     bool styles_initialized = false;
 
     // --- UI Setup ---

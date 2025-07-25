@@ -87,6 +87,11 @@ void HabitHistoryView::init_styles() {
     lv_style_set_border_width(&style_calendar_cell_today, 2);
     lv_style_set_border_color(&style_calendar_cell_today, lv_palette_main(LV_PALETTE_RED));
 
+    // Style for the first day of the month
+    lv_style_init(&style_calendar_cell_first_day);
+    lv_style_set_border_width(&style_calendar_cell_first_day, 2);
+    lv_style_set_border_color(&style_calendar_cell_first_day, lv_color_black());
+
     styles_initialized = true;
 }
 
@@ -96,6 +101,7 @@ void HabitHistoryView::reset_styles() {
     lv_style_reset(&style_category_header);
     lv_style_reset(&style_calendar_cell);
     lv_style_reset(&style_calendar_cell_today);
+    lv_style_reset(&style_calendar_cell_first_day);
     styles_initialized = false;
 }
 
@@ -196,8 +202,7 @@ void HabitHistoryView::create_history_panel(lv_obj_t* parent) {
     const int DAY_LABEL_WIDTH = 35;
     const int CELL_SIZE = 20;
     const int GAP_SIZE = 4;
-    const int INDICATOR_SIZE = 5;
-    const int INDICATOR_ROW_HEIGHT = 10;
+    const int INDICATOR_ROW_HEIGHT = 20;
 
     // Grid Column/Row Descriptors
     static lv_coord_t col_dsc[NUM_WEEKS + 2]; // +1 for labels, +1 for LAST
@@ -232,19 +237,24 @@ void HabitHistoryView::create_history_panel(lv_obj_t* parent) {
             lv_obj_add_style(cell, &style_calendar_cell, 0);
             // Place in grid, column index is week + 1 because col 0 is for labels
             lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_STRETCH, week + 1, 1, LV_GRID_ALIGN_STRETCH, day, 1);
+
+            // --- MODIFICATION: Create a label inside each cell for the day number ---
+            lv_obj_t* day_num_label = lv_label_create(cell);
+            lv_label_set_text(day_num_label, ""); // Initially empty
+            lv_obj_set_style_text_color(day_num_label, lv_palette_darken(LV_PALETTE_GREY, 3), 0);
+            lv_obj_set_style_text_font(day_num_label, &lv_font_montserrat_12, 0);
+            lv_obj_center(day_num_label);
         }
     }
     
-    // Create Week Indicators
+    // Create Week Number Labels
     for (int week = 0; week < NUM_WEEKS; week++) {
-        lv_obj_t* indicator = lv_obj_create(history_content_container);
-        lv_obj_remove_style_all(indicator);
-        lv_obj_set_size(indicator, INDICATOR_SIZE, INDICATOR_SIZE);
-        lv_obj_set_style_bg_color(indicator, lv_palette_main(LV_PALETTE_RED), 0);
-        lv_obj_set_style_bg_opa(indicator, LV_OPA_COVER, 0);
-        lv_obj_set_style_radius(indicator, LV_RADIUS_CIRCLE, 0);
+        lv_obj_t* week_label = lv_label_create(history_content_container);
+        lv_label_set_text(week_label, ""); // Will be populated later
+        lv_obj_set_style_text_font(week_label, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(week_label, lv_palette_main(LV_PALETTE_GREY), 0);
         // Place in grid, column index is week + 1, row is NUM_DAYS
-        lv_obj_set_grid_cell(indicator, LV_GRID_ALIGN_CENTER, week + 1, 1, LV_GRID_ALIGN_CENTER, NUM_DAYS, 1);
+        lv_obj_set_grid_cell(week_label, LV_GRID_ALIGN_CENTER, week + 1, 1, LV_GRID_ALIGN_CENTER, NUM_DAYS, 1);
     }
 }
 
@@ -402,33 +412,41 @@ void HabitHistoryView::update_history_display() {
     const int NUM_DAYS = 7;
     
     for (int week = 0; week < NUM_WEEKS; week++) {
-        // --- MODIFICATION START: Logic for week indicator ---
-        bool column_contains_day_8 = false;
-        // --- MODIFICATION END ---
-        
         for (int day = 0; day < NUM_DAYS; day++) {
             // The first NUM_DAYS children are labels. After that, cells are added row by row.
             int cell_index = NUM_DAYS + (week * NUM_DAYS) + day;
             lv_obj_t* cell = lv_obj_get_child(history_content_container, cell_index);
             if (!cell) continue; // Should not happen
 
+            // --- MODIFICATION: Get the label inside the cell ---
+            lv_obj_t* day_num_label = lv_obj_get_child(cell, 0);
+
             // Calculate the date for the current cell
             int days_ago = ((NUM_WEEKS - 1 - week) * 7) + (today_grid_row - day);
             time_t cell_date = now - (time_t)days_ago * 86400; // 86400 seconds in a day
 
-            // --- MODIFICATION START: Check if the day of the month is 8 ---
             struct tm timeinfo_cell;
             localtime_r(&cell_date, &timeinfo_cell);
-            if (timeinfo_cell.tm_mday == 8) {
-                column_contains_day_8 = true;
-            }
-            // --- MODIFICATION END ---
 
-            // Reset cell style to default gray
+            // Reset cell styles first
             lv_obj_remove_style(cell, &style_calendar_cell_today, 0);
+            lv_obj_remove_style(cell, &style_calendar_cell_first_day, 0);
             lv_obj_set_style_bg_color(cell, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
+            
+            // --- MODIFICATION: Reset label text ---
+            if (day_num_label) {
+                lv_label_set_text(day_num_label, "");
+            }
+            
+            // --- MODIFICATION: Apply black border and number "1" if it's the 1st of the month ---
+            if (timeinfo_cell.tm_mday == 1) {
+                lv_obj_add_style(cell, &style_calendar_cell_first_day, 0);
+                if (day_num_label) {
+                    lv_label_set_text(day_num_label, "1");
+                }
+            }
 
-            // Check if habit was completed on this day using a binary search for efficiency
+            // Check if habit was completed on this day
             if (std::binary_search(history.completed_dates.begin(), history.completed_dates.end(), cell_date, 
                 // Custom comparator to check by day, not exact time
                 [&](time_t a, time_t b){ return !is_same_day(a, b) && a < b; })) {
@@ -442,17 +460,20 @@ void HabitHistoryView::update_history_display() {
             }
         }
 
-        // --- MODIFICATION START: Show/hide the indicator for the current week (column) ---
+        // Set the week number label text
+        int days_ago_for_monday = ((NUM_WEEKS - 1 - week) * 7) + (today_grid_row - 0);
+        time_t monday_date = now - (time_t)days_ago_for_monday * 86400;
+        
+        struct tm timeinfo_week;
+        localtime_r(&monday_date, &timeinfo_week);
+        char week_num_buf[4]; // "52" + null terminator
+        strftime(week_num_buf, sizeof(week_num_buf), "%W", &timeinfo_week);
+
         int indicator_index = NUM_DAYS + (NUM_WEEKS * NUM_DAYS) + week;
-        lv_obj_t* indicator = lv_obj_get_child(history_content_container, indicator_index);
-        if (indicator) {
-            if (column_contains_day_8) {
-                lv_obj_clear_flag(indicator, LV_OBJ_FLAG_HIDDEN);
-            } else {
-                lv_obj_add_flag(indicator, LV_OBJ_FLAG_HIDDEN);
-            }
+        lv_obj_t* week_label = lv_obj_get_child(history_content_container, indicator_index);
+        if (week_label) {
+            lv_label_set_text(week_label, week_num_buf);
         }
-        // --- MODIFICATION END ---
     }
     
     // --- Calculate and display streak ---
