@@ -21,6 +21,8 @@
 #include "voice_note_player_view/voice_note_player_view.h"
 #include "volume_tester_view/volume_tester_view.h"
 #include "wifi_stream_view/wifi_stream_view.h"
+#include "habit_manager_view/habit_manager_view.h"                 // <-- ADDED
+#include "habit_category_manager_view/habit_category_manager_view.h" // <-- ADDED
 
 
 static const char *TAG = "VIEW_MGR";
@@ -50,6 +52,8 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_VOICE_NOTE_PLAYER] = []() { return new VoiceNotePlayerView(); };
     s_view_factory[VIEW_ID_VOLUME_TESTER] = []() { return new VolumeTesterView(); };
     s_view_factory[VIEW_ID_WIFI_STREAM_TEST] = []() { return new WifiStreamView(); };
+    s_view_factory[VIEW_ID_HABIT_MANAGER] = []() { return new HabitManagerView(); };                   // <-- ADDED
+    s_view_factory[VIEW_ID_HABIT_CATEGORY_MANAGER] = []() { return new HabitCategoryManagerView(); }; // <-- ADDED
 }
 
 void view_manager_init(void) {
