@@ -57,6 +57,13 @@ void HabitHistoryView::init_styles() {
     lv_style_set_text_color(&style_category_header, lv_palette_main(LV_PALETTE_GREY));
     lv_style_set_text_font(&style_category_header, &lv_font_montserrat_16);
 
+    // Style for the calendar grid cells
+    lv_style_init(&style_calendar_cell);
+    lv_style_set_radius(&style_calendar_cell, 2);
+    lv_style_set_bg_color(&style_calendar_cell, lv_palette_lighten(LV_PALETTE_GREY, 2));
+    lv_style_set_bg_opa(&style_calendar_cell, LV_OPA_COVER);
+    lv_style_set_border_width(&style_calendar_cell, 0);
+
     styles_initialized = true;
 }
 
@@ -64,6 +71,7 @@ void HabitHistoryView::reset_styles() {
     if (!styles_initialized) return;
     lv_style_reset(&style_list_item_focused);
     lv_style_reset(&style_category_header);
+    lv_style_reset(&style_calendar_cell);
     styles_initialized = false;
 }
 
@@ -108,24 +116,78 @@ void HabitHistoryView::create_history_panel(lv_obj_t* parent) {
     lv_obj_remove_style_all(panel_show_history);
     lv_obj_set_size(panel_show_history, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(panel_show_history, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(panel_show_history, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_gap(panel_show_history, 10, 0);
+    lv_obj_set_flex_align(panel_show_history, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_ver(panel_show_history, 10, 0);
+    lv_obj_set_style_pad_hor(panel_show_history, 5, 0);
 
+    // --- Title ---
     history_title_label = lv_label_create(panel_show_history);
-    lv_obj_set_width(history_title_label, LV_PCT(95));
+    lv_obj_set_width(history_title_label, LV_PCT(100));
     lv_label_set_long_mode(history_title_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(history_title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(history_title_label, &lv_font_montserrat_20, 0);
     
+    // --- Main content container for calendar ---
     history_content_container = lv_obj_create(panel_show_history);
     lv_obj_remove_style_all(history_content_container);
-    lv_obj_set_width(history_content_container, LV_PCT(95));
-    lv_obj_set_flex_grow(history_content_container, 1); // Make it fill remaining space
+    lv_obj_set_width(history_content_container, LV_SIZE_CONTENT); // FIX: Added object
+    lv_obj_set_height(history_content_container, LV_SIZE_CONTENT); // FIX: Added object
+    lv_obj_set_flex_flow(history_content_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(history_content_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_gap(history_content_container, 8, 0);
+
+    // --- Left side: Day of week labels ---
+    lv_obj_t* day_labels_cont = lv_obj_create(history_content_container);
+    lv_obj_remove_style_all(day_labels_cont);
+    const int GRID_HEIGHT = 164; // 7*20 (cells) + 6*4 (gaps)
+    lv_obj_set_height(day_labels_cont, GRID_HEIGHT);
+    lv_obj_set_width(day_labels_cont, LV_SIZE_CONTENT); // FIX: Added object
+    lv_obj_set_flex_flow(day_labels_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(day_labels_cont, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     
-    lv_obj_t* todo_label = lv_label_create(history_content_container);
-    lv_label_set_text(todo_label, "To do: habit history");
-    lv_obj_center(todo_label);
+    const char* day_labels[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+    for (int i = 0; i < 7; i++) {
+        lv_obj_t* label = lv_label_create(day_labels_cont);
+        lv_label_set_text(label, day_labels[i]);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0); // FIX: Changed to valid font
+        lv_obj_set_style_text_color(label, lv_palette_main(LV_PALETTE_GREY), 0);
+    }
+    
+    // --- Right side: Grid of squares ---
+    const int NUM_WEEKS = 7;
+    const int NUM_DAYS = 7;
+    const int CELL_SIZE = 20;
+    const int GAP_SIZE = 4;
+
+    static lv_coord_t col_dsc[NUM_WEEKS + 1];
+    static lv_coord_t row_dsc[NUM_DAYS + 1];
+    for(int i = 0; i < NUM_WEEKS; i++) col_dsc[i] = CELL_SIZE;
+    col_dsc[NUM_WEEKS] = LV_GRID_TEMPLATE_LAST;
+    for(int i = 0; i < NUM_DAYS; i++) row_dsc[i] = CELL_SIZE;
+    row_dsc[NUM_DAYS] = LV_GRID_TEMPLATE_LAST;
+
+    lv_obj_t* grid = lv_obj_create(history_content_container);
+    lv_obj_remove_style_all(grid);
+    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
+    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+    // FIX: Set gap using pad properties on the grid container
+    lv_obj_set_style_pad_column(grid, GAP_SIZE, 0);
+    lv_obj_set_style_pad_row(grid, GAP_SIZE, 0);
+    lv_obj_set_size(grid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+
+    for (int week = 0; week < NUM_WEEKS; week++) {
+        for (int day = 0; day < NUM_DAYS; day++) {
+            lv_obj_t* cell = lv_obj_create(grid);
+            lv_obj_remove_style_all(cell);
+            lv_obj_add_style(cell, &style_calendar_cell, 0);
+            lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_STRETCH, week, 1, LV_GRID_ALIGN_STRETCH, day, 1);
+        }
+    }
+
+    // --- Streak Label at the bottom ---
+    streak_label = lv_label_create(panel_show_history);
+    lv_label_set_text(streak_label, "Current Streak: 0 days");
+    lv_obj_set_style_text_font(streak_label, &lv_font_montserrat_16, 0);
 }
 
 void HabitHistoryView::switch_to_step(HabitHistoryStep new_step) {
@@ -139,7 +201,7 @@ void HabitHistoryView::switch_to_step(HabitHistoryStep new_step) {
         lv_obj_clear_flag(panel_select_habit, LV_OBJ_FLAG_HIDDEN);
         lv_group_set_default(group);
     } else { // SHOW_HISTORY
-        on_habit_selected();
+        update_history_display(); // Populate the view with data for selected_habit_id
         lv_obj_clear_flag(panel_show_history, LV_OBJ_FLAG_HIDDEN);
     }
 }
@@ -203,18 +265,39 @@ void HabitHistoryView::populate_habit_selector() {
     }
 }
 
-void HabitHistoryView::on_habit_selected() {
+void HabitHistoryView::update_history_display() {
     Habit* habit = HabitDataManager::get_habit_by_id(this->selected_habit_id);
     if (!habit) {
         ESP_LOGE(TAG, "Cannot show history, habit with ID %lu not found!", this->selected_habit_id);
-        // Fallback to selection screen to prevent a crash or empty view
         switch_to_step(HabitHistoryStep::SELECT_HABIT);
         return;
     }
     
+    // Update the title
     this->selected_habit_name = habit->name;
     lv_label_set_text(history_title_label, selected_habit_name.c_str());
+
+    // --- TODO: Calculate real data ---
+    HabitHistory history = HabitDataManager::get_history_for_habit(this->selected_habit_id);
+    
+    // Calculate streak (placeholder logic)
+    int streak_count = 0; // TODO: Replace with actual calculation
+    
+    // Update the streak label
+    lv_label_set_text_fmt(streak_label, "Current Streak: %d days", streak_count);
+    
+    // Update the grid (placeholder)
+    // A real implementation would iterate through dates and color cells.
+    lv_obj_t* grid = lv_obj_get_child(history_content_container, 1);
+    for (uint32_t i = 0; i < lv_obj_get_child_count(grid); i++) {
+        // FIX: Remove unused variable to clear warning
+        // lv_obj_t* cell = lv_obj_get_child(grid, i);
+        // For now, all cells use the default style.
+    }
+    
+    ESP_LOGI(TAG, "History display updated for habit '%s'.", habit->name.c_str());
 }
+
 
 // --- Button and Event Handling ---
 
@@ -234,31 +317,6 @@ void HabitHistoryView::on_ok_press() {
         }
 
         this->selected_habit_id = (uint32_t)lv_obj_get_user_data(focused_obj);
-
-        // --- SECTION ADDED FOR LOGGING ---
-        ESP_LOGI(TAG, "--- Reading History for Habit ID: %lu ---", this->selected_habit_id);
-        
-        // 1. Get the history data from the data manager
-        HabitHistory history = HabitDataManager::get_history_for_habit(this->selected_habit_id);
-
-        // 2. Check if there are any records
-        if (history.completed_dates.empty()) {
-            ESP_LOGI(TAG, "No completion records found in LittleFS for this habit.");
-        } else {
-            ESP_LOGI(TAG, "Found %d completion records:", history.completed_dates.size());
-            
-            // 3. Iterate and print each record in a human-readable format
-            for (const auto& timestamp : history.completed_dates) {
-                struct tm timeinfo;
-                char buffer[32];
-                localtime_r(&timestamp, &timeinfo);
-                strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
-                ESP_LOGI(TAG, "  - Completed on: %s (Raw Timestamp: %lld)", buffer, (long long)timestamp);
-            }
-        }
-        ESP_LOGI(TAG, "------------------------------------------");
-        // --- END OF SECTION ADDED ---
-
         switch_to_step(HabitHistoryStep::SHOW_HISTORY);
     }
     // No action for OK press on the history screen

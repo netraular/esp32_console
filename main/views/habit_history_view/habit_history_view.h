@@ -19,7 +19,7 @@ enum class HabitHistoryStep {
  *
  * This view has two screens:
  * 1. A list, grouped by category, to select an active habit.
- * 2. A placeholder screen showing the selected habit's name, ready for future implementation.
+ * 2. A GitHub-style calendar grid showing completion history for the last few weeks.
  */
 class HabitHistoryView : public View {
 public:
@@ -44,11 +44,13 @@ private:
     
     // History panel
     lv_obj_t* history_title_label = nullptr;
-    lv_obj_t* history_content_container = nullptr;
+    lv_obj_t* history_content_container = nullptr; // This will hold the calendar grid
+    lv_obj_t* streak_label = nullptr;            // Label for the current streak
 
     // --- Style Management ---
     lv_style_t style_list_item_focused;
     lv_style_t style_category_header;
+    lv_style_t style_calendar_cell; // New style for the grid cells
     bool styles_initialized = false;
 
     // --- UI Setup ---
@@ -61,7 +63,7 @@ private:
 
     // --- Logic ---
     void populate_habit_selector();
-    void on_habit_selected();
+    void update_history_display(); // New function to populate the history view
 
     // --- Button and Event Handling ---
     void setup_button_handlers();
