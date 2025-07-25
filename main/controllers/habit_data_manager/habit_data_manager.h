@@ -36,6 +36,8 @@ public:
 
     // --- History Management ---
     static bool mark_habit_as_done(uint32_t habit_id, time_t date);
+    static bool unmark_habit_as_done(uint32_t habit_id, time_t date);
+    static bool is_habit_done_today(uint32_t habit_id);
     static HabitHistory get_history_for_habit(uint32_t habit_id);
 
 private:
@@ -51,6 +53,12 @@ private:
     static void save_id_counter();
 
     static uint32_t get_next_unique_id();
+
+    // --- NEW: History Helper Methods ---
+    static std::string get_history_filepath(uint32_t habit_id);
+    static std::vector<time_t> read_history_file(uint32_t habit_id);
+    static bool write_history_file(uint32_t habit_id, const std::vector<time_t>& dates);
+    static bool is_same_day(time_t t1, time_t t2);
 };
 
 #endif // HABIT_DATA_MANAGER_H

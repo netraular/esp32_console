@@ -119,7 +119,8 @@ void HabitManagerView::on_ok_press() {
 
     switch (index) {
         case 0: // Track Today's Habits
-            ESP_LOGI(TAG, "Navigate to: Track Today's Habits (Not Implemented)");
+            ESP_LOGI(TAG, "Navigate to: Track Today's Habits");
+            view_manager_load_view(VIEW_ID_TRACK_HABITS);
             break;
         case 1: // Manage Categories
             ESP_LOGI(TAG, "Navigate to: Manage Categories");
@@ -127,7 +128,7 @@ void HabitManagerView::on_ok_press() {
             break;
         case 2: // Manage Habits -> NOW Add Habit
             ESP_LOGI(TAG, "Navigate to: Add New Habit");
-            view_manager_load_view(VIEW_ID_HABIT_ADD); // <-- MODIFIED
+            view_manager_load_view(VIEW_ID_HABIT_ADD);
             break;
         case 3: // View History
             ESP_LOGI(TAG, "Navigate to: View History (Not Implemented)");

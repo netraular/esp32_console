@@ -23,7 +23,8 @@
 #include "wifi_stream_view/wifi_stream_view.h"
 #include "habit_manager_view/habit_manager_view.h"
 #include "habit_category_manager_view/habit_category_manager_view.h"
-#include "habit_add_view/habit_add_view.h" // <-- ADDED
+#include "habit_add_view/habit_add_view.h"
+#include "track_habits_view/track_habits_view.h"
 
 
 static const char *TAG = "VIEW_MGR";
@@ -55,7 +56,8 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_WIFI_STREAM_TEST] = []() { return new WifiStreamView(); };
     s_view_factory[VIEW_ID_HABIT_MANAGER] = []() { return new HabitManagerView(); };
     s_view_factory[VIEW_ID_HABIT_CATEGORY_MANAGER] = []() { return new HabitCategoryManagerView(); };
-    s_view_factory[VIEW_ID_HABIT_ADD] = []() { return new HabitAddView(); }; // <-- ADDED
+    s_view_factory[VIEW_ID_HABIT_ADD] = []() { return new HabitAddView(); };
+    s_view_factory[VIEW_ID_TRACK_HABITS] = []() { return new TrackHabitsView(); };
 }
 
 void view_manager_init(void) {

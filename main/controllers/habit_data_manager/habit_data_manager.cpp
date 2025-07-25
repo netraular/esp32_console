@@ -3,12 +3,14 @@
 #include "esp_log.h"
 #include <sstream>
 #include <algorithm>
-#include <string> // For std::string, std::stoul, etc.
+#include <string>
+#include <cstdlib> // --- MODIFIED ---: For strtoll (exception-free string to long long)
 
 static const char* TAG = "HABIT_DATA_MGR";
 
 // --- File paths within LittleFS ---
 static const char* DIR_PATH = "habits";
+static const char* HISTORY_DIR_PATH = "habits/history";
 static const std::string CATEGORIES_FILENAME = std::string(DIR_PATH) + "/categories.csv";
 static const std::string HABITS_FILENAME = std::string(DIR_PATH) + "/habits.csv";
 static const std::string ID_COUNTER_FILENAME = std::string(DIR_PATH) + "/id.txt";
@@ -23,6 +25,10 @@ void HabitDataManager::init() {
     ESP_LOGI(TAG, "Initializing Habit Data Manager...");
     if (!littlefs_manager_ensure_dir_exists(DIR_PATH)) {
         ESP_LOGE(TAG, "Failed to create habits directory! Data will not be loaded or saved.");
+        return;
+    }
+    if (!littlefs_manager_ensure_dir_exists(HISTORY_DIR_PATH)) {
+        ESP_LOGE(TAG, "Failed to create habits history directory!");
         return;
     }
     load_data();
@@ -41,8 +47,7 @@ void HabitDataManager::load_data() {
         ESP_LOGI(TAG, "Loaded next_id: %lu", s_next_id);
     }
 
-    // --- MODIFIED: Load Categories with is_deletable flag ---
-    // CSV Format: id,is_active,is_deletable,name
+    // Load Categories with is_deletable flag
     char* cat_buffer = nullptr;
     size_t cat_size = 0;
     if (littlefs_manager_read_file(CATEGORIES_FILENAME.c_str(), &cat_buffer, &cat_size) && cat_buffer) {
@@ -63,7 +68,6 @@ void HabitDataManager::load_data() {
         ESP_LOGI(TAG, "Loaded %d categories.", (int)s_categories.size());
     }
 
-    // --- NEW: First-time initialization logic ---
     if (s_categories.empty()) {
         ESP_LOGI(TAG, "No categories found. Creating default 'General' category.");
         uint32_t new_id = get_next_unique_id();
@@ -71,7 +75,7 @@ void HabitDataManager::load_data() {
         save_categories(); // Save immediately
     }
 
-    // Load Habits (unchanged)
+    // Load Habits
     char* habit_buffer = nullptr;
     size_t habit_size = 0;
     if (littlefs_manager_read_file(HABITS_FILENAME.c_str(), &habit_buffer, &habit_size) && habit_buffer) {
@@ -94,8 +98,6 @@ void HabitDataManager::load_data() {
     }
 }
 
-// --- MODIFIED: Save Categories with is_deletable flag ---
-// CSV Format: id,is_active,is_deletable,name
 void HabitDataManager::save_categories() {
     std::stringstream ss;
     for (const auto& category : s_categories) {
@@ -105,8 +107,6 @@ void HabitDataManager::save_categories() {
         ESP_LOGE(TAG, "Failed to save categories!");
     }
 }
-
-// Save Habits (unchanged)
 void HabitDataManager::save_habits() {
     std::stringstream ss;
     for (const auto& habit : s_habits) {
@@ -116,21 +116,16 @@ void HabitDataManager::save_habits() {
         ESP_LOGE(TAG, "Failed to save habits!");
     }
 }
-
 void HabitDataManager::save_id_counter() {
     if (!littlefs_manager_write_file(ID_COUNTER_FILENAME.c_str(), std::to_string(s_next_id).c_str())) {
         ESP_LOGE(TAG, "Failed to save ID counter!");
     }
 }
-
 uint32_t HabitDataManager::get_next_unique_id() {
     uint32_t id = s_next_id++;
     save_id_counter();
     return id;
 }
-
-// --- Public API Methods (Implementations) ---
-
 std::vector<HabitCategory> HabitDataManager::get_active_categories() {
     std::vector<HabitCategory> active_cats;
     for (const auto& cat : s_categories) {
@@ -140,7 +135,6 @@ std::vector<HabitCategory> HabitDataManager::get_active_categories() {
     }
     return active_cats;
 }
-
 HabitCategory* HabitDataManager::get_category_by_id(uint32_t category_id) {
     for (auto& cat : s_categories) {
         if (cat.id == category_id) {
@@ -149,30 +143,24 @@ HabitCategory* HabitDataManager::get_category_by_id(uint32_t category_id) {
     }
     return nullptr;
 }
-
 bool HabitDataManager::add_category(const std::string& name) {
     uint32_t new_id = get_next_unique_id();
-    s_categories.push_back({new_id, name, true, true}); // User-added categories are always deletable
+    s_categories.push_back({new_id, name, true, true});
     save_categories();
     ESP_LOGI(TAG, "Added category '%s' with ID %lu", name.c_str(), new_id);
     return true;
 }
-
 bool HabitDataManager::archive_category(uint32_t category_id) {
     auto it = std::find_if(s_categories.begin(), s_categories.end(), [category_id](const HabitCategory& cat){
         return cat.id == category_id;
     });
-
     if (it != s_categories.end()) {
-        // --- NEW: Check if the category is deletable ---
         if (!it->is_deletable) {
             ESP_LOGW(TAG, "Attempted to archive a non-deletable category (ID: %lu). Operation denied.", category_id);
             return false;
         }
-
         it->is_active = false;
         save_categories();
-        // Also archive all habits in this category
         for (auto& habit : s_habits) {
             if (habit.category_id == category_id) {
                 habit.is_active = false;
@@ -185,7 +173,6 @@ bool HabitDataManager::archive_category(uint32_t category_id) {
     ESP_LOGW(TAG, "Could not find category with ID %lu to archive", category_id);
     return false;
 }
-
 int HabitDataManager::get_habit_count_for_category(uint32_t category_id, bool active_only) {
     int count = 0;
     for (const auto& habit : s_habits) {
@@ -197,7 +184,6 @@ int HabitDataManager::get_habit_count_for_category(uint32_t category_id, bool ac
     }
     return count;
 }
-
 std::vector<Habit> HabitDataManager::get_active_habits_for_category(uint32_t category_id) {
     std::vector<Habit> active_habits;
     for (const auto& habit : s_habits) {
@@ -207,7 +193,6 @@ std::vector<Habit> HabitDataManager::get_active_habits_for_category(uint32_t cat
     }
     return active_habits;
 }
-
 bool HabitDataManager::add_habit(const std::string& name, uint32_t category_id, const std::string& color_hex) {
     uint32_t new_id = get_next_unique_id();
     s_habits.push_back({new_id, category_id, name, color_hex, true});
@@ -215,12 +200,10 @@ bool HabitDataManager::add_habit(const std::string& name, uint32_t category_id, 
     ESP_LOGI(TAG, "Added habit '%s' with ID %lu, color %s", name.c_str(), new_id, color_hex.c_str());
     return true;
 }
-
 bool HabitDataManager::archive_habit(uint32_t habit_id) {
     auto it = std::find_if(s_habits.begin(), s_habits.end(), [habit_id](const Habit& h){
         return h.id == habit_id;
     });
-
     if (it != s_habits.end()) {
         it->is_active = false;
         save_habits();
@@ -230,16 +213,111 @@ bool HabitDataManager::archive_habit(uint32_t habit_id) {
     ESP_LOGW(TAG, "Could not find habit with ID %lu to archive", habit_id);
     return false;
 }
-
 bool HabitDataManager::delete_habit_permanently(uint32_t habit_id) { 
     ESP_LOGW(TAG, "delete_habit_permanently not implemented");
     return false; 
 }
+// --- History Helper Methods (Private) ---
+
+std::string HabitDataManager::get_history_filepath(uint32_t habit_id) {
+    return std::string(HISTORY_DIR_PATH) + "/" + std::to_string(habit_id) + ".csv";
+}
+
+bool HabitDataManager::is_same_day(time_t t1, time_t t2) {
+    struct tm tm1, tm2;
+    localtime_r(&t1, &tm1);
+    localtime_r(&t2, &tm2);
+    return (tm1.tm_year == tm2.tm_year &&
+            tm1.tm_mon == tm2.tm_mon &&
+            tm1.tm_mday == tm2.tm_mday);
+}
+
+std::vector<time_t> HabitDataManager::read_history_file(uint32_t habit_id) {
+    std::vector<time_t> dates;
+    char* buffer = nullptr;
+    size_t size = 0;
+    std::string path = get_history_filepath(habit_id);
+
+    if (littlefs_manager_read_file(path.c_str(), &buffer, &size) && buffer) {
+        std::stringstream ss(buffer);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (!line.empty()) {
+                // --- MODIFIED ---: Use exception-free strtoll instead of stoll
+                const char* c_str = line.c_str();
+                char* end_ptr;
+                long long val = strtoll(c_str, &end_ptr, 10);
+
+                // Check if conversion was successful (at least one character was consumed)
+                if (c_str != end_ptr) {
+                    dates.push_back(static_cast<time_t>(val));
+                } else {
+                    ESP_LOGE(TAG, "Invalid timestamp in history file %s: %s", path.c_str(), line.c_str());
+                }
+            }
+        }
+        free(buffer);
+    }
+    return dates;
+}
+
+bool HabitDataManager::write_history_file(uint32_t habit_id, const std::vector<time_t>& dates) {
+    std::stringstream ss;
+    for (const auto& date : dates) {
+        ss << date << "\n";
+    }
+    std::string path = get_history_filepath(habit_id);
+    return littlefs_manager_write_file(path.c_str(), ss.str().c_str());
+}
+
+
+// --- History Management (Public API) ---
+
 bool HabitDataManager::mark_habit_as_done(uint32_t habit_id, time_t date) {
-    ESP_LOGW(TAG, "mark_habit_as_done not implemented");
+    auto dates = read_history_file(habit_id);
+    for (const auto& existing_date : dates) {
+        if (is_same_day(existing_date, date)) {
+            ESP_LOGW(TAG, "Habit %lu already marked as done for this day.", habit_id);
+            return true;
+        }
+    }
+    dates.push_back(date);
+    return write_history_file(habit_id, dates);
+}
+
+bool HabitDataManager::unmark_habit_as_done(uint32_t habit_id, time_t date) {
+    auto dates = read_history_file(habit_id);
+    bool changed = false;
+    
+    auto new_end = std::remove_if(dates.begin(), dates.end(), [&](time_t existing_date) {
+        bool match = is_same_day(existing_date, date);
+        if (match) changed = true;
+        return match;
+    });
+    dates.erase(new_end, dates.end());
+
+    if (!changed) {
+        ESP_LOGW(TAG, "Attempted to unmark habit %lu, but it was not marked for this day.", habit_id);
+        return true;
+    }
+    
+    return write_history_file(habit_id, dates);
+}
+
+bool HabitDataManager::is_habit_done_today(uint32_t habit_id) {
+    time_t today = time(NULL);
+    auto dates = read_history_file(habit_id);
+    for (const auto& date : dates) {
+        if (is_same_day(date, today)) {
+            return true;
+        }
+    }
     return false;
 }
+
 HabitHistory HabitDataManager::get_history_for_habit(uint32_t habit_id) {
-    ESP_LOGW(TAG, "get_history_for_habit not implemented");
-    return {};
+    HabitHistory history;
+    history.habit_id = habit_id;
+    history.completed_dates = read_history_file(habit_id);
+    return history;
 }

@@ -35,6 +35,7 @@ typedef enum {
     VIEW_ID_HABIT_MANAGER,
     VIEW_ID_HABIT_CATEGORY_MANAGER,
     VIEW_ID_HABIT_ADD,
+    VIEW_ID_TRACK_HABITS,
     
     // Add other views here as they are converted
     VIEW_ID_COUNT // Total number of views, must be last
