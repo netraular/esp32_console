@@ -50,7 +50,8 @@ private:
     // --- Style Management ---
     lv_style_t style_list_item_focused;
     lv_style_t style_category_header;
-    lv_style_t style_calendar_cell; // New style for the grid cells
+    lv_style_t style_calendar_cell;
+    lv_style_t style_calendar_cell_today; // Style for the current day's cell
     bool styles_initialized = false;
 
     // --- UI Setup ---
@@ -63,7 +64,7 @@ private:
 
     // --- Logic ---
     void populate_habit_selector();
-    void update_history_display(); // New function to populate the history view
+    void update_history_display();
 
     // --- Button and Event Handling ---
     void setup_button_handlers();

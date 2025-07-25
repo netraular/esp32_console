@@ -3,9 +3,27 @@
 #include "controllers/habit_data_manager/habit_data_manager.h"
 #include "esp_log.h"
 #include <string>
+#include <algorithm> // For std::sort
 #include <time.h> // Required for timestamp formatting
 
 static const char *TAG = "HABIT_HISTORY_VIEW";
+
+// --- Static Helper Functions ---
+/**
+ * @brief Checks if two time_t values fall on the same calendar day.
+ * @param t1 First timestamp.
+ * @param t2 Second timestamp.
+ * @return True if they are on the same day, false otherwise.
+ */
+static bool is_same_day(time_t t1, time_t t2) {
+    struct tm tm1, tm2;
+    localtime_r(&t1, &tm1);
+    localtime_r(&t2, &tm2);
+    return (tm1.tm_year == tm2.tm_year &&
+            tm1.tm_mon == tm2.tm_mon &&
+            tm1.tm_mday == tm2.tm_mday);
+}
+
 
 // --- Lifecycle Methods ---
 
@@ -64,6 +82,13 @@ void HabitHistoryView::init_styles() {
     lv_style_set_bg_opa(&style_calendar_cell, LV_OPA_COVER);
     lv_style_set_border_width(&style_calendar_cell, 0);
 
+    // Style for the current day's cell (red border)
+    lv_style_init(&style_calendar_cell_today);
+    lv_style_set_border_width(&style_calendar_cell_today, 2);
+    lv_style_set_border_color(&style_calendar_cell_today, lv_palette_main(LV_PALETTE_RED));
+    // Making the background transparent allows the completed color to show through
+    lv_style_set_bg_opa(&style_calendar_cell_today, LV_OPA_TRANSP);
+
     styles_initialized = true;
 }
 
@@ -72,6 +97,7 @@ void HabitHistoryView::reset_styles() {
     lv_style_reset(&style_list_item_focused);
     lv_style_reset(&style_category_header);
     lv_style_reset(&style_calendar_cell);
+    lv_style_reset(&style_calendar_cell_today);
     styles_initialized = false;
 }
 
@@ -130,8 +156,7 @@ void HabitHistoryView::create_history_panel(lv_obj_t* parent) {
     // --- Main content container for calendar ---
     history_content_container = lv_obj_create(panel_show_history);
     lv_obj_remove_style_all(history_content_container);
-    lv_obj_set_width(history_content_container, LV_SIZE_CONTENT); // FIX: Added object
-    lv_obj_set_height(history_content_container, LV_SIZE_CONTENT); // FIX: Added object
+    lv_obj_set_size(history_content_container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(history_content_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(history_content_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_gap(history_content_container, 8, 0);
@@ -141,15 +166,15 @@ void HabitHistoryView::create_history_panel(lv_obj_t* parent) {
     lv_obj_remove_style_all(day_labels_cont);
     const int GRID_HEIGHT = 164; // 7*20 (cells) + 6*4 (gaps)
     lv_obj_set_height(day_labels_cont, GRID_HEIGHT);
-    lv_obj_set_width(day_labels_cont, LV_SIZE_CONTENT); // FIX: Added object
+    lv_obj_set_width(day_labels_cont, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(day_labels_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(day_labels_cont, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_flex_align(day_labels_cont, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     
     const char* day_labels[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
     for (int i = 0; i < 7; i++) {
         lv_obj_t* label = lv_label_create(day_labels_cont);
         lv_label_set_text(label, day_labels[i]);
-        lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0); // FIX: Changed to valid font
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(label, lv_palette_main(LV_PALETTE_GREY), 0);
     }
     
@@ -170,7 +195,6 @@ void HabitHistoryView::create_history_panel(lv_obj_t* parent) {
     lv_obj_remove_style_all(grid);
     lv_obj_set_layout(grid, LV_LAYOUT_GRID);
     lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
-    // FIX: Set gap using pad properties on the grid container
     lv_obj_set_style_pad_column(grid, GAP_SIZE, 0);
     lv_obj_set_style_pad_row(grid, GAP_SIZE, 0);
     lv_obj_set_size(grid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -201,7 +225,7 @@ void HabitHistoryView::switch_to_step(HabitHistoryStep new_step) {
         lv_obj_clear_flag(panel_select_habit, LV_OBJ_FLAG_HIDDEN);
         lv_group_set_default(group);
     } else { // SHOW_HISTORY
-        update_history_display(); // Populate the view with data for selected_habit_id
+        update_history_display();
         lv_obj_clear_flag(panel_show_history, LV_OBJ_FLAG_HIDDEN);
     }
 }
@@ -240,7 +264,6 @@ void HabitHistoryView::populate_habit_selector() {
             lv_obj_set_style_radius(item, 5, 0);
             lv_obj_add_style(item, &style_list_item_focused, LV_STATE_FOCUSED);
             
-            // Store habit ID in user data
             lv_obj_set_user_data(item, (void*)habit.id);
             
             lv_obj_t* color_indicator = lv_obj_create(item);
@@ -273,27 +296,54 @@ void HabitHistoryView::update_history_display() {
         return;
     }
     
-    // Update the title
+    // Update the title with the habit's name and color
     this->selected_habit_name = habit->name;
+    lv_color_t habit_color = lv_color_hex(std::stoul(habit->color_hex.substr(1), nullptr, 16));
     lv_label_set_text(history_title_label, selected_habit_name.c_str());
+    lv_obj_set_style_text_color(history_title_label, habit_color, 0);
 
-    // --- TODO: Calculate real data ---
     HabitHistory history = HabitDataManager::get_history_for_habit(this->selected_habit_id);
+    std::sort(history.completed_dates.begin(), history.completed_dates.end());
     
-    // Calculate streak (placeholder logic)
-    int streak_count = 0; // TODO: Replace with actual calculation
-    
-    // Update the streak label
-    lv_label_set_text_fmt(streak_label, "Current Streak: %d days", streak_count);
-    
-    // Update the grid (placeholder)
-    // A real implementation would iterate through dates and color cells.
+    // --- Date calculations for the grid ---
+    time_t now = time(NULL);
+    struct tm timeinfo_today;
+    localtime_r(&now, &timeinfo_today);
+    // Convert tm_wday (Sun=0, Mon=1...) to our grid's row index (Mon=0, ..., Sun=6)
+    int today_grid_row = (timeinfo_today.tm_wday == 0) ? 6 : timeinfo_today.tm_wday - 1;
+
+    // --- Update the calendar grid ---
+    const int NUM_WEEKS = 7;
+    const int NUM_DAYS = 7;
     lv_obj_t* grid = lv_obj_get_child(history_content_container, 1);
-    for (uint32_t i = 0; i < lv_obj_get_child_count(grid); i++) {
-        // FIX: Remove unused variable to clear warning
-        // lv_obj_t* cell = lv_obj_get_child(grid, i);
-        // For now, all cells use the default style.
+
+    for (int week = 0; week < NUM_WEEKS; week++) {
+        for (int day = 0; day < NUM_DAYS; day++) {
+            lv_obj_t* cell = lv_obj_get_child(grid, week * NUM_DAYS + day);
+
+            // Calculate the date for the current cell
+            int days_ago = ((NUM_WEEKS - 1 - week) * 7) + (today_grid_row - day);
+            time_t cell_date = now - (time_t)days_ago * 86400; // 86400 seconds in a day
+
+            // Reset cell style to default
+            lv_obj_remove_style(cell, &style_calendar_cell_today, 0);
+            lv_obj_set_style_bg_color(cell, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
+
+            // Check if habit was completed on this day using a binary search for efficiency
+            if (std::binary_search(history.completed_dates.begin(), history.completed_dates.end(), cell_date, [](time_t a, time_t b){ return !is_same_day(a, b) && a < b; })) {
+                 lv_obj_set_style_bg_color(cell, habit_color, 0);
+            }
+
+            // Check if it's today and apply red border on top
+            if (days_ago == 0) {
+                lv_obj_add_style(cell, &style_calendar_cell_today, 0);
+            }
+        }
     }
+    
+    // --- Calculate and display streak (placeholder) ---
+    int streak_count = 0; // TODO: Implement real streak calculation logic
+    lv_label_set_text_fmt(streak_label, "Current Streak: %d days", streak_count);
     
     ESP_LOGI(TAG, "History display updated for habit '%s'.", habit->name.c_str());
 }
