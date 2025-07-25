@@ -3,7 +3,7 @@
 #include "controllers/habit_data_manager/habit_data_manager.h"
 #include "esp_log.h"
 #include <string>
-#include <algorithm> // For std::sort
+#include <algorithm> // For std::sort and std::binary_search
 #include <time.h> // Required for timestamp formatting
 
 static const char *TAG = "HABIT_HISTORY_VIEW";
@@ -82,12 +82,10 @@ void HabitHistoryView::init_styles() {
     lv_style_set_bg_opa(&style_calendar_cell, LV_OPA_COVER);
     lv_style_set_border_width(&style_calendar_cell, 0);
 
-    // Style for the current day's cell (red border)
+    // Style for the current day's cell
     lv_style_init(&style_calendar_cell_today);
     lv_style_set_border_width(&style_calendar_cell_today, 2);
     lv_style_set_border_color(&style_calendar_cell_today, lv_palette_main(LV_PALETTE_RED));
-    // Making the background transparent allows the completed color to show through
-    lv_style_set_bg_opa(&style_calendar_cell_today, LV_OPA_TRANSP);
 
     styles_initialized = true;
 }
@@ -146,11 +144,27 @@ void HabitHistoryView::create_history_panel(lv_obj_t* parent) {
     lv_obj_set_style_pad_ver(panel_show_history, 10, 0);
     lv_obj_set_style_pad_hor(panel_show_history, 5, 0);
 
-    // --- Title ---
-    history_title_label = lv_label_create(panel_show_history);
-    lv_obj_set_width(history_title_label, LV_PCT(100));
+    // --- New Title Container (Flex Row) ---
+    lv_obj_t* title_container = lv_obj_create(panel_show_history);
+    lv_obj_remove_style_all(title_container);
+    lv_obj_set_width(title_container, LV_PCT(100));
+    lv_obj_set_height(title_container, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(title_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(title_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(title_container, 10, 0);
+
+    // --- Color Indicator Circle ---
+    history_color_indicator = lv_obj_create(title_container);
+    lv_obj_remove_style_all(history_color_indicator);
+    lv_obj_set_size(history_color_indicator, 20, 20);
+    lv_obj_set_style_radius(history_color_indicator, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(history_color_indicator, 0, 0);
+
+    // --- Title Label (inside the new container) ---
+    history_title_label = lv_label_create(title_container);
+    lv_obj_set_flex_grow(history_title_label, 1); // Allow label to take remaining space
     lv_label_set_long_mode(history_title_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_obj_set_style_text_align(history_title_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_align(history_title_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_font(history_title_label, &lv_font_montserrat_20, 0);
     
     // --- Main content container for calendar ---
@@ -288,6 +302,53 @@ void HabitHistoryView::populate_habit_selector() {
     }
 }
 
+int HabitHistoryView::calculate_streak(const std::vector<time_t>& completed_dates) const {
+    if (completed_dates.empty()) {
+        return 0;
+    }
+
+    time_t now = time(NULL);
+
+    // Lambda to check if a specific date exists in the sorted vector
+    auto is_date_completed = [&](time_t date_to_find) {
+        // Use a custom comparator for binary_search to match by day, not by exact second
+        return std::binary_search(completed_dates.begin(), completed_dates.end(), date_to_find, 
+            [](time_t a, time_t b){ 
+                // This complex lambda helps find if any timestamp 'a' from the vector
+                // falls on the same day as a target timestamp 'b', respecting sort order.
+                // It returns true if day of 'a' is less than day of 'b'.
+                struct tm tm_a, tm_b;
+                localtime_r(&a, &tm_a);
+                localtime_r(&b, &tm_b);
+                if (tm_a.tm_year != tm_b.tm_year) return tm_a.tm_year < tm_b.tm_year;
+                if (tm_a.tm_mon != tm_b.tm_mon) return tm_a.tm_mon < tm_b.tm_mon;
+                return tm_a.tm_mday < tm_b.tm_mday;
+            });
+    };
+    
+    // Check if the habit was completed today. If not, the current streak must be 0.
+    if (!is_date_completed(now)) {
+        return 0;
+    }
+
+    int streak = 1;
+    time_t check_date = now - 86400; // Start checking from yesterday
+
+    // Loop backwards in time
+    while (true) {
+        if (is_date_completed(check_date)) {
+            streak++;
+            check_date -= 86400; // Go back one more day
+        } else {
+            // The day was missed, the streak is broken
+            break; 
+        }
+    }
+
+    return streak;
+}
+
+
 void HabitHistoryView::update_history_display() {
     Habit* habit = HabitDataManager::get_habit_by_id(this->selected_habit_id);
     if (!habit) {
@@ -296,13 +357,19 @@ void HabitHistoryView::update_history_display() {
         return;
     }
     
-    // Update the title with the habit's name and color
+    // Update the title and color indicator
     this->selected_habit_name = habit->name;
     lv_color_t habit_color = lv_color_hex(std::stoul(habit->color_hex.substr(1), nullptr, 16));
+
     lv_label_set_text(history_title_label, selected_habit_name.c_str());
-    lv_obj_set_style_text_color(history_title_label, habit_color, 0);
+    lv_obj_set_style_text_color(history_title_label, lv_color_black(), 0); // Title is now always black
+    lv_obj_set_style_bg_color(history_color_indicator, habit_color, 0); // Set circle color
+    
+    // --- SOLUCIÓN: Hacer que el círculo sea opaco ---
+    lv_obj_set_style_bg_opa(history_color_indicator, LV_OPA_COVER, 0);
 
     HabitHistory history = HabitDataManager::get_history_for_habit(this->selected_habit_id);
+    // Ensure dates are sorted for efficient searching
     std::sort(history.completed_dates.begin(), history.completed_dates.end());
     
     // --- Date calculations for the grid ---
@@ -325,13 +392,16 @@ void HabitHistoryView::update_history_display() {
             int days_ago = ((NUM_WEEKS - 1 - week) * 7) + (today_grid_row - day);
             time_t cell_date = now - (time_t)days_ago * 86400; // 86400 seconds in a day
 
-            // Reset cell style to default
+            // Reset cell style to default gray
             lv_obj_remove_style(cell, &style_calendar_cell_today, 0);
             lv_obj_set_style_bg_color(cell, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
 
             // Check if habit was completed on this day using a binary search for efficiency
-            if (std::binary_search(history.completed_dates.begin(), history.completed_dates.end(), cell_date, [](time_t a, time_t b){ return !is_same_day(a, b) && a < b; })) {
-                 lv_obj_set_style_bg_color(cell, habit_color, 0);
+            if (std::binary_search(history.completed_dates.begin(), history.completed_dates.end(), cell_date, 
+                // Custom comparator to check by day, not exact time
+                [&](time_t a, time_t b){ return !is_same_day(a, b) && a < b; })) {
+                 // Set the cell to a standard green color on completion
+                 lv_obj_set_style_bg_color(cell, lv_palette_main(LV_PALETTE_LIGHT_GREEN), 0);
             }
 
             // Check if it's today and apply red border on top
@@ -341,8 +411,8 @@ void HabitHistoryView::update_history_display() {
         }
     }
     
-    // --- Calculate and display streak (placeholder) ---
-    int streak_count = 0; // TODO: Implement real streak calculation logic
+    // --- Calculate and display streak ---
+    int streak_count = calculate_streak(history.completed_dates);
     lv_label_set_text_fmt(streak_label, "Current Streak: %d days", streak_count);
     
     ESP_LOGI(TAG, "History display updated for habit '%s'.", habit->name.c_str());

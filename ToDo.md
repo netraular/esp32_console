@@ -1,3 +1,5 @@
+En el habit history view, hacer que el streak de hábitos se muestre en la esquina superior derecha con un icono y el número de hábitos recurrentes. Además, en la parte inferior ahora se deberá mostrar las 3 primeras letras del nombre del mes que corresponda a la semana que contenga el día 8 del mes.
+
 Estandarizar algun ejemplo de notificación y de pop-up. Se añadirán métodos de ayuda en la clase base como `show_error_popup("Mensaje")`. Esto nos permitirá mostrar diálogos y notificaciones con un **estilo consistente en toda la aplicación** y con una sola línea de código, reduciendo la duplicación y simplificando la lógica de las vistas.
 Implementar popup como component en vez de crearlo de cero en cada vista.
 

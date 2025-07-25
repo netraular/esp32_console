@@ -43,6 +43,8 @@ private:
     lv_group_t* group = nullptr;
     
     // History panel
+    // --- MODIFIED: Added a pointer for the color indicator circle ---
+    lv_obj_t* history_color_indicator = nullptr; 
     lv_obj_t* history_title_label = nullptr;
     lv_obj_t* history_content_container = nullptr; // This will hold the calendar grid
     lv_obj_t* streak_label = nullptr;            // Label for the current streak
@@ -65,6 +67,7 @@ private:
     // --- Logic ---
     void populate_habit_selector();
     void update_history_display();
+    int calculate_streak(const std::vector<time_t>& completed_dates) const;
 
     // --- Button and Event Handling ---
     void setup_button_handlers();
