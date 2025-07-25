@@ -10,6 +10,7 @@ struct HabitCategory {
     uint32_t id;
     std::string name;
     bool is_active;
+    bool is_deletable; // System-defined categories like 'General' cannot be deleted.
 };
 
 // Represents a single trackable habit.

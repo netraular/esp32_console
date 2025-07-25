@@ -1,10 +1,10 @@
 #include "habit_category_manager_view.h"
 #include "controllers/button_manager/button_manager.h"
-#include "controllers/habit_data_manager/habit_data_manager.h" // <-- The view now uses the data manager
+#include "controllers/habit_data_manager/habit_data_manager.h"
 #include "esp_log.h"
-#include <time.h>
 #include <vector>
 #include <cstring>
+#include <time.h> // Required for timestamp generation
 
 static const char *TAG = "HABIT_CAT_MGR_VIEW";
 
@@ -62,10 +62,21 @@ void HabitCategoryManagerView::repopulate_category_slots() {
     lv_obj_clean(category_container);
     lv_group_remove_all_objs(main_group);
 
-    // Get the current list of active categories from the data manager
-    auto active_categories = HabitDataManager::get_active_categories();
-    const int MAX_UI_CATEGORIES = 3; // The number of user-configurable slots in the UI
+    auto all_active_categories = HabitDataManager::get_active_categories();
+    
+    std::vector<HabitCategory> user_categories;
+    HabitCategory* general_category = nullptr;
+
+    for (const auto& cat : all_active_categories) {
+        if (cat.is_deletable) {
+            user_categories.push_back(cat);
+        } else {
+            general_category = HabitDataManager::get_category_by_id(cat.id);
+        }
+    }
+
     const int total_slots = 4;
+    const int user_category_slots = 3;
 
     for (int i = 0; i < total_slots; ++i) {
         lv_obj_t* slot = lv_button_create(category_container);
@@ -76,19 +87,28 @@ void HabitCategoryManagerView::repopulate_category_slots() {
         lv_obj_t* label = lv_label_create(slot);
         lv_obj_center(label);
 
-        if (i < MAX_UI_CATEGORIES) {
-            if (i < active_categories.size()) {
-                const auto& category = active_categories[i];
+        uint32_t category_id_for_slot = 0;
+
+        if (i < user_category_slots) {
+            if (i < user_categories.size()) {
+                const auto& category = user_categories[i];
                 int habit_count = HabitDataManager::get_habit_count_for_category(category.id, true);
                 lv_label_set_text_fmt(label, "%s (%d)", category.name.c_str(), habit_count);
+                category_id_for_slot = category.id;
             } else {
                 lv_label_set_text(label, LV_SYMBOL_PLUS " Add Category");
             }
-        } else {
-            lv_label_set_text(label, "General");
-            // Here you could get the count for a general/uncategorized category if you have one
-            // For now, it's just a label.
+        } else { // The last slot is for "General"
+            if (general_category) {
+                int habit_count = HabitDataManager::get_habit_count_for_category(general_category->id, true);
+                lv_label_set_text_fmt(label, "%s (%d)", general_category->name.c_str(), habit_count);
+                category_id_for_slot = general_category->id;
+            } else {
+                lv_label_set_text(label, "General (Error)");
+                lv_obj_add_state(slot, LV_STATE_DISABLED);
+            }
         }
+        lv_obj_set_user_data(slot, (void*)category_id_for_slot);
     }
     
     if(lv_group_get_obj_count(main_group) > 0) {
@@ -101,35 +121,48 @@ void HabitCategoryManagerView::setup_button_handlers() {
     set_main_input_active(true);
 }
 
+// --- MODIFIED: on_ok_press ---
 void HabitCategoryManagerView::on_ok_press() {
     lv_obj_t* focused_btn = lv_group_get_focused(main_group);
     if (!focused_btn) return;
 
-    uint32_t slot_index = lv_obj_get_index(focused_btn);
-    auto active_categories = HabitDataManager::get_active_categories();
-    const int MAX_UI_CATEGORIES = 3;
-    
-    if (slot_index < MAX_UI_CATEGORIES) {
-        if (slot_index < active_categories.size()) {
-            // It's an existing category, show action menu
-            uint32_t category_id = active_categories[slot_index].id;
-            ESP_LOGI(TAG, "Selected existing category with ID %lu", category_id);
-            create_action_menu(category_id);
-        } else {
-            // It's an "+ Add Category" button
-            ESP_LOGI(TAG, "Adding new category at slot %lu...", slot_index);
-            time_t now = time(NULL);
-            struct tm timeinfo;
-            localtime_r(&now, &timeinfo);
-            char name_buffer[64];
-            strftime(name_buffer, sizeof(name_buffer), "Cat_%y%m%d_%H%M%S", &timeinfo);
-            
-            HabitDataManager::add_category(std::string(name_buffer));
-            repopulate_category_slots();
-        }
+    // Get the category ID stored in the button's user data.
+    // If it's 0, this is an "Add" slot.
+    uint32_t category_id = (uint32_t)lv_obj_get_user_data(focused_btn);
+
+    if (category_id > 0) {
+        // An existing category was selected, show the action menu.
+        ESP_LOGI(TAG, "Selected existing category with ID %lu", category_id);
+        create_action_menu(category_id);
     } else {
-        // The "General" category was selected. Could navigate to its habit list.
-        ESP_LOGI(TAG, "Selected 'General' category. (No action implemented)");
+        // An "Add Category" slot was selected.
+        // Get the index of the button to determine the prefix (A, B, C).
+        uint32_t slot_index = lv_obj_get_index(focused_btn);
+        
+        const char* prefix = "Slot"; // Fallback prefix
+        if (slot_index < 3) {
+            // Array of prefixes for user-creatable slots.
+            const char* prefixes[] = {"A", "B", "C"};
+            prefix = prefixes[slot_index];
+        }
+
+        // Get current time
+        time_t now = time(NULL);
+        struct tm timeinfo;
+        localtime_r(&now, &timeinfo);
+        
+        // Format the time into a string
+        char time_buffer[20];
+        strftime(time_buffer, sizeof(time_buffer), "_%y%m%d_%H%M%S", &timeinfo);
+        
+        // Combine prefix and time to create the final name
+        std::string new_name = std::string(prefix) + time_buffer;
+        
+        ESP_LOGI(TAG, "Adding new category '%s' at slot %lu...", new_name.c_str(), slot_index);
+        
+        // Add the new category via the data manager and refresh the UI.
+        HabitDataManager::add_category(new_name);
+        repopulate_category_slots();
     }
 }
 
@@ -145,6 +178,13 @@ void HabitCategoryManagerView::on_nav_press(bool next) {
 // --- Action Menu Logic ---
 void HabitCategoryManagerView::create_action_menu(uint32_t category_id) {
     if (action_menu_container) return;
+
+    HabitCategory* category = HabitDataManager::get_category_by_id(category_id);
+    if (!category) {
+        ESP_LOGE(TAG, "Cannot create action menu, category ID %lu not found!", category_id);
+        return;
+    }
+
     this->selected_category_id = category_id;
     set_main_input_active(false);
 
@@ -162,13 +202,15 @@ void HabitCategoryManagerView::create_action_menu(uint32_t category_id) {
     lv_group_set_wrap(action_menu_group, true);
 
     lv_obj_t* btn;
-    btn = lv_list_add_button(list, LV_SYMBOL_EYE_OPEN, "View Details");
+    btn = lv_list_add_button(list, LV_SYMBOL_EYE_OPEN, "View Habits");
     lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
     lv_group_add_obj(action_menu_group, btn);
 
-    btn = lv_list_add_button(list, LV_SYMBOL_TRASH, "Archive"); // Changed from Delete to Archive
-    lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
-    lv_group_add_obj(action_menu_group, btn);
+    if (category->is_deletable) {
+        btn = lv_list_add_button(list, LV_SYMBOL_TRASH, "Archive");
+        lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
+        lv_group_add_obj(action_menu_group, btn);
+    }
 
     lv_group_set_default(action_menu_group);
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_action_menu_ok_cb, true, this);
@@ -201,8 +243,8 @@ void HabitCategoryManagerView::on_action_menu_ok() {
         HabitDataManager::archive_category(this->selected_category_id);
         destroy_action_menu();
         repopulate_category_slots();
-    } else if (strcmp(action_text, "View Details") == 0) {
-        ESP_LOGI(TAG, "View Details for category ID %lu selected (Not Implemented)", this->selected_category_id);
+    } else if (strcmp(action_text, "View Habits") == 0) {
+        ESP_LOGI(TAG, "View Habits for category ID %lu selected (Not Implemented)", this->selected_category_id);
         destroy_action_menu();
     }
 }

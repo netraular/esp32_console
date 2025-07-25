@@ -12,6 +12,7 @@ static const char* DIR_PATH = "habits";
 static const std::string CATEGORIES_FILENAME = std::string(DIR_PATH) + "/categories.csv";
 static const std::string HABITS_FILENAME = std::string(DIR_PATH) + "/habits.csv";
 static const std::string ID_COUNTER_FILENAME = std::string(DIR_PATH) + "/id.txt";
+static const char* GENERAL_CATEGORY_NAME = "General";
 
 // --- Static Member Initialization ---
 std::vector<HabitCategory> HabitDataManager::s_categories;
@@ -31,41 +32,46 @@ void HabitDataManager::load_data() {
     s_categories.clear();
     s_habits.clear();
 
-    // Load ID Counter (unchanged)
+    // Load ID Counter
     char* id_buffer = nullptr;
     size_t id_size = 0;
     if (littlefs_manager_read_file(ID_COUNTER_FILENAME.c_str(), &id_buffer, &id_size) && id_buffer) {
-        std::stringstream ss(id_buffer);
-        uint32_t temp_id = 0;
-        if (ss >> temp_id) {
-            s_next_id = temp_id;
-        } else {
-            ESP_LOGE(TAG, "Invalid ID counter file content. Resetting to 1.");
-            s_next_id = 1;
-        }
+        s_next_id = std::stoul(id_buffer);
         free(id_buffer);
         ESP_LOGI(TAG, "Loaded next_id: %lu", s_next_id);
     }
 
-    // Load Categories (unchanged)
+    // --- MODIFIED: Load Categories with is_deletable flag ---
+    // CSV Format: id,is_active,is_deletable,name
     char* cat_buffer = nullptr;
     size_t cat_size = 0;
     if (littlefs_manager_read_file(CATEGORIES_FILENAME.c_str(), &cat_buffer, &cat_size) && cat_buffer) {
         std::stringstream ss(cat_buffer);
         std::string line;
         while (std::getline(ss, line)) {
+            if (line.empty()) continue;
             std::stringstream line_ss(line);
-            std::string id_str, active_str, name;
-            if (std::getline(line_ss, id_str, ',') && std::getline(line_ss, active_str, ',') && std::getline(line_ss, name)) {
-                s_categories.push_back({(uint32_t)std::stoul(id_str), name, (bool)std::stoi(active_str)});
+            std::string id_str, active_str, deletable_str, name;
+            if (std::getline(line_ss, id_str, ',') && 
+                std::getline(line_ss, active_str, ',') &&
+                std::getline(line_ss, deletable_str, ',') && 
+                std::getline(line_ss, name)) {
+                s_categories.push_back({(uint32_t)std::stoul(id_str), name, (bool)std::stoi(active_str), (bool)std::stoi(deletable_str)});
             }
         }
         free(cat_buffer);
         ESP_LOGI(TAG, "Loaded %d categories.", (int)s_categories.size());
     }
 
-    // --- MODIFIED: Load Habits with color ---
-    // CSV Format: id,cat_id,is_active,color_hex,name
+    // --- NEW: First-time initialization logic ---
+    if (s_categories.empty()) {
+        ESP_LOGI(TAG, "No categories found. Creating default 'General' category.");
+        uint32_t new_id = get_next_unique_id();
+        s_categories.push_back({new_id, GENERAL_CATEGORY_NAME, true, false}); // id, name, active, deletable=false
+        save_categories(); // Save immediately
+    }
+
+    // Load Habits (unchanged)
     char* habit_buffer = nullptr;
     size_t habit_size = 0;
     if (littlefs_manager_read_file(HABITS_FILENAME.c_str(), &habit_buffer, &habit_size) && habit_buffer) {
@@ -88,18 +94,19 @@ void HabitDataManager::load_data() {
     }
 }
 
+// --- MODIFIED: Save Categories with is_deletable flag ---
+// CSV Format: id,is_active,is_deletable,name
 void HabitDataManager::save_categories() {
     std::stringstream ss;
     for (const auto& category : s_categories) {
-        ss << category.id << "," << (int)category.is_active << "," << category.name << "\n";
+        ss << category.id << "," << (int)category.is_active << "," << (int)category.is_deletable << "," << category.name << "\n";
     }
     if (!littlefs_manager_write_file(CATEGORIES_FILENAME.c_str(), ss.str().c_str())) {
         ESP_LOGE(TAG, "Failed to save categories!");
     }
 }
 
-// --- MODIFIED: Save Habits with color ---
-// CSV Format: id,cat_id,is_active,color_hex,name
+// Save Habits (unchanged)
 void HabitDataManager::save_habits() {
     std::stringstream ss;
     for (const auto& habit : s_habits) {
@@ -134,9 +141,18 @@ std::vector<HabitCategory> HabitDataManager::get_active_categories() {
     return active_cats;
 }
 
+HabitCategory* HabitDataManager::get_category_by_id(uint32_t category_id) {
+    for (auto& cat : s_categories) {
+        if (cat.id == category_id) {
+            return &cat;
+        }
+    }
+    return nullptr;
+}
+
 bool HabitDataManager::add_category(const std::string& name) {
     uint32_t new_id = get_next_unique_id();
-    s_categories.push_back({new_id, name, true});
+    s_categories.push_back({new_id, name, true, true}); // User-added categories are always deletable
     save_categories();
     ESP_LOGI(TAG, "Added category '%s' with ID %lu", name.c_str(), new_id);
     return true;
@@ -148,6 +164,12 @@ bool HabitDataManager::archive_category(uint32_t category_id) {
     });
 
     if (it != s_categories.end()) {
+        // --- NEW: Check if the category is deletable ---
+        if (!it->is_deletable) {
+            ESP_LOGW(TAG, "Attempted to archive a non-deletable category (ID: %lu). Operation denied.", category_id);
+            return false;
+        }
+
         it->is_active = false;
         save_categories();
         // Also archive all habits in this category
@@ -186,7 +208,6 @@ std::vector<Habit> HabitDataManager::get_active_habits_for_category(uint32_t cat
     return active_habits;
 }
 
-// --- NEWLY IMPLEMENTED: add_habit ---
 bool HabitDataManager::add_habit(const std::string& name, uint32_t category_id, const std::string& color_hex) {
     uint32_t new_id = get_next_unique_id();
     s_habits.push_back({new_id, category_id, name, color_hex, true});
@@ -210,8 +231,6 @@ bool HabitDataManager::archive_habit(uint32_t habit_id) {
     return false;
 }
 
-// NOTE: These are not requested but are good to have for a complete manager.
-// Implementations omitted for brevity as they are not needed for the core request.
 bool HabitDataManager::delete_habit_permanently(uint32_t habit_id) { 
     ESP_LOGW(TAG, "delete_habit_permanently not implemented");
     return false; 

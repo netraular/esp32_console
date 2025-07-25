@@ -23,6 +23,7 @@ public:
 
     // --- Category Management ---
     static std::vector<HabitCategory> get_active_categories();
+    static HabitCategory* get_category_by_id(uint32_t category_id);
     static bool add_category(const std::string& name);
     static bool archive_category(uint32_t category_id);
     static int get_habit_count_for_category(uint32_t category_id, bool active_only);
