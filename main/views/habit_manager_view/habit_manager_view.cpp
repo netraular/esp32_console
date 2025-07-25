@@ -34,15 +34,11 @@ void HabitManagerView::create(lv_obj_t* parent) {
 }
 
 void HabitManagerView::setup_ui(lv_obj_t* parent) {
-    // --- MODIFICATION: Status bar removed ---
-    // status_bar_create(parent); 
-    
     init_styles();
 
     group = lv_group_create();
     lv_group_set_wrap(group, true);
 
-    // --- MODIFICATION: Container is now full screen ---
     lv_obj_t* content_container = lv_obj_create(parent);
     lv_obj_remove_style_all(content_container);
     lv_obj_set_size(content_container, LV_PCT(100), LV_PCT(100));
@@ -129,8 +125,9 @@ void HabitManagerView::on_ok_press() {
             ESP_LOGI(TAG, "Navigate to: Manage Categories");
             view_manager_load_view(VIEW_ID_HABIT_CATEGORY_MANAGER);
             break;
-        case 2: // Manage Habits
-            ESP_LOGI(TAG, "Navigate to: Manage Habits (Not Implemented)");
+        case 2: // Manage Habits -> NOW Add Habit
+            ESP_LOGI(TAG, "Navigate to: Add New Habit");
+            view_manager_load_view(VIEW_ID_HABIT_ADD); // <-- MODIFIED
             break;
         case 3: // View History
             ESP_LOGI(TAG, "Navigate to: View History (Not Implemented)");

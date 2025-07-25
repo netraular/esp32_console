@@ -30,8 +30,11 @@ typedef enum {
     VIEW_ID_VOICE_NOTE,
     VIEW_ID_VOICE_NOTE_PLAYER,
     VIEW_ID_VOLUME_TESTER,
+    
+    // Habit Tracker Views
     VIEW_ID_HABIT_MANAGER,
     VIEW_ID_HABIT_CATEGORY_MANAGER,
+    VIEW_ID_HABIT_ADD,
     
     // Add other views here as they are converted
     VIEW_ID_COUNT // Total number of views, must be last

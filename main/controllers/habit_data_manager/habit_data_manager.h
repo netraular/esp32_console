@@ -1,31 +1,10 @@
 #ifndef HABIT_DATA_MANAGER_H
 #define HABIT_DATA_MANAGER_H
 
+#include "models/habit_data_models.h" // Include the data models
 #include <string>
 #include <vector>
 #include <time.h>
-
-// --- Data Models ---
-// These structs represent our data in memory.
-
-struct HabitCategory {
-    uint32_t id;
-    std::string name;
-    bool is_active;
-};
-
-struct Habit {
-    uint32_t id;
-    uint32_t category_id;
-    std::string name;
-    bool is_active;
-};
-
-struct HabitHistory {
-    uint32_t habit_id;
-    std::vector<time_t> completed_dates;
-};
-
 
 /**
  * @brief Manages loading, saving, and accessing all habit-related data.
@@ -50,9 +29,9 @@ public:
 
     // --- Habit Management ---
     static std::vector<Habit> get_active_habits_for_category(uint32_t category_id);
-    static bool add_habit(const std::string& name, uint32_t category_id);
+    static bool add_habit(const std::string& name, uint32_t category_id, const std::string& color_hex);
     static bool archive_habit(uint32_t habit_id);
-    static bool delete_habit_permanently(uint32_t habit_id);
+    static bool delete_habit_permanently(uint32_t habit_id); // Optional: for permanent deletion
 
     // --- History Management ---
     static bool mark_habit_as_done(uint32_t habit_id, time_t date);

@@ -45,8 +45,9 @@ idf_component_register(SRCS
         "./views/wifi_stream_view/wifi_stream_view.cpp"
         "./views/habit_manager_view/habit_manager_view.cpp"
         "./views/habit_category_manager_view/habit_category_manager_view.cpp"
+        "./views/habit_add_view/habit_add_view.cpp"
 
-    INCLUDE_DIRS "."
+    INCLUDE_DIRS "." "models"
     EMBED_FILES 
         "./server_certs/groq_api_ca.pem"
         "./littlefs/welcome.txt"
