@@ -140,93 +140,114 @@ void HabitHistoryView::create_history_panel(lv_obj_t* parent) {
     lv_obj_remove_style_all(panel_show_history);
     lv_obj_set_size(panel_show_history, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(panel_show_history, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(panel_show_history, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(panel_show_history, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_ver(panel_show_history, 10, 0);
     lv_obj_set_style_pad_hor(panel_show_history, 5, 0);
 
-    // --- New Title Container (Flex Row) ---
-    lv_obj_t* title_container = lv_obj_create(panel_show_history);
-    lv_obj_remove_style_all(title_container);
-    lv_obj_set_width(title_container, LV_PCT(100));
-    lv_obj_set_height(title_container, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(title_container, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(title_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(title_container, 10, 0);
+    // --- Top container for Title and Streak ---
+    lv_obj_t* top_bar = lv_obj_create(panel_show_history);
+    lv_obj_remove_style_all(top_bar);
+    lv_obj_set_width(top_bar, LV_PCT(100));
+    lv_obj_set_height(top_bar, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(top_bar, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(top_bar, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(top_bar, 10, 0);
 
-    // --- Color Indicator Circle ---
-    history_color_indicator = lv_obj_create(title_container);
+    // Color Indicator Circle (child of top_bar)
+    history_color_indicator = lv_obj_create(top_bar);
     lv_obj_remove_style_all(history_color_indicator);
     lv_obj_set_size(history_color_indicator, 20, 20);
     lv_obj_set_style_radius(history_color_indicator, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_width(history_color_indicator, 0, 0);
 
-    // --- Title Label (inside the new container) ---
-    history_title_label = lv_label_create(title_container);
+    // Title Label (child of top_bar)
+    history_title_label = lv_label_create(top_bar);
     lv_obj_set_flex_grow(history_title_label, 1); // Allow label to take remaining space
     lv_label_set_long_mode(history_title_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(history_title_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_font(history_title_label, &lv_font_montserrat_20, 0);
-    
-    // --- Main content container for calendar ---
+
+    // --- Streak Container (child of top_bar) ---
+    streak_container = lv_obj_create(top_bar);
+    lv_obj_remove_style_all(streak_container);
+    lv_obj_set_size(streak_container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(streak_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(streak_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(streak_container, 4, 0);
+
+    lv_obj_t* streak_icon = lv_label_create(streak_container);
+    lv_label_set_text(streak_icon, LV_SYMBOL_CHARGE);
+    lv_obj_set_style_text_color(streak_icon, lv_palette_main(LV_PALETTE_ORANGE), 0);
+    lv_obj_set_style_text_font(streak_icon, &lv_font_montserrat_18, 0);
+
+    streak_value_label = lv_label_create(streak_container);
+    lv_label_set_text(streak_value_label, "0");
+    lv_obj_set_style_text_font(streak_value_label, &lv_font_montserrat_18, 0);
+
+
+    // --- Main content container for calendar grid ---
     history_content_container = lv_obj_create(panel_show_history);
     lv_obj_remove_style_all(history_content_container);
     lv_obj_set_size(history_content_container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(history_content_container, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(history_content_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_gap(history_content_container, 8, 0);
+    lv_obj_set_layout(history_content_container, LV_LAYOUT_GRID);
 
-    // --- Left side: Day of week labels ---
-    lv_obj_t* day_labels_cont = lv_obj_create(history_content_container);
-    lv_obj_remove_style_all(day_labels_cont);
-    const int GRID_HEIGHT = 164; // 7*20 (cells) + 6*4 (gaps)
-    lv_obj_set_height(day_labels_cont, GRID_HEIGHT);
-    lv_obj_set_width(day_labels_cont, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(day_labels_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(day_labels_cont, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    
+    const int NUM_WEEKS = 7;
+    const int NUM_DAYS = 7;
+    const int DAY_LABEL_WIDTH = 35;
+    const int CELL_SIZE = 20;
+    const int GAP_SIZE = 4;
+    const int INDICATOR_SIZE = 5;
+    const int INDICATOR_ROW_HEIGHT = 10;
+
+    // Grid Column/Row Descriptors
+    static lv_coord_t col_dsc[NUM_WEEKS + 2]; // +1 for labels, +1 for LAST
+    col_dsc[0] = DAY_LABEL_WIDTH;
+    for (int i = 0; i < NUM_WEEKS; i++) col_dsc[i + 1] = CELL_SIZE;
+    col_dsc[NUM_WEEKS + 1] = LV_GRID_TEMPLATE_LAST;
+
+    static lv_coord_t row_dsc[NUM_DAYS + 2]; // +1 for indicators, +1 for LAST
+    for (int i = 0; i < NUM_DAYS; i++) row_dsc[i] = CELL_SIZE;
+    row_dsc[NUM_DAYS] = INDICATOR_ROW_HEIGHT;
+    row_dsc[NUM_DAYS + 1] = LV_GRID_TEMPLATE_LAST;
+
+    lv_obj_set_grid_dsc_array(history_content_container, col_dsc, row_dsc);
+    lv_obj_set_style_pad_column(history_content_container, GAP_SIZE, 0);
+    lv_obj_set_style_pad_row(history_content_container, GAP_SIZE, 0);
+
+    // Create Day of Week Labels
     const char* day_labels[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
-    for (int i = 0; i < 7; i++) {
-        lv_obj_t* label = lv_label_create(day_labels_cont);
+    for (int i = 0; i < NUM_DAYS; i++) {
+        lv_obj_t* label = lv_label_create(history_content_container);
         lv_label_set_text(label, day_labels[i]);
         lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(label, lv_palette_main(LV_PALETTE_GREY), 0);
+        lv_obj_set_grid_cell(label, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, i, 1);
     }
-    
-    // --- Right side: Grid of squares ---
-    const int NUM_WEEKS = 7;
-    const int NUM_DAYS = 7;
-    const int CELL_SIZE = 20;
-    const int GAP_SIZE = 4;
 
-    static lv_coord_t col_dsc[NUM_WEEKS + 1];
-    static lv_coord_t row_dsc[NUM_DAYS + 1];
-    for(int i = 0; i < NUM_WEEKS; i++) col_dsc[i] = CELL_SIZE;
-    col_dsc[NUM_WEEKS] = LV_GRID_TEMPLATE_LAST;
-    for(int i = 0; i < NUM_DAYS; i++) row_dsc[i] = CELL_SIZE;
-    row_dsc[NUM_DAYS] = LV_GRID_TEMPLATE_LAST;
-
-    lv_obj_t* grid = lv_obj_create(history_content_container);
-    lv_obj_remove_style_all(grid);
-    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
-    lv_obj_set_style_pad_column(grid, GAP_SIZE, 0);
-    lv_obj_set_style_pad_row(grid, GAP_SIZE, 0);
-    lv_obj_set_size(grid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-
+    // Create Calendar Cells
     for (int week = 0; week < NUM_WEEKS; week++) {
         for (int day = 0; day < NUM_DAYS; day++) {
-            lv_obj_t* cell = lv_obj_create(grid);
+            lv_obj_t* cell = lv_obj_create(history_content_container);
             lv_obj_remove_style_all(cell);
             lv_obj_add_style(cell, &style_calendar_cell, 0);
-            lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_STRETCH, week, 1, LV_GRID_ALIGN_STRETCH, day, 1);
+            // Place in grid, column index is week + 1 because col 0 is for labels
+            lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_STRETCH, week + 1, 1, LV_GRID_ALIGN_STRETCH, day, 1);
         }
     }
-
-    // --- Streak Label at the bottom ---
-    streak_label = lv_label_create(panel_show_history);
-    lv_label_set_text(streak_label, "Current Streak: 0 days");
-    lv_obj_set_style_text_font(streak_label, &lv_font_montserrat_16, 0);
+    
+    // Create Week Indicators
+    for (int week = 0; week < NUM_WEEKS; week++) {
+        lv_obj_t* indicator = lv_obj_create(history_content_container);
+        lv_obj_remove_style_all(indicator);
+        lv_obj_set_size(indicator, INDICATOR_SIZE, INDICATOR_SIZE);
+        lv_obj_set_style_bg_color(indicator, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_obj_set_style_bg_opa(indicator, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(indicator, LV_RADIUS_CIRCLE, 0);
+        // Place in grid, column index is week + 1, row is NUM_DAYS
+        lv_obj_set_grid_cell(indicator, LV_GRID_ALIGN_CENTER, week + 1, 1, LV_GRID_ALIGN_CENTER, NUM_DAYS, 1);
+    }
 }
+
 
 void HabitHistoryView::switch_to_step(HabitHistoryStep new_step) {
     current_step = new_step;
@@ -362,10 +383,7 @@ void HabitHistoryView::update_history_display() {
     lv_color_t habit_color = lv_color_hex(std::stoul(habit->color_hex.substr(1), nullptr, 16));
 
     lv_label_set_text(history_title_label, selected_habit_name.c_str());
-    lv_obj_set_style_text_color(history_title_label, lv_color_black(), 0); // Title is now always black
-    lv_obj_set_style_bg_color(history_color_indicator, habit_color, 0); // Set circle color
-    
-    // --- SOLUCIÓN: Hacer que el círculo sea opaco ---
+    lv_obj_set_style_bg_color(history_color_indicator, habit_color, 0);
     lv_obj_set_style_bg_opa(history_color_indicator, LV_OPA_COVER, 0);
 
     HabitHistory history = HabitDataManager::get_history_for_habit(this->selected_habit_id);
@@ -382,15 +400,29 @@ void HabitHistoryView::update_history_display() {
     // --- Update the calendar grid ---
     const int NUM_WEEKS = 7;
     const int NUM_DAYS = 7;
-    lv_obj_t* grid = lv_obj_get_child(history_content_container, 1);
-
+    
     for (int week = 0; week < NUM_WEEKS; week++) {
+        // --- MODIFICATION START: Logic for week indicator ---
+        bool column_contains_day_8 = false;
+        // --- MODIFICATION END ---
+        
         for (int day = 0; day < NUM_DAYS; day++) {
-            lv_obj_t* cell = lv_obj_get_child(grid, week * NUM_DAYS + day);
+            // The first NUM_DAYS children are labels. After that, cells are added row by row.
+            int cell_index = NUM_DAYS + (week * NUM_DAYS) + day;
+            lv_obj_t* cell = lv_obj_get_child(history_content_container, cell_index);
+            if (!cell) continue; // Should not happen
 
             // Calculate the date for the current cell
             int days_ago = ((NUM_WEEKS - 1 - week) * 7) + (today_grid_row - day);
             time_t cell_date = now - (time_t)days_ago * 86400; // 86400 seconds in a day
+
+            // --- MODIFICATION START: Check if the day of the month is 8 ---
+            struct tm timeinfo_cell;
+            localtime_r(&cell_date, &timeinfo_cell);
+            if (timeinfo_cell.tm_mday == 8) {
+                column_contains_day_8 = true;
+            }
+            // --- MODIFICATION END ---
 
             // Reset cell style to default gray
             lv_obj_remove_style(cell, &style_calendar_cell_today, 0);
@@ -409,13 +441,25 @@ void HabitHistoryView::update_history_display() {
                 lv_obj_add_style(cell, &style_calendar_cell_today, 0);
             }
         }
+
+        // --- MODIFICATION START: Show/hide the indicator for the current week (column) ---
+        int indicator_index = NUM_DAYS + (NUM_WEEKS * NUM_DAYS) + week;
+        lv_obj_t* indicator = lv_obj_get_child(history_content_container, indicator_index);
+        if (indicator) {
+            if (column_contains_day_8) {
+                lv_obj_clear_flag(indicator, LV_OBJ_FLAG_HIDDEN);
+            } else {
+                lv_obj_add_flag(indicator, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+        // --- MODIFICATION END ---
     }
     
     // --- Calculate and display streak ---
     int streak_count = calculate_streak(history.completed_dates);
-    lv_label_set_text_fmt(streak_label, "Current Streak: %d days", streak_count);
+    lv_label_set_text_fmt(streak_value_label, "%d", streak_count);
     
-    ESP_LOGI(TAG, "History display updated for habit '%s'.", habit->name.c_str());
+    ESP_LOGI(TAG, "History display updated for habit '%s'. Streak: %d", habit->name.c_str(), streak_count);
 }
 
 

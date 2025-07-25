@@ -43,11 +43,12 @@ private:
     lv_group_t* group = nullptr;
     
     // History panel
-    // --- MODIFIED: Added a pointer for the color indicator circle ---
     lv_obj_t* history_color_indicator = nullptr; 
     lv_obj_t* history_title_label = nullptr;
-    lv_obj_t* history_content_container = nullptr; // This will hold the calendar grid
-    lv_obj_t* streak_label = nullptr;            // Label for the current streak
+    lv_obj_t* history_content_container = nullptr; // This will hold the calendar grid and indicators
+    // --- MODIFIED: Replaced streak_label with a container and value label ---
+    lv_obj_t* streak_container = nullptr;
+    lv_obj_t* streak_value_label = nullptr;
 
     // --- Style Management ---
     lv_style_t style_list_item_focused;
