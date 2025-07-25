@@ -56,7 +56,11 @@ void HabitManagerView::setup_ui(lv_obj_t* parent) {
 
     lv_obj_t* btn;
     
-    btn = lv_list_add_button(list_menu, LV_SYMBOL_PLAY, "Track Today's Habits");
+    btn = lv_list_add_button(list_menu, LV_SYMBOL_LIST, "Track Today's Habits");
+    lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
+    lv_group_add_obj(group, btn);
+
+    btn = lv_list_add_button(list_menu, LV_SYMBOL_EYE_OPEN, "View History");
     lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
     lv_group_add_obj(group, btn);
 
@@ -64,11 +68,7 @@ void HabitManagerView::setup_ui(lv_obj_t* parent) {
     lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
     lv_group_add_obj(group, btn);
 
-    btn = lv_list_add_button(list_menu, LV_SYMBOL_LIST, "Manage Habits");
-    lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
-    lv_group_add_obj(group, btn);
-
-    btn = lv_list_add_button(list_menu, LV_SYMBOL_EYE_OPEN, "View History");
+    btn = lv_list_add_button(list_menu, LV_SYMBOL_PLUS, "Add New Habit");
     lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
     lv_group_add_obj(group, btn);
 
@@ -122,16 +122,17 @@ void HabitManagerView::on_ok_press() {
             ESP_LOGI(TAG, "Navigate to: Track Today's Habits");
             view_manager_load_view(VIEW_ID_TRACK_HABITS);
             break;
-        case 1: // Manage Categories
+        case 1: // View History
+            ESP_LOGI(TAG, "Navigate to: View History");
+            view_manager_load_view(VIEW_ID_HABIT_HISTORY);
+            break;
+        case 2: // Manage Categories
             ESP_LOGI(TAG, "Navigate to: Manage Categories");
             view_manager_load_view(VIEW_ID_HABIT_CATEGORY_MANAGER);
             break;
-        case 2: // Manage Habits -> NOW Add Habit
+        case 3: // Add New Habit
             ESP_LOGI(TAG, "Navigate to: Add New Habit");
             view_manager_load_view(VIEW_ID_HABIT_ADD);
-            break;
-        case 3: // View History
-            ESP_LOGI(TAG, "Navigate to: View History (Not Implemented)");
             break;
     }
 }

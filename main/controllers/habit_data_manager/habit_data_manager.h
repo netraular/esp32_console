@@ -30,6 +30,8 @@ public:
 
     // --- Habit Management ---
     static std::vector<Habit> get_active_habits_for_category(uint32_t category_id);
+    static std::vector<Habit> get_all_active_habits();
+    static Habit* get_habit_by_id(uint32_t habit_id);
     static bool add_habit(const std::string& name, uint32_t category_id, const std::string& color_hex);
     static bool archive_habit(uint32_t habit_id);
     static bool delete_habit_permanently(uint32_t habit_id); // Optional: for permanent deletion

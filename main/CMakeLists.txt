@@ -47,6 +47,7 @@ idf_component_register(SRCS
         "./views/habit_category_manager_view/habit_category_manager_view.cpp"
         "./views/habit_add_view/habit_add_view.cpp"
         "./views/track_habits_view/track_habits_view.cpp"
+        "./views/habit_history_view/habit_history_view.cpp"
 
     INCLUDE_DIRS "." "models"
     EMBED_FILES 

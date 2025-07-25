@@ -193,6 +193,26 @@ std::vector<Habit> HabitDataManager::get_active_habits_for_category(uint32_t cat
     }
     return active_habits;
 }
+
+std::vector<Habit> HabitDataManager::get_all_active_habits() {
+    std::vector<Habit> active_habits;
+    for (const auto& habit : s_habits) {
+        if (habit.is_active) {
+            active_habits.push_back(habit);
+        }
+    }
+    return active_habits;
+}
+
+Habit* HabitDataManager::get_habit_by_id(uint32_t habit_id) {
+    for (auto& habit : s_habits) {
+        if (habit.id == habit_id) {
+            return &habit;
+        }
+    }
+    return nullptr;
+}
+
 bool HabitDataManager::add_habit(const std::string& name, uint32_t category_id, const std::string& color_hex) {
     uint32_t new_id = get_next_unique_id();
     s_habits.push_back({new_id, category_id, name, color_hex, true});
