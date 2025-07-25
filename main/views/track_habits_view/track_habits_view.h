@@ -4,15 +4,16 @@
 #include "../view.h"
 #include "../view_manager.h"
 #include "lvgl.h"
-#include "models/habit_data_models.h" // For Habit struct
+#include "models/habit_data_models.h" // For Habit and HabitCategory
 #include <vector>
+#include <string>
 
 /**
- * @brief A view for tracking daily habit completion.
+ * @brief A view for tracking all daily habits in a unified list.
  *
- * This view displays a list of all active habits. Each habit has a checkbox
- * that can be toggled. The state is saved immediately to the filesystem,
- * allowing the user to track their progress for the current day.
+ * This view provides an efficient and responsive interface for users to mark their
+ * habits as completed for the current day. It displays a single, scrollable list
+ * of all active habits, grouped by their category, for quick and easy tracking.
  */
 class TrackHabitsView : public View {
 public:
@@ -22,31 +23,40 @@ public:
     void create(lv_obj_t* parent) override;
 
 private:
+    // --- Private Data Structure for UI ---
+    /**
+     * @brief A helper struct to cache all data needed to render a single habit row.
+     * This avoids repeated calls to the data manager during UI interaction.
+     */
+    struct HabitRenderData {
+        Habit habit;
+        std::string category_name; // Added to show category context if needed
+        bool is_done_today;
+    };
+
     // --- UI and State Members ---
-    lv_obj_t* list_habits = nullptr;
+    lv_obj_t* habit_list_container = nullptr;
     lv_group_t* group = nullptr;
-    lv_style_t style_focused_list_btn;
+    lv_style_t style_list_item_focused;
+    lv_style_t style_category_header;
     bool styles_initialized = false;
 
-    // A local copy of habits being displayed to map list indices to habit IDs
-    std::vector<Habit> displayed_habits;
+    // --- Data Cache ---
+    std::vector<HabitRenderData> m_habit_render_data;
 
     // --- UI Setup ---
     void setup_ui(lv_obj_t* parent);
-    void populate_list();
-    lv_obj_t* create_habit_list_item(lv_obj_t* parent, const Habit& habit);
+    void populate_habit_list();
     void init_styles();
     void reset_styles();
 
-    // --- Button Handling ---
+    // --- Button and Event Handling ---
     void setup_button_handlers();
-
-    // Instance Methods for Button Actions
     void on_ok_press();
     void on_cancel_press();
     void on_nav_press(bool next);
 
-    // Static Callbacks for Button Manager
+    // --- Static Callbacks ---
     static void handle_ok_press_cb(void* user_data);
     static void handle_cancel_press_cb(void* user_data);
     static void handle_left_press_cb(void* user_data);
