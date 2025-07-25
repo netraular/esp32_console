@@ -7,11 +7,19 @@
 #include <vector>
 #include <string>
 
+// Defines the steps in the habit creation wizard
+enum class HabitAddStep {
+    STEP_CATEGORY,
+    STEP_NAME,
+    STEP_COLOR_CREATE
+};
+
 /**
- * @brief A view for creating a new habit.
+ * @brief A view for creating a new habit, implemented as a 3-step wizard.
  *
- * This view allows the user to select a category, pick a color, and
- * create a new habit, which is then saved by the HabitDataManager.
+ * This view manages three distinct UI panels within a single class, guiding the
+ * user through selecting a category, setting a name, and choosing a color
+ * before creating the habit.
  */
 class HabitAddView : public View {
 public:
@@ -21,45 +29,55 @@ public:
     void create(lv_obj_t* parent) override;
 
 private:
-    // --- UI and State Members ---
-    lv_group_t* group = nullptr;
+    // --- UI Panels and State ---
+    lv_obj_t* panel_category = nullptr;
+    lv_obj_t* panel_name = nullptr;
+    lv_obj_t* panel_color_create = nullptr;
+    lv_group_t* color_panel_group = nullptr; // Group only for the color/create panel
+
+    HabitAddStep current_step;
+
+    // --- UI Elements ---
     lv_obj_t* category_roller = nullptr;
-    lv_obj_t* color_palette_container = nullptr;
     lv_obj_t* name_label = nullptr;
-    lv_obj_t* refresh_name_button = nullptr;
-
-    lv_obj_t* create_button = nullptr;
-
-    lv_style_t style_focused;
-    lv_style_t style_color_cell_focused;
-    bool styles_initialized = false;
+    lv_obj_t* btn_arrow_left = nullptr;  // Navigation arrow buttons
+    lv_obj_t* btn_arrow_right = nullptr;
     
-    std::string selected_color_hex;
+    // --- Style Management ---
+    lv_style_t color_cell_style;
+    bool styles_initialized = false;
+
+    // --- Data Storage During Creation ---
+    uint32_t selected_category_id = 0;
     std::string current_habit_name;
+    std::string selected_color_hex;
     std::vector<std::string> preset_colors;
 
     // --- UI Setup ---
     void setup_ui(lv_obj_t* parent);
+    void create_category_panel(lv_obj_t* parent);
+    void create_name_panel(lv_obj_t* parent);
+    void create_color_create_panel(lv_obj_t* parent);
+    void create_nav_arrows(lv_obj_t* parent);
     void populate_category_roller();
-    void create_color_palette(lv_obj_t* parent);
     void init_styles();
-    void reset_styles();
+    void switch_to_step(HabitAddStep new_step);
 
     // --- Logic ---
     void update_habit_name();
+    void handle_create_habit();
+    void show_creation_toast();
 
-    // --- Button Handling ---
+    // --- Button and Event Handling ---
     void setup_button_handlers();
     void on_ok_press();
     void on_cancel_press();
+    void on_left_press();
+    void on_right_press();
     void on_nav_press(bool next);
     
-    // --- Event Handlers ---
-    static void color_cell_event_cb(lv_event_t * e);
-    static void show_creation_toast_cb(lv_timer_t * timer);
-    static void focus_changed_cb(lv_group_t * group); // <-- NEW: Callback for focus changes
-
-    // Static Callbacks for Button Manager
+    // --- Static Callbacks ---
+    static void return_to_manager_cb(lv_timer_t * timer);
     static void handle_ok_press_cb(void* user_data);
     static void handle_cancel_press_cb(void* user_data);
     static void handle_left_press_cb(void* user_data);
