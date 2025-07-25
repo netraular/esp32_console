@@ -19,6 +19,7 @@
 #include "controllers/data_manager/data_manager.h"
 #include "controllers/stt_manager/stt_manager.h"
 #include "controllers/power_manager/power_manager.h"
+#include "controllers/habit_data_manager/habit_data_manager.h"
 #include "views/view_manager.h"
 #include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
 
@@ -93,6 +94,11 @@ extern "C" void app_main(void) {
     } else {
         ESP_LOGE(TAG, "Failed to initialize LittleFS manager.");
     }
+
+    // Initialize the Habit Data Manager (depends on LittleFS)
+    HabitDataManager::init();
+    ESP_LOGI(TAG, "Habit data manager initialized.");
+
 
     // Initialize SD card hardware.
     if (sd_manager_init()) {

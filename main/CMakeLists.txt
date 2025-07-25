@@ -11,6 +11,7 @@ idf_component_register(SRCS
         "./controllers/power_manager/power_manager.cpp"
         "./controllers/screen_manager/screen_manager.cpp"
         "./controllers/sd_card_manager/sd_card_manager.cpp"
+        "./controllers/habit_data_manager/habit_data_manager.cpp"
         "./controllers/stt_manager/stt_manager.cpp"
         "./controllers/wifi_manager/wifi_manager.cpp"
         "./controllers/wifi_streamer/wifi_streamer.cpp"

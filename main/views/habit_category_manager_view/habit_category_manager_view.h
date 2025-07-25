@@ -7,14 +7,9 @@
 #include <vector>
 #include <string>
 
-// A struct to hold category data
-struct HabitCategory {
-    std::string name;
-    int habit_count; // Placeholder for now
-};
-
 /**
  * @brief View for creating, viewing, and deleting habit categories using a simple slot-based UI.
+ * This view communicates with the HabitDataManager to display and modify data.
  */
 class HabitCategoryManagerView : public View {
 public:
@@ -33,11 +28,7 @@ private:
 
     lv_style_t style_focused;
     bool styles_initialized = false;
-    int selected_category_index = -1;
-
-    // --- Static Data ---
-    static std::vector<HabitCategory> user_categories;
-    static const int MAX_USER_CATEGORIES;
+    uint32_t selected_category_id = 0; // Stores the ID of the selected category for the action menu
 
     // --- UI Setup & Management ---
     void setup_ui(lv_obj_t* parent);
@@ -45,12 +36,8 @@ private:
     void init_styles();
     void reset_styles();
 
-    // --- Filesystem Persistence ---
-    void load_categories_from_fs();
-    void save_categories_to_fs();
-
     // --- Action Menu Management ---
-    void create_action_menu(int category_index);
+    void create_action_menu(uint32_t category_id);
     void destroy_action_menu();
     void set_main_input_active(bool active);
 

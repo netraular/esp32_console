@@ -36,6 +36,14 @@ void littlefs_manager_deinit(void);
 const char* littlefs_manager_get_mount_point(void);
 
 /**
+ * @brief Checks if a directory exists, and creates it if it does not.
+ * 
+ * @param relative_path The path of the directory relative to the mount point (e.g., "my_dir").
+ * @return true if the directory exists or was created successfully, false on error.
+ */
+bool littlefs_manager_ensure_dir_exists(const char* relative_path);
+
+/**
  * @brief Checks if a file exists in the LittleFS filesystem.
  * @param filename The name of the file (without the mount point).
  * @return true if the file exists, false otherwise.
