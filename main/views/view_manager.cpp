@@ -21,7 +21,7 @@
 #include "voice_note_player_view/voice_note_player_view.h"
 #include "volume_tester_view/volume_tester_view.h"
 #include "wifi_stream_view/wifi_stream_view.h"
-// --- FIX: Ensure ALL habit view headers are included ---
+#include "popup_test_view/popup_test_view.h"
 #include "habit_manager_view/habit_manager_view.h"
 #include "habit_category_manager_view/habit_category_manager_view.h"
 #include "habit_add_view/habit_add_view.h"
@@ -56,7 +56,7 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_VOICE_NOTE_PLAYER] = []() { return new VoiceNotePlayerView(); };
     s_view_factory[VIEW_ID_VOLUME_TESTER] = []() { return new VolumeTesterView(); };
     s_view_factory[VIEW_ID_WIFI_STREAM_TEST] = []() { return new WifiStreamView(); };
-    // --- FIX: Ensure ALL habit views are in the factory ---
+    s_view_factory[VIEW_ID_POPUP_TEST] = []() { return new PopupTestView(); };
     s_view_factory[VIEW_ID_HABIT_MANAGER] = []() { return new HabitManagerView(); };
     s_view_factory[VIEW_ID_HABIT_CATEGORY_MANAGER] = []() { return new HabitCategoryManagerView(); };
     s_view_factory[VIEW_ID_HABIT_ADD] = []() { return new HabitAddView(); };

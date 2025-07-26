@@ -1,9 +1,10 @@
+Crear una vista para mostrar los distintos estilos de popup 
+-mensaje con ok
+-Mensaje con 1 o 2 acciones
+-Loading spinner con callback
+
 Realizar vista de settings que permita guardar ajustes como si queremos obtener hora de wifi al iniciar el dispositivo o no.
 Permitir guardar valores de forma persistente; por ejemplo la hora actual.
-
-
-Generar archivos .h en los controllers y components con comentarios en las funciones en vez de usar readme.
-
 
 Al iniciar el dispositivo, la conexión wifi puede tardar un rato y consumir más energía por lo que puede que no se lea la micro sd al inicio y si se entra luego no funcione correctamentela reproducción de archivos.
 Se debería esprar a hacer las inicializaciones de forma progresiva evitando que se avanze la pantalla de standby y mostrando "Loading..." hasta que todo esté funcional?

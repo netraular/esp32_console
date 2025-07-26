@@ -30,6 +30,7 @@ typedef enum {
     VIEW_ID_VOICE_NOTE,
     VIEW_ID_VOICE_NOTE_PLAYER,
     VIEW_ID_VOLUME_TESTER,
+    VIEW_ID_POPUP_TEST,
     
     // Habit Tracker Views
     VIEW_ID_HABIT_MANAGER,

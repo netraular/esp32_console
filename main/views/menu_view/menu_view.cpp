@@ -10,16 +10,16 @@ static const char *TAG = "MENU_VIEW";
 const char *MenuView::view_options[] = {
     "Test Microphone", "Test Speaker", "Test SD Card",
     "Test Image", "Test LittleFS", "Test Button Events", "WiFi Audio Stream",
-    "Pomodoro Clock", "Click Counter", "Voice Notes",
-    "Volume Tester", "Habit Tracker" // <-- ADDED
+    "Pomodoro Clock", "Click Counter", "Voice Notes", "Test Popups",
+    "Volume Tester", "Habit Tracker"
 };
 
 // The corresponding view IDs for each option. The order must match view_options.
 const view_id_t MenuView::view_ids[] = {
     VIEW_ID_MIC_TEST, VIEW_ID_SPEAKER_TEST, VIEW_ID_SD_TEST,
     VIEW_ID_IMAGE_TEST, VIEW_ID_LITTLEFS_TEST, VIEW_ID_MULTI_CLICK_TEST, VIEW_ID_WIFI_STREAM_TEST,
-    VIEW_ID_POMODORO, VIEW_ID_CLICK_COUNTER_TEST, VIEW_ID_VOICE_NOTE,
-    VIEW_ID_VOLUME_TESTER, VIEW_ID_HABIT_MANAGER // <-- ADDED
+    VIEW_ID_POMODORO, VIEW_ID_CLICK_COUNTER_TEST, VIEW_ID_VOICE_NOTE, VIEW_ID_POPUP_TEST,
+    VIEW_ID_VOLUME_TESTER, VIEW_ID_HABIT_MANAGER
 };
 
 // Calculate the number of options at compile time.
