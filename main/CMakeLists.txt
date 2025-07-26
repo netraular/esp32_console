@@ -23,6 +23,7 @@ idf_component_register(SRCS
         "./components/file_explorer/file_explorer.cpp"
         "./components/status_bar_component/status_bar_component.cpp"
         "./components/text_viewer/text_viewer.cpp"
+        "./components/popup_manager/popup_manager.cpp"
 
         # --- Views (Class-based) ---
         "./views/view_manager.cpp"

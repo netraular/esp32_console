@@ -3,6 +3,7 @@
 
 #include "../view.h"
 #include "lvgl.h"
+#include "components/popup_manager/popup_manager.h" // <-- ADDED for popup_result_t
 
 /**
  * @brief The StandbyView class represents the main idle/clock screen.
@@ -22,8 +23,8 @@ public:
      * @brief Destroys the StandbyView and cleans up all its non-widget resources.
      *
      * This is automatically called by the ViewManager. It ensures that all
-     * manually created timers, LVGL groups, and styles are freed, preventing
-     * memory leaks. LVGL widgets are cleaned up by the ViewManager itself.
+     * manually created timers are freed, preventing memory leaks. LVGL widgets
+     * are cleaned up by the ViewManager itself.
      */
     ~StandbyView() override;
 
@@ -47,24 +48,12 @@ private:
     // --- State ---
     bool is_time_synced = false;
 
-    // --- Shutdown Popup ---
-    lv_obj_t* shutdown_popup_container = nullptr;
-    lv_group_t* shutdown_popup_group = nullptr;
-    lv_style_t style_popup_focused;
-    lv_style_t style_popup_normal;
-    bool popup_styles_initialized = false;
-
     // --- Private Methods for Setup ---
     void setup_ui(lv_obj_t* parent);
     void setup_main_button_handlers();
-    void setup_popup_button_handlers();
 
     // --- Private Methods for UI Logic ---
     void update_clock();
-    void create_shutdown_popup();
-    void destroy_shutdown_popup();
-    void init_popup_styles();
-    void reset_popup_styles();
 
     // --- Instance Methods for Button Actions ---
     void on_menu_press();
@@ -73,10 +62,9 @@ private:
     void on_volume_up_long_press_start();
     void on_volume_down_long_press_start();
     void stop_volume_repeat_timer(lv_timer_t** timer_ptr);
-    void on_popup_ok();
-    void on_popup_cancel();
-    void on_popup_nav_left();
-    void on_popup_nav_right();
+
+    // --- Instance method to handle popup results ---
+    void handle_shutdown_result(popup_result_t result);
 
     // --- Static Callbacks (Bridge to C-style APIs) ---
     static void update_clock_cb(lv_timer_t* timer);
@@ -87,10 +75,8 @@ private:
     static void volume_down_long_press_start_cb(void* user_data);
     static void volume_up_press_up_cb(void* user_data);
     static void volume_down_press_up_cb(void* user_data);
-    static void popup_ok_cb(void* user_data);
-    static void popup_cancel_cb(void* user_data);
-    static void popup_nav_left_cb(void* user_data);
-    static void popup_nav_right_cb(void* user_data);
+    // Static callback for the popup manager
+    static void shutdown_popup_cb(popup_result_t result, void* user_data);
 };
 
 #endif // STANDBY_VIEW_H
