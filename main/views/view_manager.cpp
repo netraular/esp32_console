@@ -27,6 +27,7 @@
 #include "habit_add_view/habit_add_view.h"
 #include "track_habits_view/track_habits_view.h"
 #include "habit_history_view/habit_history_view.h"
+#include "add_notification_view/add_notification_view.h" // <-- ADDED
 
 
 static const char *TAG = "VIEW_MGR";
@@ -62,6 +63,7 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_HABIT_ADD] = []() { return new HabitAddView(); };
     s_view_factory[VIEW_ID_TRACK_HABITS] = []() { return new TrackHabitsView(); };
     s_view_factory[VIEW_ID_HABIT_HISTORY] = []() { return new HabitHistoryView(); };
+    s_view_factory[VIEW_ID_ADD_NOTIFICATION] = []() { return new AddNotificationView(); }; // <-- ADDED
 }
 
 void view_manager_init(void) {
@@ -71,6 +73,7 @@ void view_manager_init(void) {
     view_manager_load_view(VIEW_ID_STANDBY);
 }
 
+// ... (rest of the file remains unchanged)
 void view_manager_load_view(view_id_t view_id) {
     // A special value to prevent reloading during initialization
     static view_id_t s_initializing_view_id = VIEW_ID_COUNT; 

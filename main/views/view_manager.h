@@ -38,6 +38,9 @@ typedef enum {
     VIEW_ID_HABIT_ADD,
     VIEW_ID_TRACK_HABITS,
     VIEW_ID_HABIT_HISTORY,
+
+    // Notification System Views
+    VIEW_ID_ADD_NOTIFICATION, // <-- ADDED
     
     // Add other views here as they are converted
     VIEW_ID_COUNT // Total number of views, must be last
@@ -60,6 +63,6 @@ void view_manager_load_view(view_id_t view_id);
  * @brief Gets the ID of the currently active view.
  * @return The view_id_t of the current view.
  */
-view_id_t view_manager_get_current_view_id(void); // <-- ADDED
+view_id_t view_manager_get_current_view_id(void);
 
 #endif // VIEW_MANAGER_H
