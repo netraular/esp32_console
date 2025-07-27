@@ -7,131 +7,209 @@
 
 static const char *TAG = "NOTIF_HIST_VIEW";
 
-// --- Constructor & Destructor ---
+// ... (Constructor, destructor, create, cleanup_ui, setup_selector_ui permanecen igual)
+// --- La parte superior del archivo no cambia ---
+
 NotificationHistoryView::NotificationHistoryView() {
     ESP_LOGI(TAG, "NotificationHistoryView constructed");
 }
 
 NotificationHistoryView::~NotificationHistoryView() {
-    if (group) {
-        lv_group_del(group);
-        group = nullptr;
-    }
+    cleanup_ui();
     ESP_LOGI(TAG, "NotificationHistoryView destructed");
 }
 
-// --- View Lifecycle ---
 void NotificationHistoryView::create(lv_obj_t* parent) {
     container = lv_obj_create(parent);
     lv_obj_remove_style_all(container);
     lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
-    lv_obj_center(container);
     
-    setup_ui(container);
-    setup_button_handlers();
+    status_bar_create(container);
+    setup_selector_ui();
 }
 
-// --- UI & Handler Setup ---
-void NotificationHistoryView::setup_ui(lv_obj_t* parent) {
-    status_bar_create(parent);
-    
-    // Fetch notifications first to decide what to display
-    unread_notifications = NotificationManager::get_unread_notifications();
-
-    if (unread_notifications.empty()) {
-        // Display a message if there are no notifications
-        lv_obj_t* label = lv_label_create(parent);
-        lv_label_set_text(label, "No unread notifications");
-        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_center(label);
-    } else {
-        // Create the list widget
-        list = lv_list_create(parent);
-        lv_obj_set_size(list, LV_PCT(100), LV_PCT(100) - 20); // Full size minus status bar
-        lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
-
-        group = lv_group_create();
-        populate_list();
+void NotificationHistoryView::cleanup_ui() {
+    if (group) {
+        lv_group_del(group);
+        group = nullptr;
+    }
+    if (selector_container) {
+        lv_obj_del(selector_container);
+        selector_container = nullptr;
+    }
+    if (list_container) {
+        lv_obj_del(list_container);
+        list_container = nullptr;
     }
 }
 
-void NotificationHistoryView::populate_list() {
-    ESP_LOGI(TAG, "Populating list with %d notifications.", unread_notifications.size());
-    for (size_t i = 0; i < unread_notifications.size(); ++i) {
-        const auto& notif = unread_notifications[i];
+void NotificationHistoryView::setup_selector_ui() {
+    cleanup_ui();
+    current_state = STATE_SELECTING;
 
-        // Create a button in the list for each notification
-        lv_obj_t* btn = lv_list_add_button(list, LV_SYMBOL_BELL, notif.title.c_str());
-        
-        // Store the index of the notification in the button's user data
-        lv_obj_set_user_data(btn, (void*)i);
-        
-        // Add an event callback for clicks
-        lv_obj_add_event_cb(btn, item_click_event_cb, LV_EVENT_CLICKED, this);
-        
-        // Add the button to the navigation group
-        lv_group_add_obj(group, btn);
-    }
-}
+    selector_container = lv_obj_create(container);
+    lv_obj_remove_style_all(selector_container);
+    lv_obj_set_size(selector_container, LV_PCT(100), LV_PCT(100) - 20);
+    lv_obj_align(selector_container, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_flex_flow(selector_container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(selector_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(selector_container, 20, 0);
 
-void NotificationHistoryView::setup_button_handlers() {
+    lv_obj_t* title = lv_label_create(selector_container);
+    lv_label_set_text(title, "View Notifications");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+
+    group = lv_group_create();
+
+    lv_obj_t* pending_btn = lv_list_add_button(selector_container, LV_SYMBOL_REFRESH, "Pending");
+    lv_obj_set_user_data(pending_btn, (void*)LIST_TYPE_PENDING);
+    lv_group_add_obj(group, pending_btn);
+
+    lv_obj_t* unread_btn = lv_list_add_button(selector_container, LV_SYMBOL_BELL, "Unread");
+    lv_obj_set_user_data(unread_btn, (void*)LIST_TYPE_UNREAD);
+    lv_group_add_obj(group, unread_btn);
+    
     button_manager_unregister_view_handlers();
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ok_press_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, cancel_press_cb, true, this);
-    // For list navigation, up/down is more intuitive than left/right
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, up_press_cb, true, this);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, down_press_cb, true, this);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, left_press_cb, true, this);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, right_press_cb, true, this);
 }
 
-// --- UI Logic ---
+// --- FUNCIÓN MODIFICADA CON LOGS ---
+void NotificationHistoryView::setup_list_ui() {
+    cleanup_ui();
+    current_state = STATE_SHOWING_LIST;
+
+    list_container = lv_obj_create(container);
+    lv_obj_remove_style_all(list_container);
+    lv_obj_set_size(list_container, LV_PCT(100), LV_PCT(100) - 20);
+    lv_obj_align(list_container, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+    const char* list_name = "Unknown";
+    if (current_list_type == LIST_TYPE_PENDING) {
+        list_name = "Pending";
+        current_notifications = NotificationManager::get_pending_notifications();
+    } else {
+        list_name = "Unread";
+        current_notifications = NotificationManager::get_unread_notifications();
+    }
+    ESP_LOGI(TAG, "Setting up list view for '%s' notifications. Found %d items.", list_name, current_notifications.size());
+
+
+    if (current_notifications.empty()) {
+        lv_obj_t* label = lv_label_create(list_container);
+        lv_label_set_text(label, current_list_type == LIST_TYPE_PENDING ? "No pending notifications" : "No unread notifications");
+        lv_obj_center(label);
+    } else {
+        lv_obj_t* list = lv_list_create(list_container);
+        lv_obj_set_size(list, LV_PCT(100), LV_PCT(100));
+        lv_obj_center(list);
+        group = lv_group_create();
+        populate_list();
+    }
+    
+    button_manager_unregister_view_handlers();
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ok_press_cb, true, this);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, cancel_press_cb, true, this);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, left_press_cb, true, this);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, right_press_cb, true, this);
+}
+
+// --- FUNCIÓN MODIFICADA CON LOGS ---
+void NotificationHistoryView::populate_list() {
+    lv_obj_t* list = lv_obj_get_child(list_container, 0);
+    if (!list) return;
+
+    ESP_LOGI(TAG, "--- Start of Notification List ---");
+    for (size_t i = 0; i < current_notifications.size(); ++i) {
+        const auto& notification_item = current_notifications[i];
+        
+        char time_buf[64];
+        struct tm timeinfo;
+        localtime_r(&notification_item.timestamp, &timeinfo);
+        strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
+        
+        ESP_LOGI(TAG, "Item %d: ID=%lu, Title='%s', Timestamp=%s", 
+                 i, notification_item.id, notification_item.title.c_str(), time_buf);
+
+        lv_obj_t* btn;
+        if (current_list_type == LIST_TYPE_PENDING) {
+            strftime(time_buf, sizeof(time_buf), "%b %d, %H:%M", &timeinfo);
+            std::string text = notification_item.title + "\n" + time_buf;
+            btn = lv_list_add_button(list, LV_SYMBOL_REFRESH, text.c_str());
+        } else {
+            btn = lv_list_add_button(list, LV_SYMBOL_BELL, notification_item.title.c_str());
+        }
+        
+        lv_obj_set_user_data(btn, (void*)i);
+        lv_obj_add_event_cb(btn, list_event_cb, LV_EVENT_ALL, this);
+        lv_group_add_obj(group, btn);
+    }
+    ESP_LOGI(TAG, "--- End of Notification List ---");
+}
+
+// ... (El resto de funciones permanecen igual)
+// --- La parte inferior del archivo no cambia ---
+
 void NotificationHistoryView::handle_item_selection() {
     if (!group) return;
-
     lv_obj_t* focused_btn = lv_group_get_focused(group);
     if (!focused_btn) return;
-
-    // Retrieve the index stored in the button's user data
     size_t index = (size_t)lv_obj_get_user_data(focused_btn);
-
-    if (index < unread_notifications.size()) {
-        const Notification& selected_notif = unread_notifications[index];
+    if (index < current_notifications.size()) {
+        const Notification& selected_notif = current_notifications[index];
         ESP_LOGI(TAG, "Showing details for notification ID: %lu", selected_notif.id);
-
-        // Show the full notification in a popup
-        popup_manager_show_alert(
-            selected_notif.title.c_str(),
-            selected_notif.message.c_str(),
-            popup_close_cb,
-            this
-        );
+        if (current_list_type == LIST_TYPE_UNREAD) {
+            NotificationManager::mark_as_read(selected_notif.id);
+        }
+        popup_manager_show_alert(selected_notif.title.c_str(), selected_notif.message.c_str(), popup_close_cb, this);
     }
 }
 
 void NotificationHistoryView::handle_popup_close(popup_result_t result) {
-    ESP_LOGI(TAG, "Notification detail popup closed. Re-enabling view input.");
-    // After the popup is closed, we must re-register our button handlers
-    setup_button_handlers();
+    if (current_list_type == LIST_TYPE_UNREAD) {
+        ESP_LOGI(TAG, "Unread notification viewed, refreshing list.");
+        setup_list_ui();
+    } else {
+        ESP_LOGI(TAG, "Pending notification viewed, re-enabling input.");
+        button_manager_unregister_view_handlers();
+        button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ok_press_cb, true, this);
+        button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, cancel_press_cb, true, this);
+        button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, left_press_cb, true, this);
+        button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, right_press_cb, true, this);
+    }
 }
 
-// --- Instance Methods for Button Actions ---
 void NotificationHistoryView::on_ok_press() {
-    handle_item_selection();
+    if (current_state == STATE_SELECTING) {
+        lv_obj_t* focused_btn = lv_group_get_focused(group);
+        if (focused_btn) {
+            current_list_type = (ListType)(size_t)lv_obj_get_user_data(focused_btn);
+            setup_list_ui();
+        }
+    } else if (current_state == STATE_SHOWING_LIST) {
+        handle_item_selection();
+    }
 }
 
 void NotificationHistoryView::on_cancel_press() {
-    ESP_LOGI(TAG, "Cancel pressed, returning to menu.");
-    view_manager_load_view(VIEW_ID_MENU);
+    if (current_state == STATE_SHOWING_LIST) {
+        setup_selector_ui();
+    } else {
+        view_manager_load_view(VIEW_ID_MENU);
+    }
 }
 
-void NotificationHistoryView::on_up_press() {
-    if (group) lv_group_focus_prev(group);
+void NotificationHistoryView::on_nav_press(bool is_next) {
+    if (!group) return;
+    if (is_next) {
+        lv_group_focus_next(group);
+    } else {
+        lv_group_focus_prev(group);
+    }
 }
 
-void NotificationHistoryView::on_down_press() {
-    if (group) lv_group_focus_next(group);
-}
-
-// --- Static Callback Bridges ---
 void NotificationHistoryView::ok_press_cb(void* user_data) {
     static_cast<NotificationHistoryView*>(user_data)->on_ok_press();
 }
@@ -140,17 +218,18 @@ void NotificationHistoryView::cancel_press_cb(void* user_data) {
     static_cast<NotificationHistoryView*>(user_data)->on_cancel_press();
 }
 
-void NotificationHistoryView::up_press_cb(void* user_data) {
-    static_cast<NotificationHistoryView*>(user_data)->on_up_press();
+void NotificationHistoryView::left_press_cb(void* user_data) {
+    static_cast<NotificationHistoryView*>(user_data)->on_nav_press(false);
 }
 
-void NotificationHistoryView::down_press_cb(void* user_data) {
-    static_cast<NotificationHistoryView*>(user_data)->on_down_press();
+void NotificationHistoryView::right_press_cb(void* user_data) {
+    static_cast<NotificationHistoryView*>(user_data)->on_nav_press(true);
 }
 
-void NotificationHistoryView::item_click_event_cb(lv_event_t* e) {
+void NotificationHistoryView::list_event_cb(lv_event_t* e) {
+    auto* view = static_cast<NotificationHistoryView*>(lv_event_get_user_data(e));
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        static_cast<NotificationHistoryView*>(lv_event_get_user_data(e))->handle_item_selection();
+        view->handle_item_selection();
     }
 }
 

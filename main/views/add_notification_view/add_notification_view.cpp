@@ -11,14 +11,16 @@
 
 static const char *TAG = "ADD_NOTIF_VIEW";
 
-// A struct to pass all necessary data to the FreeRTOS task.
+// Struct to pass all necessary data to the FreeRTOS task.
 struct NotificationTaskParams {
     std::string title;
     std::string message;
-    int delay_seconds;
+    time_t timestamp; // Store the final timestamp here
+    int delay_seconds; // Store the delay for the task
 };
 
-// --- Constructor & Destructor ---
+// --- Constructor, Destructor, and UI Setup methods are unchanged ---
+
 AddNotificationView::AddNotificationView() {
     ESP_LOGI(TAG, "AddNotificationView constructed");
 }
@@ -33,19 +35,16 @@ AddNotificationView::~AddNotificationView() {
     ESP_LOGI(TAG, "AddNotificationView destructed");
 }
 
-// --- View Lifecycle ---
 void AddNotificationView::create(lv_obj_t* parent) {
     container = lv_obj_create(parent);
     lv_obj_remove_style_all(container);
     lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
     lv_obj_center(container);
-
     init_styles();
     setup_ui(container);
     setup_button_handlers();
 }
 
-// --- Style Initialization ---
 void AddNotificationView::init_styles() {
     lv_style_init(&style_btn_default);
     lv_style_set_radius(&style_btn_default, 6);
@@ -54,43 +53,34 @@ void AddNotificationView::init_styles() {
     lv_style_set_border_color(&style_btn_default, lv_palette_main(LV_PALETTE_BLUE));
     lv_style_set_border_width(&style_btn_default, 2);
     lv_style_set_text_color(&style_btn_default, lv_palette_main(LV_PALETTE_BLUE));
-
     lv_style_init(&style_btn_focused);
     lv_style_set_bg_color(&style_btn_focused, lv_palette_main(LV_PALETTE_BLUE));
     lv_style_set_text_color(&style_btn_focused, lv_color_white());
 }
 
-// --- UI & Handler Setup ---
 void AddNotificationView::setup_ui(lv_obj_t* parent) {
     status_bar_create(parent);
-    
     lv_obj_t* cont = lv_obj_create(parent);
     lv_obj_set_size(cont, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_center(cont);
     lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(cont, 20, 0);
-
     lv_obj_t* info_label = lv_label_create(cont);
     lv_label_set_text(info_label, "Create a test notification");
     lv_obj_set_style_text_font(info_label, &lv_font_montserrat_20, 0);
-
-    // Button for 10-second delay
     save_10s_button = lv_button_create(cont);
     lv_obj_t* save_10s_label = lv_label_create(save_10s_button);
     lv_label_set_text(save_10s_label, "Create (10s Delay)");
     lv_obj_add_event_cb(save_10s_button, save_10s_event_cb, LV_EVENT_CLICKED, this);
     lv_obj_add_style(save_10s_button, &style_btn_default, LV_STATE_DEFAULT);
     lv_obj_add_style(save_10s_button, &style_btn_focused, LV_STATE_FOCUSED);
-
-    // Button for 1-minute delay
     save_1min_button = lv_button_create(cont);
     lv_obj_t* save_1min_label = lv_label_create(save_1min_button);
     lv_label_set_text(save_1min_label, "Create (1 min Delay)");
     lv_obj_add_event_cb(save_1min_button, save_1min_event_cb, LV_EVENT_CLICKED, this);
     lv_obj_add_style(save_1min_button, &style_btn_default, LV_STATE_DEFAULT);
     lv_obj_add_style(save_1min_button, &style_btn_focused, LV_STATE_FOCUSED);
-
     input_group = lv_group_create();
     lv_group_add_obj(input_group, save_10s_button);
     lv_group_add_obj(input_group, save_1min_button);
@@ -114,25 +104,30 @@ void AddNotificationView::save_notification(int delay_seconds) {
         auto* task_params = static_cast<NotificationTaskParams*>(params);
         ESP_LOGI(TAG, "[Delayed Task] Started, waiting %d seconds...", task_params->delay_seconds);
         
+        // --- FIX: Use delay_seconds from the captured struct ---
         vTaskDelay(pdMS_TO_TICKS(task_params->delay_seconds * 1000));
         
         ESP_LOGI(TAG, "[Delayed Task] Adding notification now.");
-        NotificationManager::add_notification(task_params->title, task_params->message);
+        // Pass the pre-calculated future timestamp to the manager
+        NotificationManager::add_notification(task_params->title, task_params->message, task_params->timestamp);
 
-        delete task_params; // Clean up the allocated data
+        delete task_params;
         ESP_LOGI(TAG, "[Delayed Task] Finished, deleting task.");
-        vTaskDelete(NULL); // Delete the task
+        vTaskDelete(NULL);
     };
 
-    // We must copy the data to the heap so it's valid when the task runs.
+    // Calculate the future time and store it in the params struct.
+    time_t future_timestamp = time(NULL) + delay_seconds;
+    
     auto* params = new NotificationTaskParams();
-    params->title = "Notification at " + std::to_string(time(NULL) + delay_seconds);
+    params->title = "Notification at " + std::to_string(future_timestamp);
     params->message = "This notification was scheduled.";
-    params->delay_seconds = delay_seconds;
+    params->timestamp = future_timestamp;
+    params->delay_seconds = delay_seconds; // Store the delay in the struct
 
     xTaskCreate(task_func, "notif_delay_task", 4096, params, 5, NULL);
     
-    // Show a temporary confirmation message before going back
+    // Show a temporary confirmation message
     lv_obj_t* label = lv_label_create(lv_screen_active());
     lv_label_set_text(label, "Notification Scheduled!");
     lv_obj_center(label);
@@ -142,6 +137,8 @@ void AddNotificationView::save_notification(int delay_seconds) {
     }, 1500, NULL);
     lv_timer_set_repeat_count(lv_timer_get_next(NULL), 1);
 }
+
+// --- Instance Methods and Static Callbacks are unchanged ---
 
 void AddNotificationView::on_ok_press() {
     if (!input_group) return;
@@ -156,7 +153,6 @@ void AddNotificationView::on_cancel_press() {
     view_manager_load_view(VIEW_ID_MENU);
 }
 
-// --- Static Callback Bridges ---
 void AddNotificationView::ok_press_cb(void* user_data) {
     static_cast<AddNotificationView*>(user_data)->on_ok_press();
 }

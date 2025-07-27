@@ -10,8 +10,17 @@
 class NotificationManager {
 public:
     static void init();
-    static void add_notification(const std::string& title, const std::string& message);
+    
+    /**
+     * @brief Adds a notification to the manager with a specific timestamp.
+     * @param title The title of the notification.
+     * @param message The body of the notification.
+     * @param timestamp The Unix timestamp when the notification should occur.
+     */
+    static void add_notification(const std::string& title, const std::string& message, time_t timestamp);
+    
     static std::vector<Notification> get_unread_notifications();
+    static std::vector<Notification> get_pending_notifications();
     static void mark_as_read(uint32_t id);
     static void clear_all_notifications();
 

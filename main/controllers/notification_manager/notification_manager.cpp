@@ -1,7 +1,7 @@
 #include "notification_manager.h"
 #include "esp_log.h"
 #include <algorithm>
-#include <memory> // For std::unique_ptr
+#include <memory>
 #include "views/view_manager.h"
 #include "components/popup_manager/popup_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
@@ -9,10 +9,10 @@
 #include "views/standby_view/standby_view.h"
 #include "json_generator.h"
 #include "json_parser.h"
-
-// Correctly include the header for JSMN, which json_parser uses internally,
-// to access token types like JSMN_ARRAY.
 #include "jsmn.h"
+
+// ... (El resto del archivo, init, dispatcher_task, etc., permanece igual hasta add_notification)
+// --- La parte superior del archivo no cambia ---
 
 static const char *TAG = "NOTIF_MGR";
 static const char* DATA_DIR = "data";
@@ -38,8 +38,11 @@ void NotificationManager::init() {
 void NotificationManager::dispatcher_task(lv_timer_t* timer) {
     if (view_manager_get_current_view_id() != VIEW_ID_STANDBY) return;
     if (popup_manager_is_active()) return;
+    time_t now = time(NULL);
     auto it = std::find_if(s_notifications.begin(), s_notifications.end(), 
-                           [](const Notification& notif) { return !notif.is_read; });
+        [&](const Notification& notif) {
+            return !notif.is_read && notif.timestamp <= now;
+        });
     if (it == s_notifications.end()) return; 
     Notification& notif_to_show = *it;
     ESP_LOGI(TAG, "Dispatching notification popup for ID: %lu to StandbyView", notif_to_show.id);
@@ -49,24 +52,49 @@ void NotificationManager::dispatcher_task(lv_timer_t* timer) {
 
 uint32_t NotificationManager::get_next_unique_id() { return s_next_id++; }
 
-void NotificationManager::add_notification(const std::string& title, const std::string& message) {
+// --- FUNCIÓN MODIFICADA ---
+void NotificationManager::add_notification(const std::string& title, const std::string& message, time_t timestamp) {
     Notification new_notif;
     new_notif.id = get_next_unique_id();
     new_notif.title = title;
     new_notif.message = message;
-    new_notif.timestamp = time(NULL);
+    new_notif.timestamp = timestamp; // Usa el timestamp proporcionado
     new_notif.is_read = false;
+    
     s_notifications.push_back(new_notif);
-    ESP_LOGI(TAG, "Added new notification (ID: %lu): '%s'", new_notif.id, new_notif.title.c_str());
+    ESP_LOGI(TAG, "Added new notification (ID: %lu, Timestamp: %ld): '%s'", new_notif.id, (long)new_notif.timestamp, new_notif.title.c_str());
     save_notifications();
 }
 
+// ... (El resto de funciones como get_unread_notifications, etc., permanecen igual)
+// --- La parte inferior del archivo no cambia ---
+
 std::vector<Notification> NotificationManager::get_unread_notifications() {
     std::vector<Notification> unread;
+    time_t now = time(NULL);
     for (const auto& notif : s_notifications) {
-        if (!notif.is_read) unread.push_back(notif);
+        if (!notif.is_read && notif.timestamp <= now) {
+            unread.push_back(notif);
+        }
     }
+    std::sort(unread.begin(), unread.end(), [](const Notification& a, const Notification& b) {
+        return a.timestamp > b.timestamp;
+    });
     return unread;
+}
+
+std::vector<Notification> NotificationManager::get_pending_notifications() {
+    std::vector<Notification> pending;
+    time_t now = time(NULL);
+    for (const auto& notif : s_notifications) {
+        if (!notif.is_read && notif.timestamp > now) {
+            pending.push_back(notif);
+        }
+    }
+    std::sort(pending.begin(), pending.end(), [](const Notification& a, const Notification& b) {
+        return a.timestamp < b.timestamp;
+    });
+    return pending;
 }
 
 void NotificationManager::mark_as_read(uint32_t id) {
@@ -92,12 +120,10 @@ void NotificationManager::clear_all_notifications() {
 void NotificationManager::save_notifications() {
     const size_t buffer_size = 4096;
     auto json_buffer = std::make_unique<char[]>(buffer_size);
-
     if (!json_buffer) {
         ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer. Cannot save notifications.");
         return;
     }
-
     json_gen_str_t jstr;
     json_gen_str_start(&jstr, json_buffer.get(), buffer_size, NULL, NULL);
     json_gen_start_array(&jstr);
@@ -112,7 +138,6 @@ void NotificationManager::save_notifications() {
     }
     json_gen_end_array(&jstr);
     json_gen_str_end(&jstr);
-
     if (littlefs_manager_write_file(NOTIFICATIONS_FILE_PATH, json_buffer.get())) {
         ESP_LOGI(TAG, "Successfully saved %d notifications to LittleFS.", s_notifications.size());
     } else {
@@ -123,13 +148,11 @@ void NotificationManager::save_notifications() {
 void NotificationManager::load_notifications() {
     char* file_buffer = nullptr;
     size_t file_size = 0;
-    
     if (!littlefs_manager_read_file(NOTIFICATIONS_FILE_PATH, &file_buffer, &file_size)) {
         ESP_LOGI(TAG, "No notifications file found. Starting fresh.");
         if(file_buffer) free(file_buffer);
         return;
     }
-
     ESP_LOGI(TAG, "Found notifications file, parsing...");
     jparse_ctx_t jctx;
     int ret = json_parse_start(&jctx, file_buffer, file_size);
@@ -138,30 +161,25 @@ void NotificationManager::load_notifications() {
         free(file_buffer);
         return;
     }
-    
     if (jctx.tokens[0].type != JSMN_ARRAY) {
         ESP_LOGE(TAG, "Expected a JSON array as the root object.");
         json_parse_end(&jctx);
         free(file_buffer);
         return;
     }
-
     uint32_t max_id = 0;
     s_notifications.clear();
     int num_elements = jctx.tokens[0].size;
-
     for (int i = 0; i < num_elements; i++) {
         if (json_arr_get_object(&jctx, i) == 0) {
             Notification temp_notif;
             long long temp_ll;
             char temp_str_buf[256];
-
             if (json_obj_get_int64(&jctx, "id", &temp_ll) == 0) temp_notif.id = (uint32_t)temp_ll;
             if (json_obj_get_int64(&jctx, "timestamp", &temp_ll) == 0) temp_notif.timestamp = (time_t)temp_ll;
             if (json_obj_get_bool(&jctx, "is_read", &temp_notif.is_read) != 0) temp_notif.is_read = false;
             if (json_obj_get_string(&jctx, "title", temp_str_buf, sizeof(temp_str_buf)) >= 0) temp_notif.title = temp_str_buf;
             if (json_obj_get_string(&jctx, "message", temp_str_buf, sizeof(temp_str_buf)) >= 0) temp_notif.message = temp_str_buf;
-            
             s_notifications.push_back(temp_notif);
             if (temp_notif.id > max_id) {
                 max_id = temp_notif.id;
@@ -169,9 +187,7 @@ void NotificationManager::load_notifications() {
             json_arr_leave_object(&jctx);
         }
     }
-    
     s_next_id = max_id + 1;
-    
     json_parse_end(&jctx);
     free(file_buffer);
     ESP_LOGI(TAG, "Loaded %d notifications. Next ID is %lu.", s_notifications.size(), s_next_id);
