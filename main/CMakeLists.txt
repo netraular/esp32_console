@@ -8,6 +8,7 @@ idf_component_register(SRCS
         "./controllers/button_manager/button_manager.cpp"
         "./controllers/data_manager/data_manager.cpp"
         "./controllers/littlefs_manager/littlefs_manager.cpp"
+        "./controllers/notification_manager/notification_manager.cpp"
         "./controllers/power_manager/power_manager.cpp"
         "./controllers/screen_manager/screen_manager.cpp"
         "./controllers/sd_card_manager/sd_card_manager.cpp"
