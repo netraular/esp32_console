@@ -28,6 +28,7 @@ idf_component_register(SRCS
 
         # --- Views (Class-based) ---
         "./views/view_manager.cpp"
+        "./views/add_notification_view/add_notification_view.cpp" # <-- ADDED
         "./views/standby_view/standby_view.cpp"
         "./views/menu_view/menu_view.cpp"
         "./views/multi_click_test_view/multi_click_test_view.cpp"
