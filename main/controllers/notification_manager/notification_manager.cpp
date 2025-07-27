@@ -11,9 +11,6 @@
 #include "json_parser.h"
 #include "jsmn.h"
 
-// ... (El resto del archivo, init, dispatcher_task, etc., permanece igual hasta add_notification)
-// --- La parte superior del archivo no cambia ---
-
 static const char *TAG = "NOTIF_MGR";
 static const char* DATA_DIR = "data";
 static const char* NOTIFICATIONS_FILE_PATH = "data/notifications.json";
@@ -52,22 +49,18 @@ void NotificationManager::dispatcher_task(lv_timer_t* timer) {
 
 uint32_t NotificationManager::get_next_unique_id() { return s_next_id++; }
 
-// --- FUNCIÓN MODIFICADA ---
 void NotificationManager::add_notification(const std::string& title, const std::string& message, time_t timestamp) {
     Notification new_notif;
     new_notif.id = get_next_unique_id();
     new_notif.title = title;
     new_notif.message = message;
-    new_notif.timestamp = timestamp; // Usa el timestamp proporcionado
+    new_notif.timestamp = timestamp; // Use the provided future timestamp
     new_notif.is_read = false;
     
     s_notifications.push_back(new_notif);
     ESP_LOGI(TAG, "Added new notification (ID: %lu, Timestamp: %ld): '%s'", new_notif.id, (long)new_notif.timestamp, new_notif.title.c_str());
     save_notifications();
 }
-
-// ... (El resto de funciones como get_unread_notifications, etc., permanecen igual)
-// --- La parte inferior del archivo no cambia ---
 
 std::vector<Notification> NotificationManager::get_unread_notifications() {
     std::vector<Notification> unread;
@@ -87,7 +80,7 @@ std::vector<Notification> NotificationManager::get_pending_notifications() {
     std::vector<Notification> pending;
     time_t now = time(NULL);
     for (const auto& notif : s_notifications) {
-        if (!notif.is_read && notif.timestamp > now) {
+        if (notif.timestamp > now) { // A pending notification is simply one in the future
             pending.push_back(notif);
         }
     }

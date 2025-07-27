@@ -12,7 +12,8 @@
  * @brief Manages the display of pending and unread notifications.
  *
  * This view first presents a selection screen to choose between "Pending"
- * and "Unread" notifications. It then displays the corresponding list.
+ * and "Unread" notifications. It then displays the corresponding list and
+ * automatically refreshes if the underlying data changes.
  */
 class NotificationHistoryView : public View {
 public:
@@ -38,6 +39,7 @@ private:
     lv_obj_t* selector_container = nullptr;
     lv_obj_t* list_container = nullptr;
     lv_group_t* group = nullptr;
+    lv_timer_t* refresh_timer = nullptr; // Timer to auto-refresh the list
 
     // --- Data ---
     std::vector<Notification> current_notifications;
@@ -46,9 +48,11 @@ private:
     void setup_selector_ui();
     void setup_list_ui();
     void cleanup_ui();
+    void stop_refresh_timer();
 
     // --- Private Methods for UI Logic ---
     void populate_list();
+    void refresh_list_content();
     void handle_item_selection();
     void handle_popup_close(popup_result_t result);
 
@@ -64,6 +68,7 @@ private:
     static void right_press_cb(void* user_data);
     static void list_event_cb(lv_event_t* e);
     static void popup_close_cb(popup_result_t result, void* user_data);
+    static void refresh_list_cb(lv_timer_t* timer);
 };
 
 #endif // NOTIFICATION_HISTORY_VIEW_H

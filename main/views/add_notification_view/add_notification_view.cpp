@@ -4,22 +4,10 @@
 #include "controllers/notification_manager/notification_manager.h"
 #include "components/status_bar_component/status_bar_component.h"
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include <time.h>
 #include <string>
 
 static const char *TAG = "ADD_NOTIF_VIEW";
-
-// Struct to pass all necessary data to the FreeRTOS task.
-struct NotificationTaskParams {
-    std::string title;
-    std::string message;
-    time_t timestamp; // Store the final timestamp here
-    int delay_seconds; // Store the delay for the task
-};
-
-// --- Constructor, Destructor, and UI Setup methods are unchanged ---
 
 AddNotificationView::AddNotificationView() {
     ESP_LOGI(TAG, "AddNotificationView constructed");
@@ -95,50 +83,35 @@ void AddNotificationView::setup_button_handlers() {
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, [](void* d) { lv_group_focus_next(static_cast<AddNotificationView*>(d)->input_group); }, true, this);
 }
 
-// --- UI Logic ---
 void AddNotificationView::save_notification(int delay_seconds) {
-    ESP_LOGI(TAG, "Scheduling notification with %d-second delay.", delay_seconds);
+    ESP_LOGI(TAG, "Creating notification with %d-second delay.", delay_seconds);
 
-    // Task function to be run in the background
-    auto task_func = [](void* params) {
-        auto* task_params = static_cast<NotificationTaskParams*>(params);
-        ESP_LOGI(TAG, "[Delayed Task] Started, waiting %d seconds...", task_params->delay_seconds);
-        
-        // --- FIX: Use delay_seconds from the captured struct ---
-        vTaskDelay(pdMS_TO_TICKS(task_params->delay_seconds * 1000));
-        
-        ESP_LOGI(TAG, "[Delayed Task] Adding notification now.");
-        // Pass the pre-calculated future timestamp to the manager
-        NotificationManager::add_notification(task_params->title, task_params->message, task_params->timestamp);
-
-        delete task_params;
-        ESP_LOGI(TAG, "[Delayed Task] Finished, deleting task.");
-        vTaskDelete(NULL);
-    };
-
-    // Calculate the future time and store it in the params struct.
+    // Calculate the exact future time the notification should trigger.
     time_t future_timestamp = time(NULL) + delay_seconds;
-    
-    auto* params = new NotificationTaskParams();
-    params->title = "Notification at " + std::to_string(future_timestamp);
-    params->message = "This notification was scheduled.";
-    params->timestamp = future_timestamp;
-    params->delay_seconds = delay_seconds; // Store the delay in the struct
 
-    xTaskCreate(task_func, "notif_delay_task", 4096, params, 5, NULL);
+    // Create a descriptive title and message.
+    std::string title = "Scheduled Alert";
+    char message_buf[128];
+    snprintf(message_buf, sizeof(message_buf), "This alert was scheduled to trigger after %d seconds.", delay_seconds);
+    std::string message = message_buf;
+
+    // Immediately add the notification with its future timestamp to the manager.
+    NotificationManager::add_notification(title, message, future_timestamp);
     
-    // Show a temporary confirmation message
+    // Show a temporary confirmation message on the screen.
     lv_obj_t* label = lv_label_create(lv_screen_active());
     lv_label_set_text(label, "Notification Scheduled!");
     lv_obj_center(label);
     
-    lv_timer_create([](lv_timer_t* t){
+    // Create a one-shot timer to automatically return to the menu.
+    lv_timer_t* timer = lv_timer_create([](lv_timer_t* t){
+        // The object attached to the timer is deleted, so we can navigate away.
+        void* user_data = lv_timer_get_user_data(t);
+        lv_obj_del(static_cast<lv_obj_t*>(user_data)); 
         view_manager_load_view(VIEW_ID_MENU);
-    }, 1500, NULL);
-    lv_timer_set_repeat_count(lv_timer_get_next(NULL), 1);
+    }, 1500, label);
+    lv_timer_set_repeat_count(timer, 1);
 }
-
-// --- Instance Methods and Static Callbacks are unchanged ---
 
 void AddNotificationView::on_ok_press() {
     if (!input_group) return;

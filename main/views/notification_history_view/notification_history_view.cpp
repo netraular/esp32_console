@@ -7,14 +7,12 @@
 
 static const char *TAG = "NOTIF_HIST_VIEW";
 
-// ... (Constructor, destructor, create, cleanup_ui, setup_selector_ui permanecen igual)
-// --- La parte superior del archivo no cambia ---
-
 NotificationHistoryView::NotificationHistoryView() {
     ESP_LOGI(TAG, "NotificationHistoryView constructed");
 }
 
 NotificationHistoryView::~NotificationHistoryView() {
+    stop_refresh_timer();
     cleanup_ui();
     ESP_LOGI(TAG, "NotificationHistoryView destructed");
 }
@@ -43,7 +41,16 @@ void NotificationHistoryView::cleanup_ui() {
     }
 }
 
+void NotificationHistoryView::stop_refresh_timer() {
+    if (refresh_timer) {
+        ESP_LOGI(TAG, "Stopping refresh timer.");
+        lv_timer_del(refresh_timer);
+        refresh_timer = nullptr;
+    }
+}
+
 void NotificationHistoryView::setup_selector_ui() {
+    stop_refresh_timer();
     cleanup_ui();
     current_state = STATE_SELECTING;
 
@@ -76,8 +83,8 @@ void NotificationHistoryView::setup_selector_ui() {
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, right_press_cb, true, this);
 }
 
-// --- FUNCIÓN MODIFICADA CON LOGS ---
 void NotificationHistoryView::setup_list_ui() {
+    stop_refresh_timer();
     cleanup_ui();
     current_state = STATE_SHOWING_LIST;
 
@@ -96,7 +103,6 @@ void NotificationHistoryView::setup_list_ui() {
     }
     ESP_LOGI(TAG, "Setting up list view for '%s' notifications. Found %d items.", list_name, current_notifications.size());
 
-
     if (current_notifications.empty()) {
         lv_obj_t* label = lv_label_create(list_container);
         lv_label_set_text(label, current_list_type == LIST_TYPE_PENDING ? "No pending notifications" : "No unread notifications");
@@ -114,9 +120,11 @@ void NotificationHistoryView::setup_list_ui() {
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, cancel_press_cb, true, this);
     button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, left_press_cb, true, this);
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, right_press_cb, true, this);
+
+    ESP_LOGI(TAG, "Starting refresh timer for the list view.");
+    refresh_timer = lv_timer_create(refresh_list_cb, 2000, this);
 }
 
-// --- FUNCIÓN MODIFICADA CON LOGS ---
 void NotificationHistoryView::populate_list() {
     lv_obj_t* list = lv_obj_get_child(list_container, 0);
     if (!list) return;
@@ -149,20 +157,36 @@ void NotificationHistoryView::populate_list() {
     ESP_LOGI(TAG, "--- End of Notification List ---");
 }
 
-// ... (El resto de funciones permanecen igual)
-// --- La parte inferior del archivo no cambia ---
+void NotificationHistoryView::refresh_list_content() {
+    std::vector<Notification> new_notifications;
+    if (current_list_type == LIST_TYPE_PENDING) {
+        new_notifications = NotificationManager::get_pending_notifications();
+    } else {
+        new_notifications = NotificationManager::get_unread_notifications();
+    }
+
+    if (new_notifications.size() != current_notifications.size()) {
+        ESP_LOGI(TAG, "Data has changed (old: %d, new: %d), refreshing list UI.", current_notifications.size(), new_notifications.size());
+        setup_list_ui();
+    }
+}
 
 void NotificationHistoryView::handle_item_selection() {
     if (!group) return;
     lv_obj_t* focused_btn = lv_group_get_focused(group);
     if (!focused_btn) return;
+
     size_t index = (size_t)lv_obj_get_user_data(focused_btn);
+
     if (index < current_notifications.size()) {
         const Notification& selected_notif = current_notifications[index];
         ESP_LOGI(TAG, "Showing details for notification ID: %lu", selected_notif.id);
+
         if (current_list_type == LIST_TYPE_UNREAD) {
             NotificationManager::mark_as_read(selected_notif.id);
         }
+
+        stop_refresh_timer(); // Pause refresh while popup is active
         popup_manager_show_alert(selected_notif.title.c_str(), selected_notif.message.c_str(), popup_close_cb, this);
     }
 }
@@ -170,14 +194,15 @@ void NotificationHistoryView::handle_item_selection() {
 void NotificationHistoryView::handle_popup_close(popup_result_t result) {
     if (current_list_type == LIST_TYPE_UNREAD) {
         ESP_LOGI(TAG, "Unread notification viewed, refreshing list.");
-        setup_list_ui();
+        setup_list_ui(); // This will refresh the list and restart the timer
     } else {
-        ESP_LOGI(TAG, "Pending notification viewed, re-enabling input.");
+        ESP_LOGI(TAG, "Pending notification viewed, re-enabling input and restarting timer.");
         button_manager_unregister_view_handlers();
         button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ok_press_cb, true, this);
         button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, cancel_press_cb, true, this);
         button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, left_press_cb, true, this);
         button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, right_press_cb, true, this);
+        refresh_timer = lv_timer_create(refresh_list_cb, 2000, this); // Restart timer
     }
 }
 
@@ -235,4 +260,9 @@ void NotificationHistoryView::list_event_cb(lv_event_t* e) {
 
 void NotificationHistoryView::popup_close_cb(popup_result_t result, void* user_data) {
     static_cast<NotificationHistoryView*>(user_data)->handle_popup_close(result);
+}
+
+void NotificationHistoryView::refresh_list_cb(lv_timer_t* timer) {
+    auto* view = static_cast<NotificationHistoryView*>(lv_timer_get_user_data(timer));
+    view->refresh_list_content();
 }
