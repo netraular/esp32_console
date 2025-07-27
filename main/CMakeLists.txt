@@ -1,61 +1,20 @@
-idf_component_register(SRCS 
-        # --- Main Entry Point ---
-        "main.cpp"
+# --- Detección Automática de Ficheros Fuente ---
+# Busca recursivamente todos los ficheros .c y .cpp dentro del directorio 'main'
+# y sus subdirectorios. Esto elimina la necesidad de añadir manualmente cada
+# nuevo fichero a la lista de SRCS.
+file(GLOB_RECURSE MAIN_SRCS 
+    "*.cpp"
+    "*.c"
+)
 
-        # --- Controllers ---
-        "./controllers/audio_manager/audio_manager.cpp"
-        "./controllers/audio_recorder/audio_recorder.cpp"
-        "./controllers/button_manager/button_manager.cpp"
-        "./controllers/data_manager/data_manager.cpp"
-        "./controllers/littlefs_manager/littlefs_manager.cpp"
-        "./controllers/notification_manager/notification_manager.cpp"
-        "./controllers/power_manager/power_manager.cpp"
-        "./controllers/screen_manager/screen_manager.cpp"
-        "./controllers/sd_card_manager/sd_card_manager.cpp"
-        "./controllers/habit_data_manager/habit_data_manager.cpp"
-        "./controllers/stt_manager/stt_manager.cpp"
-        "./controllers/wifi_manager/wifi_manager.cpp"
-        "./controllers/wifi_streamer/wifi_streamer.cpp"
-        "./controllers/lvgl_vfs_driver/lvgl_fs_driver.cpp"
-
-        # --- Reusable UI Components ---
-        "./components/audio_player_component/audio_player_component.cpp"
-        "./components/audio_visualizer/audio_visualizer.cpp"
-        "./components/file_explorer/file_explorer.cpp"
-        "./components/status_bar_component/status_bar_component.cpp"
-        "./components/text_viewer/text_viewer.cpp"
-        "./components/popup_manager/popup_manager.cpp"
-
-        # --- Views (Class-based) ---
-        "./views/view_manager.cpp"
-        "./views/add_notification_view/add_notification_view.cpp"
-        "./views/notification_history_view/notification_history_view.cpp" # <-- ADDED
-        "./views/standby_view/standby_view.cpp"
-        "./views/menu_view/menu_view.cpp"
-        "./views/multi_click_test_view/multi_click_test_view.cpp"
-        "./views/click_counter_view/click_counter_view.cpp"
-        "./views/click_counter_view/assets/coin_pile.c"
-        "./views/image_test_view/image_test_view.cpp"
-        "./views/littlefs_test_view/littlefs_test_view.cpp"
-        "./views/sd_test_view/sd_test_view.cpp"
-        "./views/speaker_test_view/speaker_test_view.cpp"
-        "./views/mic_test_view/mic_test_view.cpp"
-        "./views/pomodoro_view/pomodoro_view.cpp"
-        "./views/pomodoro_view/components/pomodoro_config_component.cpp"
-        "./views/pomodoro_view/components/pomodoro_timer_component.cpp"
-        "./views/voice_note_view/voice_note_view.cpp"
-        "./views/voice_note_player_view/voice_note_player_view.cpp"
-        "./views/volume_tester_view/volume_tester_view.cpp"
-        "./views/popup_test_view/popup_test_view.cpp"
-        "./views/wifi_stream_view/wifi_stream_view.cpp"
-        "./views/habit_manager_view/habit_manager_view.cpp"
-        "./views/habit_category_manager_view/habit_category_manager_view.cpp"
-        "./views/habit_add_view/habit_add_view.cpp"
-        "./views/track_habits_view/track_habits_view.cpp"
-        "./views/habit_history_view/habit_history_view.cpp"
+# --- Registro del Componente 'main' ---
+idf_component_register(
+    # Variable que ahora contiene todos nuestros ficheros fuente
+    SRCS ${MAIN_SRCS}
 
     INCLUDE_DIRS "." "models"
-    # Declara TODAS las dependencias para el componente 'main'
+    
+    # Dependencias para el componente 'main'
     REQUIRES 
         # --- Componentes del Registro IDF (de idf_component.yml) ---
         button              # Para iot_button en button_manager
