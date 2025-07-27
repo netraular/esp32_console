@@ -33,18 +33,32 @@ void NotificationManager::init() {
 }
 
 void NotificationManager::dispatcher_task(lv_timer_t* timer) {
-    if (view_manager_get_current_view_id() != VIEW_ID_STANDBY) return;
-    if (popup_manager_is_active()) return;
+    // Only dispatch popups if the user is on the standby screen and no other popup is active.
+    if (view_manager_get_current_view_id() != VIEW_ID_STANDBY || popup_manager_is_active()) {
+        return;
+    }
+
     time_t now = time(NULL);
+    // Defines a 1-second window to catch notifications. This prevents stale notifications
+    // that expired while the user was in another view from popping up upon returning to standby.
+    // A notification will only trigger a popup if its timestamp falls within this exact moment.
+    time_t one_second_ago = now - 1;
+
     auto it = std::find_if(s_notifications.begin(), s_notifications.end(), 
         [&](const Notification& notif) {
-            return !notif.is_read && notif.timestamp <= now;
+            return !notif.is_read && notif.timestamp <= now && notif.timestamp > one_second_ago;
         });
-    if (it == s_notifications.end()) return; 
-    Notification& notif_to_show = *it;
-    ESP_LOGI(TAG, "Dispatching notification popup for ID: %lu to StandbyView", notif_to_show.id);
-    StandbyView::show_notification_popup(notif_to_show);
-    mark_as_read(notif_to_show.id);
+
+    if (it != s_notifications.end()) {
+        Notification& notif_to_show = *it;
+        ESP_LOGI(TAG, "Dispatching notification popup for ID: %lu to StandbyView", notif_to_show.id);
+        
+        // Delegate the presentation of the popup to the StandbyView itself.
+        StandbyView::show_notification_popup(notif_to_show);
+        
+        // Mark as read immediately to prevent re-triggering.
+        mark_as_read(notif_to_show.id);
+    }
 }
 
 uint32_t NotificationManager::get_next_unique_id() { return s_next_id++; }
@@ -54,7 +68,7 @@ void NotificationManager::add_notification(const std::string& title, const std::
     new_notif.id = get_next_unique_id();
     new_notif.title = title;
     new_notif.message = message;
-    new_notif.timestamp = timestamp; // Use the provided future timestamp
+    new_notif.timestamp = timestamp;
     new_notif.is_read = false;
     
     s_notifications.push_back(new_notif);
@@ -66,10 +80,12 @@ std::vector<Notification> NotificationManager::get_unread_notifications() {
     std::vector<Notification> unread;
     time_t now = time(NULL);
     for (const auto& notif : s_notifications) {
+        // An unread notification is one whose time has passed but has not been acknowledged.
         if (!notif.is_read && notif.timestamp <= now) {
             unread.push_back(notif);
         }
     }
+    // Sort by most recent first
     std::sort(unread.begin(), unread.end(), [](const Notification& a, const Notification& b) {
         return a.timestamp > b.timestamp;
     });
@@ -80,10 +96,12 @@ std::vector<Notification> NotificationManager::get_pending_notifications() {
     std::vector<Notification> pending;
     time_t now = time(NULL);
     for (const auto& notif : s_notifications) {
-        if (notif.timestamp > now) { // A pending notification is simply one in the future
+        // A pending notification is one set for a future time.
+        if (notif.timestamp > now) {
             pending.push_back(notif);
         }
     }
+    // Sort by soonest first
     std::sort(pending.begin(), pending.end(), [](const Notification& a, const Notification& b) {
         return a.timestamp < b.timestamp;
     });
@@ -132,7 +150,7 @@ void NotificationManager::save_notifications() {
     json_gen_end_array(&jstr);
     json_gen_str_end(&jstr);
     if (littlefs_manager_write_file(NOTIFICATIONS_FILE_PATH, json_buffer.get())) {
-        ESP_LOGI(TAG, "Successfully saved %d notifications to LittleFS.", s_notifications.size());
+        ESP_LOGD(TAG, "Successfully saved %d notifications to LittleFS.", s_notifications.size());
     } else {
         ESP_LOGE(TAG, "Failed to save notifications to LittleFS.");
     }
@@ -146,7 +164,7 @@ void NotificationManager::load_notifications() {
         if(file_buffer) free(file_buffer);
         return;
     }
-    ESP_LOGI(TAG, "Found notifications file, parsing...");
+    ESP_LOGD(TAG, "Found notifications file, parsing...");
     jparse_ctx_t jctx;
     int ret = json_parse_start(&jctx, file_buffer, file_size);
     if (ret != 0) {
