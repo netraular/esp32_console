@@ -6,7 +6,7 @@
 #include "components/popup_manager/popup_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
 #include "controllers/littlefs_manager/littlefs_manager.h"
-#include "views/standby_view/standby_view.h"
+#include "views/core/standby_view/standby_view.h"
 #include "json_generator.h"
 #include "json_parser.h"
 #include "jsmn.h"

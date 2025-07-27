@@ -7,28 +7,34 @@
 
 // Include all view headers
 #include "view.h"
-#include "standby_view/standby_view.h"
-#include "menu_view/menu_view.h"
-#include "multi_click_test_view/multi_click_test_view.h"
-#include "click_counter_view/click_counter_view.h"
-#include "image_test_view/image_test_view.h"
-#include "littlefs_test_view/littlefs_test_view.h"
-#include "sd_test_view/sd_test_view.h"
-#include "speaker_test_view/speaker_test_view.h"
-#include "mic_test_view/mic_test_view.h"
-#include "pomodoro_view/pomodoro_view.h"
-#include "voice_note_view/voice_note_view.h"
-#include "voice_note_player_view/voice_note_player_view.h"
-#include "volume_tester_view/volume_tester_view.h"
-#include "wifi_stream_view/wifi_stream_view.h"
-#include "popup_test_view/popup_test_view.h"
-#include "habit_manager_view/habit_manager_view.h"
-#include "habit_category_manager_view/habit_category_manager_view.h"
-#include "habit_add_view/habit_add_view.h"
-#include "track_habits_view/track_habits_view.h"
-#include "habit_history_view/habit_history_view.h"
-#include "add_notification_view/add_notification_view.h"
-#include "notification_history_view/notification_history_view.h" // <-- ADDED
+// Core Views
+#include "views/core/standby_view/standby_view.h"
+#include "views/core/menu_view/menu_view.h"
+// Habit Views
+#include "views/habits/habit_add_view/habit_add_view.h"
+#include "views/habits/habit_category_manager_view/habit_category_manager_view.h"
+#include "views/habits/habit_history_view/habit_history_view.h"
+#include "views/habits/habit_manager_view/habit_manager_view.h"
+#include "views/habits/track_habits_view/track_habits_view.h"
+// Notification Views
+#include "views/notifications/add_notification_view/add_notification_view.h"
+#include "views/notifications/notification_history_view/notification_history_view.h"
+// Pomodoro View
+#include "views/pomodoro_view/pomodoro_view.h"
+// Testing Views
+#include "views/testing/click_counter_view/click_counter_view.h"
+#include "views/testing/image_test_view/image_test_view.h"
+#include "views/testing/littlefs_test_view/littlefs_test_view.h"
+#include "views/testing/mic_test_view/mic_test_view.h"
+#include "views/testing/multi_click_test_view/multi_click_test_view.h"
+#include "views/testing/popup_test_view/popup_test_view.h"
+#include "views/testing/sd_test_view/sd_test_view.h"
+#include "views/testing/speaker_test_view/speaker_test_view.h"
+#include "views/testing/volume_tester_view/volume_tester_view.h"
+#include "views/testing/wifi_stream_view/wifi_stream_view.h"
+// Voice Note Views
+#include "views/voice_note/voice_note_view/voice_note_view.h"
+#include "views/voice_note/voice_note_player_view/voice_note_player_view.h"
 
 static const char *TAG = "VIEW_MGR";
 

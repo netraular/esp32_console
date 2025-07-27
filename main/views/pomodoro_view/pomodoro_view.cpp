@@ -1,5 +1,5 @@
 #include "pomodoro_view.h"
-#include "../view_manager.h"
+#include "views/view_manager.h"
 #include "components/pomodoro_config_component.h"
 #include "components/pomodoro_timer_component.h"
 #include "esp_log.h"
