@@ -6,8 +6,8 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <time.h> // <-- ADDED for time()
-#include <string> // <-- ADDED for std::to_string
+#include <time.h>
+#include <string>
 
 static const char *TAG = "ADD_NOTIF_VIEW";
 
@@ -116,22 +116,30 @@ void AddNotificationView::save_notification(bool is_delayed) {
     // Generate the content automatically
     time_t now = time(NULL);
     std::string title = "Notification at " + std::to_string(now);
-    std::string message = "Hello World";
+    std::string message = "This is a test notification message.";
     
     if (is_delayed) {
         ESP_LOGI(TAG, "Creating notification with 10s delay.");
         // Use a simple FreeRTOS task to handle the delay.
         auto task_func = [](void* params) {
+            ESP_LOGI(TAG, "[Delayed Task] Started, waiting 10s...");
             auto* notif_data = static_cast<std::pair<std::string, std::string>*>(params);
             vTaskDelay(pdMS_TO_TICKS(10000));
+            
+            ESP_LOGI(TAG, "[Delayed Task] Adding notification now.");
             NotificationManager::add_notification(notif_data->first, notif_data->second);
+
             delete notif_data; // Clean up the allocated data
+            ESP_LOGI(TAG, "[Delayed Task] Finished, deleting task.");
             vTaskDelete(NULL); // Delete the task
         };
         
         // We must copy the strings to the heap so they are valid when the task runs.
         auto* data = new std::pair<std::string, std::string>(title, message);
-        xTaskCreate(task_func, "notif_delay_task", 2048, data, 5, NULL);
+
+        // Increased stack size to prevent stack overflow.
+        // File I/O and C++ libraries in the call chain require more stack.
+        xTaskCreate(task_func, "notif_delay_task", 4096, data, 5, NULL);
 
     } else {
         ESP_LOGI(TAG, "Creating notification now.");
@@ -143,11 +151,11 @@ void AddNotificationView::save_notification(bool is_delayed) {
     lv_label_set_text(label, "Notification Created!");
     lv_obj_center(label);
     
-    // Create a timer to go back to the menu after a short delay
+    // Create a one-shot timer to go back to the menu after a short delay
     lv_timer_create([](lv_timer_t* t){
         view_manager_load_view(VIEW_ID_MENU);
-    }, 1500, nullptr);
-    lv_timer_set_repeat_count(lv_timer_get_next(nullptr), 1);
+    }, 1500, NULL);
+    lv_timer_set_repeat_count(lv_timer_get_next(NULL), 1);
 }
 
 // --- Instance Methods for Button Actions ---

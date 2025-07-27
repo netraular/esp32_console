@@ -28,7 +28,7 @@ idf_component_register(SRCS
 
         # --- Views (Class-based) ---
         "./views/view_manager.cpp"
-        "./views/add_notification_view/add_notification_view.cpp" # <-- ADDED
+        "./views/add_notification_view/add_notification_view.cpp"
         "./views/standby_view/standby_view.cpp"
         "./views/menu_view/menu_view.cpp"
         "./views/multi_click_test_view/multi_click_test_view.cpp"
@@ -54,6 +54,30 @@ idf_component_register(SRCS
         "./views/habit_history_view/habit_history_view.cpp"
 
     INCLUDE_DIRS "." "models"
+    # Declara TODAS las dependencias para el componente 'main'
+    REQUIRES 
+        # --- Componentes del Registro IDF (de idf_component.yml) ---
+        button              # Para iot_button en button_manager
+        littlefs            # Para esp_littlefs en littlefs_manager
+        # jsmn              # <-- ELIMINADO. Se gestiona a través de json_parser
+        json_parser         # <<< PARA notification_manager
+        json_generator      # <<< PARA notification_manager
+
+        # --- Componentes del Sistema ESP-IDF (usados por los controladores) ---
+        driver              # Para GPIO, SPI, I2S
+        esp_wifi            # Para wifi_manager
+        esp_netif           # Para wifi_manager
+        esp_event           # Para wifi_manager
+        esp_lcd             # Para screen_manager
+        nvs_flash           # Para data_manager y wifi_manager
+        fatfs               # PARA sd_card_manager (esp_vfs_fat.h)
+        sdmmc               # PARA sd_card_manager
+        esp_http_client     # PARA stt_manager
+        esp-tls             # PARA stt_manager (HTTPS)
+        esp_system          # PARA power_manager (esp_sleep.h)
+        esp_rom             # PARA funciones ROM (ej. en audio_manager)
+        json                # PARA stt_manager (cJSON.h)
+
     EMBED_FILES 
         "./server_certs/groq_api_ca.pem"
         "./littlefs/welcome.txt"

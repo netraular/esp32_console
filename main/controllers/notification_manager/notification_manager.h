@@ -21,7 +21,10 @@ private:
     static lv_timer_t* s_dispatcher_timer;
     static uint32_t get_next_unique_id();
     static void dispatcher_task(lv_timer_t* timer); 
-    // REMOVED on_popup_closed
+
+    // --- Persistence ---
+    static void load_notifications();
+    static void save_notifications();
 };
 
 #endif // NOTIFICATION_MANAGER_H
