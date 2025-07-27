@@ -5,3 +5,5 @@ dependencies:
   espressif/button: ^4.0.0
   joltwallet/littlefs: ^1.20.1
   espressif/libpng: ^1.6.39~1
+  espressif/json_generator: ^1.1.2
+  espressif/json_parser: ^1.0.3

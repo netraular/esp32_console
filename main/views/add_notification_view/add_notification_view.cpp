@@ -6,7 +6,8 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <cstring> // <-- ADDED: This fixes the 'strlen' error
+#include <time.h> // <-- ADDED for time()
+#include <string> // <-- ADDED for std::to_string
 
 static const char *TAG = "ADD_NOTIF_VIEW";
 
@@ -17,12 +18,12 @@ AddNotificationView::AddNotificationView() {
 
 AddNotificationView::~AddNotificationView() {
     if (input_group) {
-        // LVGL groups are not objects, so we don't need to check for lv_obj_is_valid.
-        // The group is automatically invalidated if the screen is cleared,
-        // but it's good practice to delete it if we created it.
         lv_group_del(input_group);
         input_group = nullptr;
     }
+    // Clean up the styles we created
+    lv_style_reset(&style_btn_default);
+    lv_style_reset(&style_btn_focused);
     ESP_LOGI(TAG, "AddNotificationView destructed");
 }
 
@@ -33,93 +34,93 @@ void AddNotificationView::create(lv_obj_t* parent) {
     lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
     lv_obj_center(container);
 
+    init_styles(); // Initialize styles first
     setup_ui(container);
     setup_button_handlers();
+}
+
+// --- Style Initialization ---
+void AddNotificationView::init_styles() {
+    // This style is very similar to the one in popup_manager.
+    // In a larger project, you might move this to a global "Theme" manager.
+    
+    // --- Default button style (white with blue border) ---
+    lv_style_init(&style_btn_default);
+    lv_style_set_radius(&style_btn_default, 6);
+    lv_style_set_bg_color(&style_btn_default, lv_color_white());
+    lv_style_set_bg_opa(&style_btn_default, LV_OPA_100);
+    lv_style_set_border_color(&style_btn_default, lv_palette_main(LV_PALETTE_BLUE));
+    lv_style_set_border_width(&style_btn_default, 2);
+    lv_style_set_text_color(&style_btn_default, lv_palette_main(LV_PALETTE_BLUE));
+
+    // --- Focused button style (blue with white text) ---
+    lv_style_init(&style_btn_focused);
+    lv_style_set_bg_color(&style_btn_focused, lv_palette_main(LV_PALETTE_BLUE));
+    lv_style_set_text_color(&style_btn_focused, lv_color_white());
 }
 
 // --- UI & Handler Setup ---
 void AddNotificationView::setup_ui(lv_obj_t* parent) {
     status_bar_create(parent);
     
-    // Create a container for the form elements
-    lv_obj_t* form_cont = lv_obj_create(parent);
-    lv_obj_set_size(form_cont, LV_PCT(95), LV_PCT(80));
-    lv_obj_align(form_cont, LV_ALIGN_BOTTOM_MID, 0, -10);
-    lv_obj_set_flex_flow(form_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(form_cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(form_cont, 10, 0);
+    // Main container for the buttons
+    lv_obj_t* cont = lv_obj_create(parent);
+    lv_obj_set_size(cont, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_center(cont);
+    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(cont, 20, 0);
 
-    // Title Text Area
-    lv_obj_t* title_label = lv_label_create(form_cont);
-    lv_label_set_text(title_label, "Title");
-    title_textarea = lv_textarea_create(form_cont);
-    lv_textarea_set_one_line(title_textarea, true);
-    lv_obj_set_width(title_textarea, LV_PCT(100));
-    lv_textarea_set_placeholder_text(title_textarea, "Notification Title");
+    // Info Label
+    lv_obj_t* info_label = lv_label_create(cont);
+    lv_label_set_text(info_label, "Create a test notification");
+    lv_obj_set_style_text_font(info_label, &lv_font_montserrat_20, 0);
 
-    // Message Text Area
-    lv_obj_t* msg_label = lv_label_create(form_cont);
-    lv_label_set_text(msg_label, "Message");
-    message_textarea = lv_textarea_create(form_cont);
-    lv_obj_set_width(message_textarea, LV_PCT(100));
-    lv_textarea_set_placeholder_text(message_textarea, "Your message here...");
-
-    // Buttons container
-    lv_obj_t* btn_cont = lv_obj_create(form_cont);
-    lv_obj_remove_style_all(btn_cont);
-    lv_obj_set_width(btn_cont, LV_PCT(100));
-    lv_obj_set_height(btn_cont, LV_SIZE_CONTENT);
-    lv_obj_set_layout(btn_cont, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(btn_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(btn_cont, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    // Save Button
-    save_button = lv_button_create(btn_cont);
-    lv_obj_t* save_label = lv_label_create(save_button);
-    lv_label_set_text(save_label, "Save Now");
-    lv_obj_add_event_cb(save_button, save_event_cb, LV_EVENT_CLICKED, this);
+    // Save Now Button
+    save_now_button = lv_button_create(cont);
+    lv_obj_t* save_label = lv_label_create(save_now_button);
+    lv_label_set_text(save_label, "Create Now");
+    lv_obj_add_event_cb(save_now_button, save_now_event_cb, LV_EVENT_CLICKED, this);
+    // Apply custom styles
+    lv_obj_add_style(save_now_button, &style_btn_default, LV_STATE_DEFAULT);
+    lv_obj_add_style(save_now_button, &style_btn_focused, LV_STATE_FOCUSED);
 
     // Save Later Button
-    save_later_button = lv_button_create(btn_cont);
+    save_later_button = lv_button_create(cont);
     lv_obj_t* save_later_label = lv_label_create(save_later_button);
-    lv_label_set_text(save_later_label, "Save (10s)");
+    lv_label_set_text(save_later_label, "Create (10s Delay)");
     lv_obj_add_event_cb(save_later_button, save_later_event_cb, LV_EVENT_CLICKED, this);
+    // Apply custom styles
+    lv_obj_add_style(save_later_button, &style_btn_default, LV_STATE_DEFAULT);
+    lv_obj_add_style(save_later_button, &style_btn_focused, LV_STATE_FOCUSED);
 
-    // Create a group to manage focus between the input elements
+    // Create a group to manage focus between the buttons
     input_group = lv_group_create();
-    lv_group_add_obj(input_group, title_textarea);
-    lv_group_add_obj(input_group, message_textarea);
-    lv_group_add_obj(input_group, save_button);
+    lv_group_add_obj(input_group, save_now_button);
     lv_group_add_obj(input_group, save_later_button);
-    lv_group_set_wrap(input_group, true); // Allow focus to wrap around
+    lv_group_set_wrap(input_group, true);
 }
 
 void AddNotificationView::setup_button_handlers() {
     button_manager_unregister_view_handlers();
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ok_press_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, cancel_press_cb, true, this);
-    // Use Left/Right for navigation between form elements
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, left_press_cb, true, this);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, right_press_cb, true, this);
+    // Use Left/Right to navigate between the two buttons
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, [](void* d) { lv_group_focus_prev(static_cast<AddNotificationView*>(d)->input_group); }, true, this);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, [](void* d) { lv_group_focus_next(static_cast<AddNotificationView*>(d)->input_group); }, true, this);
 }
 
 // --- UI Logic ---
 
 void AddNotificationView::save_notification(bool is_delayed) {
-    const char* title = lv_textarea_get_text(title_textarea);
-    const char* message = lv_textarea_get_text(message_textarea);
-
-    if (strlen(title) == 0 || strlen(message) == 0) {
-        // Optional: Show a popup to the user indicating fields are empty
-        ESP_LOGW(TAG, "Title or message is empty. Not saving.");
-        return;
-    }
+    // Generate the content automatically
+    time_t now = time(NULL);
+    std::string title = "Notification at " + std::to_string(now);
+    std::string message = "Hello World";
     
     if (is_delayed) {
-        ESP_LOGI(TAG, "Saving notification with 10s delay.");
-        // We use a simple FreeRTOS task to handle the delay.
-        // This is a bit heavy for a simple delay, a timer would also work,
-        // but this demonstrates a pattern that could be used for more complex background tasks.
+        ESP_LOGI(TAG, "Creating notification with 10s delay.");
+        // Use a simple FreeRTOS task to handle the delay.
         auto task_func = [](void* params) {
             auto* notif_data = static_cast<std::pair<std::string, std::string>*>(params);
             vTaskDelay(pdMS_TO_TICKS(10000));
@@ -133,21 +134,20 @@ void AddNotificationView::save_notification(bool is_delayed) {
         xTaskCreate(task_func, "notif_delay_task", 2048, data, 5, NULL);
 
     } else {
-        ESP_LOGI(TAG, "Saving notification now.");
+        ESP_LOGI(TAG, "Creating notification now.");
         NotificationManager::add_notification(title, message);
     }
     
-    // After saving, go back to the menu
-    view_manager_load_view(VIEW_ID_MENU);
-}
-
-void AddNotificationView::navigate_focus(bool forward) {
-    if (!input_group) return;
-    if (forward) {
-        lv_group_focus_next(input_group);
-    } else {
-        lv_group_focus_prev(input_group);
-    }
+    // Show a temporary confirmation message before going back
+    lv_obj_t* label = lv_label_create(lv_screen_active());
+    lv_label_set_text(label, "Notification Created!");
+    lv_obj_center(label);
+    
+    // Create a timer to go back to the menu after a short delay
+    lv_timer_create([](lv_timer_t* t){
+        view_manager_load_view(VIEW_ID_MENU);
+    }, 1500, nullptr);
+    lv_timer_set_repeat_count(lv_timer_get_next(nullptr), 1);
 }
 
 // --- Instance Methods for Button Actions ---
@@ -155,7 +155,7 @@ void AddNotificationView::on_ok_press() {
     if (!input_group) return;
     lv_obj_t* focused_obj = lv_group_get_focused(input_group);
     if (focused_obj) {
-        // Send a click event to the focused object (e.g., a button)
+        // Send a click event to the focused object (the button)
         lv_obj_send_event(focused_obj, LV_EVENT_CLICKED, nullptr);
     }
 }
@@ -163,10 +163,6 @@ void AddNotificationView::on_ok_press() {
 void AddNotificationView::on_cancel_press() {
     ESP_LOGI(TAG, "Cancel pressed, returning to menu.");
     view_manager_load_view(VIEW_ID_MENU);
-}
-
-void AddNotificationView::on_nav_press(bool forward) {
-    navigate_focus(forward);
 }
 
 // --- Static Callback Bridges ---
@@ -178,15 +174,7 @@ void AddNotificationView::cancel_press_cb(void* user_data) {
     static_cast<AddNotificationView*>(user_data)->on_cancel_press();
 }
 
-void AddNotificationView::left_press_cb(void* user_data) {
-    static_cast<AddNotificationView*>(user_data)->on_nav_press(false);
-}
-
-void AddNotificationView::right_press_cb(void* user_data) {
-    static_cast<AddNotificationView*>(user_data)->on_nav_press(true);
-}
-
-void AddNotificationView::save_event_cb(lv_event_t* e) {
+void AddNotificationView::save_now_event_cb(lv_event_t* e) {
     auto* view = static_cast<AddNotificationView*>(lv_event_get_user_data(e));
     view->save_notification(false);
 }

@@ -10,6 +10,7 @@
 #define POPUP_MANAGER_H
 
 #include "lvgl.h"
+#include <stdbool.h> // Include for bool type
 
 #ifdef __cplusplus
 extern "C" {
@@ -83,7 +84,7 @@ void popup_manager_hide_loading(void);
  * @brief Checks if a modal popup (alert, confirmation, or loading) is currently active.
  * @return true if a popup is visible, false otherwise.
  */
-bool popup_manager_is_active(void); // <-- ADDED
+bool popup_manager_is_active(void);
 
 #ifdef __cplusplus
 }

@@ -4,11 +4,13 @@
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
 #include "controllers/power_manager/power_manager.h"
+#include "controllers/notification_manager/notification_manager.h"
+#include "components/popup_manager/popup_manager.h"
 #include "components/status_bar_component/status_bar_component.h"
-#include "components/popup_manager/popup_manager.h" // <-- ADDED
 #include "esp_log.h"
 #include <time.h>
 #include <cstring>
+// #include "src/core/lv_event.h" // THIS WAS INCORRECT AND IS REMOVED
 
 static const char *TAG = "STANDBY_VIEW";
 #define VOLUME_REPEAT_PERIOD_MS 200
@@ -20,19 +22,9 @@ StandbyView::StandbyView() {
 
 StandbyView::~StandbyView() {
     ESP_LOGI(TAG, "StandbyView destructed");
-
-    if (update_timer) {
-        lv_timer_del(update_timer);
-        update_timer = nullptr;
-    }
-    if (volume_up_timer) {
-        lv_timer_del(volume_up_timer);
-        volume_up_timer = nullptr;
-    }
-    if (volume_down_timer) {
-        lv_timer_del(volume_down_timer);
-        volume_down_timer = nullptr;
-    }
+    if (update_timer) lv_timer_del(update_timer);
+    if (volume_up_timer) lv_timer_del(volume_up_timer);
+    if (volume_down_timer) lv_timer_del(volume_down_timer);
 }
 
 // --- View Lifecycle ---
@@ -43,8 +35,47 @@ void StandbyView::create(lv_obj_t* parent) {
     lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
     lv_obj_center(container);
     
+    // When the screen object is deleted, this event ensures the user_data is cleared.
+    lv_obj_add_event_cb(lv_screen_active(), screen_delete_event_cb, LV_EVENT_DELETE, nullptr);
+    
+    // Associate this view instance with the screen object for static callbacks to access.
+    lv_obj_set_user_data(lv_screen_active(), this);
+    
     setup_ui(container);
     setup_main_button_handlers();
+}
+
+// --- Static Callbacks ---
+
+void StandbyView::screen_delete_event_cb(lv_event_t* e) {
+    // Using the official API getter function is the correct way for LVGL v9.
+    if (lv_event_get_code(e) == LV_EVENT_DELETE) {
+        lv_obj_set_user_data(lv_screen_active(), nullptr);
+    }
+}
+
+void StandbyView::show_notification_popup(const Notification& notif) {
+    // Play a sound
+    audio_manager_play("/sdcard/sounds/notification.wav");
+
+    // The StandbyView is responsible for showing the popup and providing its own callback.
+    popup_manager_show_alert(notif.title.c_str(), 
+                             notif.message.c_str(), 
+                             StandbyView::notification_popup_closed_cb, 
+                             nullptr);
+}
+
+void StandbyView::notification_popup_closed_cb(popup_result_t result, void* user_data) {
+    ESP_LOGI(TAG, "Notification popup closed. Re-registering button handlers for StandbyView.");
+    
+    // Find the current instance of StandbyView to call its member function.
+    StandbyView* instance = static_cast<StandbyView*>(lv_obj_get_user_data(lv_screen_active()));
+    
+    if (instance) {
+        instance->setup_main_button_handlers();
+    } else {
+        ESP_LOGE(TAG, "Could not get StandbyView instance to re-register buttons!");
+    }
 }
 
 // --- UI & Handler Setup ---
@@ -68,10 +99,11 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_add_flag(center_date_label, LV_OBJ_FLAG_HIDDEN);
 
     update_timer = lv_timer_create(StandbyView::update_clock_cb, 1000, this);
-    update_clock(); // Initial call to set state
+    update_clock();
 }
 
 void StandbyView::setup_main_button_handlers() {
+    ESP_LOGD(TAG, "Registering main button handlers for StandbyView.");
     button_manager_unregister_view_handlers();
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, StandbyView::menu_press_cb, true, this);
     button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, StandbyView::sleep_press_cb, true, this);
@@ -147,7 +179,6 @@ void StandbyView::handle_shutdown_result(popup_result_t result) {
         vTaskDelay(pdMS_TO_TICKS(500)); // Give user time to see the message
         power_manager_enter_deep_sleep();
     } else {
-        // User cancelled or dismissed. Re-enable the main view's buttons.
         ESP_LOGD(TAG, "Shutdown cancelled, re-registering main button handlers.");
         setup_main_button_handlers();
     }

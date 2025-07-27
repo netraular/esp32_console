@@ -34,7 +34,6 @@ static void init_styles() {
     if (style_initialized) return;
 
     // --- Transition properties for smooth animations ---
-    // Use padding properties for animation, as they are universally available.
     static const lv_style_prop_t props[] = {
         LV_STYLE_BG_COLOR,
         LV_STYLE_PAD_LEFT,
@@ -44,7 +43,6 @@ static void init_styles() {
         LV_STYLE_PROP_INV // Mark end of array
     };
     static lv_style_transition_dsc_t trans_dsc;
-    // Animate the properties over 150ms with an ease-out curve
     lv_style_transition_dsc_init(&trans_dsc, props, lv_anim_path_ease_out, 150, 0, NULL);
 
     // --- Default button style (white with blue border) ---
@@ -55,34 +53,25 @@ static void init_styles() {
     lv_style_set_border_color(&style_btn_default, lv_palette_main(LV_PALETTE_BLUE));
     lv_style_set_border_width(&style_btn_default, 2);
     lv_style_set_text_color(&style_btn_default, lv_palette_main(LV_PALETTE_BLUE));
-    // Set base padding
     lv_style_set_pad_hor(&style_btn_default, 15);
     lv_style_set_pad_ver(&style_btn_default, 8);
-    // Add the transition to the default state, so it animates TO other states
     lv_style_set_transition(&style_btn_default, &trans_dsc);
 
     // --- Focused button style (blue with white text, slightly larger via padding) ---
     lv_style_init(&style_btn_focused);
     lv_style_set_bg_color(&style_btn_focused, lv_palette_main(LV_PALETTE_BLUE));
     lv_style_set_text_color(&style_btn_focused, lv_color_white());
-    // Increase padding to create the "grow" effect
-    lv_style_set_pad_hor(&style_btn_focused, 18); // +3px on each side
-    lv_style_set_pad_ver(&style_btn_focused, 11); // +3px on top/bottom
+    lv_style_set_pad_hor(&style_btn_focused, 18);
+    lv_style_set_pad_ver(&style_btn_focused, 11);
 
     style_initialized = true;
 }
 
 // --- Private Functions ---
 
-/**
- * @brief Creates a semi-transparent overlay to block interaction with the background.
- */
 static void create_overlay() {
     if (s_popup_overlay) return;
-
-    // Disable the underlying view's buttons
     button_manager_unregister_view_handlers();
-
     s_popup_overlay = lv_obj_create(lv_screen_active());
     lv_obj_remove_style_all(s_popup_overlay);
     lv_obj_set_size(s_popup_overlay, LV_PCT(100), LV_PCT(100));
@@ -92,9 +81,6 @@ static void create_overlay() {
     lv_obj_center(s_popup_overlay);
 }
 
-/**
- * @brief Registers the input handlers for the popup (OK, Cancel, Left, Right).
- */
 static void setup_popup_input_handlers() {
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_ok_press, true, nullptr);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press, true, nullptr);
@@ -104,23 +90,17 @@ static void setup_popup_input_handlers() {
 
 // --- Button Handlers ---
 
-// This handler simulates a "click" on whichever button is currently focused.
 static void handle_ok_press(void* user_data) {
     if (!s_popup_group) return;
-
     lv_obj_t* focused_btn = lv_group_get_focused(s_popup_group);
     if (!focused_btn) return;
-
-    // Use lv_obj_send_event for LVGL v9
     lv_obj_send_event(focused_btn, LV_EVENT_CLICKED, NULL);
 }
 
-// The physical CANCEL button always dismisses the popup as a secondary action.
 static void handle_cancel_press(void* user_data) {
     destroy_popup_with_result(POPUP_RESULT_DISMISSED);
 }
 
-// Handles Left/Right navigation between popup buttons.
 static void handle_nav_press(void* user_data) {
     if (s_popup_group) {
         uint32_t key = (uint32_t)(uintptr_t)user_data;
@@ -142,57 +122,35 @@ static void secondary_btn_event_cb(lv_event_t * e) {
     destroy_popup_with_result(POPUP_RESULT_SECONDARY);
 }
 
-
 // --- Cleanup ---
 static void destroy_popup_with_result(popup_result_t result) {
     if (!s_popup_overlay) return;
-    
-    // Clear the popup's button handlers
     button_manager_unregister_view_handlers();
-
     if (s_popup_group) {
         lv_group_del(s_popup_group);
         s_popup_group = nullptr;
     }
-
-    // This deletes the overlay and all its children (the popup container)
     lv_obj_del(s_popup_overlay);
     s_popup_overlay = nullptr;
-
-    // Notify the caller
     if (s_current_callback) {
         s_current_callback(result, s_current_user_data);
     }
-    
-    // Reset state for the next popup
     s_current_callback = nullptr;
     s_current_user_data = nullptr;
-
     ESP_LOGD(TAG, "Popup destroyed.");
 }
 
-/**
- * @brief Helper to create a styled button for the popup footer.
- * Applies custom styles for default and focused states.
- */
 static lv_obj_t* create_footer_button(lv_obj_t* parent, const char* text) {
     lv_obj_t* btn = lv_button_create(parent);
-    // Let the size be determined by the content (label) and padding from the style.
     lv_obj_set_size(btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-
-    // Apply the base style first
     lv_obj_add_style(btn, &style_btn_default, LV_STATE_DEFAULT);
-    // Apply the focused style for the focused state
     lv_obj_add_style(btn, &style_btn_focused, LV_STATE_FOCUSED);
-
     lv_obj_t* label = lv_label_create(btn);
     lv_label_set_text(label, text);
     lv_obj_center(label);
-
     return btn;
 }
 
-// --- Popup Creation ---
 static lv_obj_t* create_popup_container() {
     lv_obj_t* cont = lv_obj_create(s_popup_overlay);
     lv_obj_set_width(cont, 220);
@@ -201,17 +159,14 @@ static lv_obj_t* create_popup_container() {
     lv_obj_set_layout(cont, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-    
     lv_obj_set_style_pad_all(cont, 10, 0);
-    lv_obj_set_style_pad_row(cont, 15, 0); // Increased space between msg and footer
+    lv_obj_set_style_pad_row(cont, 15, 0);
     lv_obj_set_style_radius(cont, 8, 0);
-
     return cont;
 }
 
 // --- Public API Implementation ---
 
-// --- NEW FUNCTION ---
 bool popup_manager_is_active(void) {
     // A popup is active if either the standard overlay or the loading container exists.
     return s_popup_overlay != nullptr || s_loading_container != nullptr;
@@ -223,25 +178,18 @@ void popup_manager_show_alert(const char* title, const char* message, popup_call
         return;
     }
     ESP_LOGD(TAG, "Showing alert: '%s'", title);
-    
     s_current_callback = cb;
     s_current_user_data = user_data;
-    
     create_overlay();
-    init_styles(); // Ensure styles are ready
-
+    init_styles();
     lv_obj_t* popup_cont = create_popup_container();
-
     lv_obj_t* title_label = lv_label_create(popup_cont);
     lv_label_set_text(title_label, title);
     lv_obj_set_style_text_font(title_label, lv_theme_get_font_large(popup_cont), 0);
-
     lv_obj_t* msg_label = lv_label_create(popup_cont);
     lv_label_set_text(msg_label, message);
     lv_label_set_long_mode(msg_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(msg_label, LV_PCT(100));
-    
-    // --- Footer for Alert ---
     lv_obj_t* footer = lv_obj_create(popup_cont);
     lv_obj_remove_style_all(footer);
     lv_obj_set_width(footer, LV_PCT(100));
@@ -249,14 +197,11 @@ void popup_manager_show_alert(const char* title, const char* message, popup_call
     lv_obj_set_layout(footer, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(footer, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(footer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
     lv_obj_t* btn_ok = create_footer_button(footer, "OK");
     lv_obj_add_event_cb(btn_ok, primary_btn_event_cb, LV_EVENT_CLICKED, NULL);
-
     s_popup_group = lv_group_create();
     lv_group_add_obj(s_popup_group, btn_ok);
     lv_group_focus_obj(btn_ok);
-
     setup_popup_input_handlers();
 }
 
@@ -267,25 +212,18 @@ void popup_manager_show_confirmation(const char* title, const char* message, con
         return;
     }
     ESP_LOGD(TAG, "Showing confirmation: '%s'", title);
-    
     s_current_callback = cb;
     s_current_user_data = user_data;
-
     create_overlay();
-    init_styles(); // Ensure styles are ready
-
+    init_styles();
     lv_obj_t* popup_cont = create_popup_container();
-
     lv_obj_t* title_label = lv_label_create(popup_cont);
     lv_label_set_text(title_label, title);
     lv_obj_set_style_text_font(title_label, lv_theme_get_font_large(popup_cont), 0);
-    
     lv_obj_t* msg_label = lv_label_create(popup_cont);
     lv_label_set_text(msg_label, message);
     lv_label_set_long_mode(msg_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(msg_label, LV_PCT(100));
-    
-    // --- Footer for Confirmation ---
     lv_obj_t* footer = lv_obj_create(popup_cont);
     lv_obj_remove_style_all(footer);
     lv_obj_set_width(footer, LV_PCT(100));
@@ -293,37 +231,28 @@ void popup_manager_show_confirmation(const char* title, const char* message, con
     lv_obj_set_layout(footer, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(footer, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(footer, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(footer, 10, 0); // Spacing between buttons
-
+    lv_obj_set_style_pad_column(footer, 10, 0);
     lv_obj_t* btn_secondary = create_footer_button(footer, secondary_btn_text);
     lv_obj_add_event_cb(btn_secondary, secondary_btn_event_cb, LV_EVENT_CLICKED, NULL);
-
     lv_obj_t* btn_primary = create_footer_button(footer, primary_btn_text);
     lv_obj_add_event_cb(btn_primary, primary_btn_event_cb, LV_EVENT_CLICKED, NULL);
-    
     s_popup_group = lv_group_create();
     lv_group_set_wrap(s_popup_group, true);
     lv_group_add_obj(s_popup_group, btn_secondary);
     lv_group_add_obj(s_popup_group, btn_primary);
-    
-    // Focus the primary button by default as it's the most common action
-    lv_group_focus_obj(btn_primary); 
 
+    lv_group_focus_obj(btn_primary); 
     setup_popup_input_handlers();
 }
 
 void popup_manager_show_loading(const char* message) {
-    if (s_loading_container) return; // Already showing
+    if (s_loading_container) return;
     ESP_LOGD(TAG, "Showing loading screen: '%s'", message);
-
     if (s_popup_overlay) {
         ESP_LOGW(TAG, "Cannot show loading screen, a standard popup is already active.");
         return;
     }
-    
-    // Disable underlying view's buttons
     button_manager_unregister_view_handlers();
-
     s_loading_container = lv_obj_create(lv_screen_active());
     lv_obj_remove_style_all(s_loading_container);
     lv_obj_set_size(s_loading_container, LV_PCT(100), LV_PCT(100));
@@ -331,16 +260,13 @@ void popup_manager_show_loading(const char* message) {
     lv_obj_set_style_bg_opa(s_loading_container, LV_OPA_70, 0);
     lv_obj_center(s_loading_container);
     lv_obj_clear_flag(s_loading_container, LV_OBJ_FLAG_SCROLLABLE);
-
     lv_obj_t* cont = lv_obj_create(s_loading_container);
     lv_obj_set_size(cont, 150, 100);
     lv_obj_center(cont);
     lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
     lv_obj_t* spinner = lv_spinner_create(cont);
     lv_obj_set_size(spinner, 50, 50);
-
     lv_obj_t* label = lv_label_create(cont);
     lv_label_set_text(label, message);
 }
@@ -348,8 +274,6 @@ void popup_manager_show_loading(const char* message) {
 void popup_manager_hide_loading() {
     if (!s_loading_container) return;
     ESP_LOGD(TAG, "Hiding loading screen.");
-
     lv_obj_del(s_loading_container);
     s_loading_container = nullptr;
-    // NOTE: The caller is responsible for re-enabling its own input handlers after this.
 }

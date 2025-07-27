@@ -5,11 +5,10 @@
 #include "lvgl.h"
 
 /**
- * @brief A view for creating new notifications.
+ * @brief A view for creating new test notifications.
  *
- * This view provides a user interface with text areas for a title and message,
- * and buttons to save the notification. It demonstrates how to interact with
- * the NotificationManager from a UI component.
+ * This view provides buttons to create notifications with pre-defined content,
+ * allowing for easy testing of the notification system's dispatcher.
  */
 class AddNotificationView : public View {
 public:
@@ -19,31 +18,30 @@ public:
 
 private:
     // --- UI Widgets ---
-    lv_obj_t* title_textarea = nullptr;
-    lv_obj_t* message_textarea = nullptr;
-    lv_obj_t* save_button = nullptr;
+    lv_obj_t* save_now_button = nullptr;
     lv_obj_t* save_later_button = nullptr;
-    lv_group_t* input_group = nullptr; // To manage focus between textareas and buttons
+    lv_group_t* input_group = nullptr; // To manage focus between buttons
+
+    // --- Style Objects ---
+    lv_style_t style_btn_default;
+    lv_style_t style_btn_focused;
 
     // --- Private Methods for Setup ---
     void setup_ui(lv_obj_t* parent);
     void setup_button_handlers();
+    void init_styles(); // Method to create the button styles
 
     // --- Private Methods for UI Logic ---
     void save_notification(bool is_delayed);
-    void navigate_focus(bool forward);
-
+    
     // --- Instance Methods for Button Actions ---
     void on_ok_press();
     void on_cancel_press();
-    void on_nav_press(bool forward);
 
     // --- Static Callbacks (Bridge to C-style APIs) ---
     static void ok_press_cb(void* user_data);
     static void cancel_press_cb(void* user_data);
-    static void left_press_cb(void* user_data);
-    static void right_press_cb(void* user_data);
-    static void save_event_cb(lv_event_t* e);
+    static void save_now_event_cb(lv_event_t* e);
     static void save_later_event_cb(lv_event_t* e);
 };
 

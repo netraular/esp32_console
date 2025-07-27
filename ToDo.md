@@ -12,7 +12,7 @@ Además, en el caso de que el dispositivo esté dormido, si había una notificac
 
         Add the new files to the CMakeLists.txt build system.
 
-    Task 2: System Integration & The "Dispatcher" Logic.
+    ✅ Task 2: System Integration & The "Dispatcher" Logic.
 
         Initialize the NotificationManager in main.cpp.
 
@@ -20,7 +20,7 @@ Además, en el caso de que el dispositivo esté dormido, si había una notificac
 
         Add helper functions to ViewManager and PopupManager to allow these checks.
 
-    Task 3: Create the "Add Notification" View.
+    ✅ Task 3: Create the "Add Notification" View.
 
         Create a new view class (AddNotificationView).
 
@@ -28,7 +28,7 @@ Además, en el caso de que el dispositivo esté dormido, si había una notificac
 
         Pressing "Save" will call NotificationManager::add_notification() and return to the menu.
 
-    Task 4: Integrate the New View into the System.
+    ✅ Task 4: Integrate the New View into the System.
 
         Add the new VIEW_ID_ADD_NOTIFICATION to the view_id_t enum in view_manager.h.
 
