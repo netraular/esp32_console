@@ -29,6 +29,7 @@ idf_component_register(SRCS
         # --- Views (Class-based) ---
         "./views/view_manager.cpp"
         "./views/add_notification_view/add_notification_view.cpp"
+        "./views/notification_history_view/notification_history_view.cpp" # <-- ADDED
         "./views/standby_view/standby_view.cpp"
         "./views/menu_view/menu_view.cpp"
         "./views/multi_click_test_view/multi_click_test_view.cpp"
@@ -59,7 +60,6 @@ idf_component_register(SRCS
         # --- Componentes del Registro IDF (de idf_component.yml) ---
         button              # Para iot_button en button_manager
         littlefs            # Para esp_littlefs en littlefs_manager
-        # jsmn              # <-- ELIMINADO. Se gestiona a través de json_parser
         json_parser         # <<< PARA notification_manager
         json_generator      # <<< PARA notification_manager
 

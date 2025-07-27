@@ -40,7 +40,8 @@ typedef enum {
     VIEW_ID_HABIT_HISTORY,
 
     // Notification System Views
-    VIEW_ID_ADD_NOTIFICATION, // <-- ADDED
+    VIEW_ID_ADD_NOTIFICATION,
+    VIEW_ID_NOTIFICATION_HISTORY, // <-- ADDED
     
     // Add other views here as they are converted
     VIEW_ID_COUNT // Total number of views, must be last
