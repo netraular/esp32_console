@@ -56,4 +56,10 @@ void view_manager_init(void);
  */
 void view_manager_load_view(view_id_t view_id);
 
+/**
+ * @brief Gets the ID of the currently active view.
+ * @return The view_id_t of the current view.
+ */
+view_id_t view_manager_get_current_view_id(void); // <-- ADDED
+
 #endif // VIEW_MANAGER_H

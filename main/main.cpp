@@ -20,6 +20,7 @@
 #include "controllers/stt_manager/stt_manager.h"
 #include "controllers/power_manager/power_manager.h"
 #include "controllers/habit_data_manager/habit_data_manager.h"
+#include "controllers/notification_manager/notification_manager.h"
 #include "views/view_manager.h"
 #include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
 
@@ -84,9 +85,6 @@ extern "C" void app_main(void) {
         return;
     }
 
-
-
-
     // Initialize LittleFS on the 'storage' partition
     if (littlefs_manager_init("storage")) {
         ESP_LOGI(TAG, "LittleFS manager initialized.");
@@ -129,6 +127,10 @@ extern "C" void app_main(void) {
     // Initialize the Speech-to-Text manager
     stt_manager_init();
     ESP_LOGI(TAG, "STT manager initialized.");
+
+    // Initialize Notification Manager
+    NotificationManager::init(); // <-- ADDED
+    ESP_LOGI(TAG, "Notification manager initialized.");
 
     // Initialize the view manager, which creates the main UI.
     view_manager_init();

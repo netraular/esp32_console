@@ -79,6 +79,11 @@ void popup_manager_show_loading(const char* message);
  */
 void popup_manager_hide_loading(void);
 
+/**
+ * @brief Checks if a modal popup (alert, confirmation, or loading) is currently active.
+ * @return true if a popup is visible, false otherwise.
+ */
+bool popup_manager_is_active(void); // <-- ADDED
 
 #ifdef __cplusplus
 }

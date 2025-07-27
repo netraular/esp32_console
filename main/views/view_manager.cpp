@@ -33,7 +33,7 @@ static const char *TAG = "VIEW_MGR";
 
 // --- State Variables ---
 static std::unique_ptr<View> s_current_view = nullptr;
-static view_id_t s_current_view_id;
+static view_id_t s_current_view_id = VIEW_ID_COUNT; // Initialize to invalid
 
 // The View Factory: Maps a view_id_t to a function that creates a new view instance.
 static std::map<view_id_t, std::function<View*()>> s_view_factory;
@@ -127,4 +127,9 @@ void view_manager_load_view(view_id_t view_id) {
 
     s_initializing_view_id = VIEW_ID_COUNT; // Mark loading as complete
     ESP_LOGI(TAG, "View %d loaded successfully.", view_id);
+}
+
+// --- NEW FUNCTION IMPLEMENTATION ---
+view_id_t view_manager_get_current_view_id(void) {
+    return s_current_view_id;
 }

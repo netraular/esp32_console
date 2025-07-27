@@ -4,6 +4,8 @@
 #include "models/notification_data_model.h"
 #include <vector>
 #include <string>
+#include "lvgl.h" 
+#include "components/popup_manager/popup_manager.h" // <-- ADDED: This fixes the error
 
 /**
  * @brief Manages the lifecycle of system notifications.
@@ -16,7 +18,7 @@ class NotificationManager {
 public:
     /**
      * @brief Initializes the Notification Manager.
-     * Must be called once at application startup.
+     * Must be called once at application startup. This also starts the dispatcher timer.
      */
     static void init();
 
@@ -50,12 +52,27 @@ private:
     // In-memory cache of all notifications
     static std::vector<Notification> s_notifications;
     static uint32_t s_next_id;
+    static lv_timer_t* s_dispatcher_timer; // Timer for the dispatcher
 
     // TODO (Task 5): Implement persistence to LittleFS
     // static void load_from_fs();
     // static void save_to_fs();
 
     static uint32_t get_next_unique_id();
+
+    // --- Dispatcher Logic ---
+    /**
+     * @brief The core logic that checks conditions and shows popups.
+     * This is called periodically by the dispatcher timer.
+     */
+    static void dispatcher_task(lv_timer_t* timer); 
+    
+    /**
+     * @brief Callback handler for when a notification popup is closed.
+     * @param result The result from the popup manager.
+     * @param user_data A pointer to the notification's ID (as a uint32_t*).
+     */
+    static void on_popup_closed(popup_result_t result, void* user_data);
 };
 
 #endif // NOTIFICATION_MANAGER_H

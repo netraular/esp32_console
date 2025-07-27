@@ -17,6 +17,9 @@ static void destroy_popup_with_result(popup_result_t result);
 static void handle_ok_press(void* user_data);
 static void handle_cancel_press(void* user_data);
 static void handle_nav_press(void* user_data);
+static lv_obj_t* create_popup_container(void);
+static void create_overlay(void);
+static void init_styles(void);
 
 // --- Styles for pop-up elements ---
 static lv_style_t style_btn_default;
@@ -207,6 +210,12 @@ static lv_obj_t* create_popup_container() {
 }
 
 // --- Public API Implementation ---
+
+// --- NEW FUNCTION ---
+bool popup_manager_is_active(void) {
+    // A popup is active if either the standard overlay or the loading container exists.
+    return s_popup_overlay != nullptr || s_loading_container != nullptr;
+}
 
 void popup_manager_show_alert(const char* title, const char* message, popup_callback_t cb, void* user_data) {
     if (s_popup_overlay) {
