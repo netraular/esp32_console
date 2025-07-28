@@ -27,6 +27,9 @@ public:
     static void show_notification_popup(const Notification& notif);
 
 private:
+    // --- Singleton-like instance for static callbacks ---
+    static StandbyView* s_instance;
+
     // --- UI Widgets ---
     lv_obj_t* center_time_label = nullptr;
     lv_obj_t* center_date_label = nullptr;

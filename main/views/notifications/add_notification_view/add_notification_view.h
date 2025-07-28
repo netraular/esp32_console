@@ -25,6 +25,7 @@ private:
     // --- Style Objects ---
     lv_style_t style_btn_default;
     lv_style_t style_btn_focused;
+    bool styles_initialized = false;
 
     // --- Private Methods for Setup ---
     void setup_ui(lv_obj_t* parent);

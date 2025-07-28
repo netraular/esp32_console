@@ -5,23 +5,30 @@
 #include "views/view_manager.h"
 #include "components/popup_manager/popup_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
+#include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/littlefs_manager/littlefs_manager.h"
 #include "views/core/standby_view/standby_view.h"
 #include "json_generator.h"
 #include "json_parser.h"
 #include "jsmn.h"
+#include <sys/stat.h>
 
 static const char *TAG = "NOTIF_MGR";
 static const char* DATA_DIR = "data";
 static const char* NOTIFICATIONS_FILE_PATH = "data/notifications.json";
+static const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
 
 std::vector<Notification> NotificationManager::s_notifications;
 uint32_t NotificationManager::s_next_id = 1;
 lv_timer_t* NotificationManager::s_dispatcher_timer = nullptr;
+bool NotificationManager::s_wakeup_sound_pending = false;
+static uint32_t s_dispatcher_paused_until = 0; // Local to this file
 
 void NotificationManager::init() {
     s_notifications.clear();
     s_next_id = 1;
+    s_wakeup_sound_pending = false;
+    s_dispatcher_paused_until = 0;
     if (littlefs_manager_ensure_dir_exists(DATA_DIR)) {
         load_notifications();
     } else {
@@ -33,15 +40,37 @@ void NotificationManager::init() {
 }
 
 void NotificationManager::dispatcher_task(lv_timer_t* timer) {
+    // --- 1. Handle Wake-up Sound Action ---
+    if (s_wakeup_sound_pending) {
+        s_wakeup_sound_pending = false; // Consume the event
+        ESP_LOGI(TAG, "Dispatcher playing wake-up notification sound.");
+        if (sd_manager_check_ready()) {
+            struct stat st;
+            if (stat(NOTIFICATION_SOUND_PATH, &st) == 0) {
+                audio_manager_play(NOTIFICATION_SOUND_PATH);
+            } else {
+                ESP_LOGW(TAG, "Notification sound file not found at %s", NOTIFICATION_SOUND_PATH);
+            }
+        } else {
+            ESP_LOGW(TAG, "SD card not ready, cannot play notification sound.");
+        }
+        // After a wake-up, pause the visual popup dispatcher to prevent race conditions.
+        s_dispatcher_paused_until = esp_log_timestamp() + 2000; // Pause for 2 seconds
+    }
+
+    // --- 2. Handle Visual Popup Action ---
+    // Check if the visual dispatcher is currently paused
+    if (esp_log_timestamp() < s_dispatcher_paused_until) {
+        return;
+    }
+
     // Only dispatch popups if the user is on the standby screen and no other popup is active.
     if (view_manager_get_current_view_id() != VIEW_ID_STANDBY || popup_manager_is_active()) {
         return;
     }
 
     time_t now = time(NULL);
-    // Defines a 1-second window to catch notifications. This prevents stale notifications
-    // that expired while the user was in another view from popping up upon returning to standby.
-    // A notification will only trigger a popup if its timestamp falls within this exact moment.
+    // Defines a 1-second window to catch notifications.
     time_t one_second_ago = now - 1;
 
     auto it = std::find_if(s_notifications.begin(), s_notifications.end(), 
@@ -51,14 +80,36 @@ void NotificationManager::dispatcher_task(lv_timer_t* timer) {
 
     if (it != s_notifications.end()) {
         Notification& notif_to_show = *it;
-        ESP_LOGI(TAG, "Dispatching notification popup for ID: %lu to StandbyView", notif_to_show.id);
+        ESP_LOGI(TAG, "Dispatching visual notification popup for ID: %lu to StandbyView", notif_to_show.id);
         
-        // Delegate the presentation of the popup to the StandbyView itself.
         StandbyView::show_notification_popup(notif_to_show);
         
-        // Mark as read immediately to prevent re-triggering.
         mark_as_read(notif_to_show.id);
     }
+}
+
+void NotificationManager::handle_wakeup_event() {
+    s_wakeup_sound_pending = true;
+    ESP_LOGI(TAG, "Wake-up event received. Sound playback is pending for the next dispatcher cycle.");
+}
+
+time_t NotificationManager::get_next_notification_timestamp() {
+    time_t now = time(NULL);
+    time_t next_timestamp = 0;
+
+    for (const auto& notif : s_notifications) {
+        if (!notif.is_read && notif.timestamp > now) {
+            if (next_timestamp == 0 || notif.timestamp < next_timestamp) {
+                next_timestamp = notif.timestamp;
+            }
+        }
+    }
+    
+    if (next_timestamp > 0) {
+        ESP_LOGD(TAG, "Next notification is at timestamp %ld", (long)next_timestamp);
+    }
+    
+    return next_timestamp;
 }
 
 uint32_t NotificationManager::get_next_unique_id() { return s_next_id++; }
@@ -80,12 +131,10 @@ std::vector<Notification> NotificationManager::get_unread_notifications() {
     std::vector<Notification> unread;
     time_t now = time(NULL);
     for (const auto& notif : s_notifications) {
-        // An unread notification is one whose time has passed but has not been acknowledged.
         if (!notif.is_read && notif.timestamp <= now) {
             unread.push_back(notif);
         }
     }
-    // Sort by most recent first
     std::sort(unread.begin(), unread.end(), [](const Notification& a, const Notification& b) {
         return a.timestamp > b.timestamp;
     });
@@ -96,12 +145,10 @@ std::vector<Notification> NotificationManager::get_pending_notifications() {
     std::vector<Notification> pending;
     time_t now = time(NULL);
     for (const auto& notif : s_notifications) {
-        // A pending notification is one set for a future time.
         if (notif.timestamp > now) {
             pending.push_back(notif);
         }
     }
-    // Sort by soonest first
     std::sort(pending.begin(), pending.end(), [](const Notification& a, const Notification& b) {
         return a.timestamp < b.timestamp;
     });

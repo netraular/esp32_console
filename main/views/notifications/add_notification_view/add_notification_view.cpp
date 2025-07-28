@@ -2,14 +2,13 @@
 #include "views/view_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/notification_manager/notification_manager.h"
-#include "components/status_bar_component/status_bar_component.h"
 #include "esp_log.h"
 #include <time.h>
-#include <string>
 
 static const char *TAG = "ADD_NOTIF_VIEW";
 
-AddNotificationView::AddNotificationView() {
+// --- Lifecycle Methods ---
+AddNotificationView::AddNotificationView() : input_group(nullptr), styles_initialized(false) {
     ESP_LOGI(TAG, "AddNotificationView constructed");
 }
 
@@ -18,114 +17,125 @@ AddNotificationView::~AddNotificationView() {
         lv_group_del(input_group);
         input_group = nullptr;
     }
-    lv_style_reset(&style_btn_default);
-    lv_style_reset(&style_btn_focused);
     ESP_LOGI(TAG, "AddNotificationView destructed");
 }
 
 void AddNotificationView::create(lv_obj_t* parent) {
-    container = lv_obj_create(parent);
-    lv_obj_remove_style_all(container);
-    lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
-    lv_obj_center(container);
-    init_styles();
-    setup_ui(container);
+    container = parent;
+    setup_ui(parent);
     setup_button_handlers();
 }
 
+// --- UI & Handler Setup ---
 void AddNotificationView::init_styles() {
+    if (styles_initialized) return;
+
     lv_style_init(&style_btn_default);
-    lv_style_set_radius(&style_btn_default, 6);
-    lv_style_set_bg_color(&style_btn_default, lv_color_white());
-    lv_style_set_bg_opa(&style_btn_default, LV_OPA_100);
-    lv_style_set_border_color(&style_btn_default, lv_palette_main(LV_PALETTE_BLUE));
+    lv_style_set_bg_color(&style_btn_default, lv_palette_lighten(LV_PALETTE_GREY, 2));
+    lv_style_set_border_color(&style_btn_default, lv_palette_darken(LV_PALETTE_GREY, 3));
     lv_style_set_border_width(&style_btn_default, 2);
-    lv_style_set_text_color(&style_btn_default, lv_palette_main(LV_PALETTE_BLUE));
+
     lv_style_init(&style_btn_focused);
     lv_style_set_bg_color(&style_btn_focused, lv_palette_main(LV_PALETTE_BLUE));
-    lv_style_set_text_color(&style_btn_focused, lv_color_white());
+    lv_style_set_border_color(&style_btn_focused, lv_palette_darken(LV_PALETTE_BLUE, 3));
+
+    styles_initialized = true;
 }
 
 void AddNotificationView::setup_ui(lv_obj_t* parent) {
-    status_bar_create(parent);
-    lv_obj_t* cont = lv_obj_create(parent);
-    lv_obj_set_size(cont, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_center(cont);
-    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(cont, 20, 0);
-    lv_obj_t* info_label = lv_label_create(cont);
-    lv_label_set_text(info_label, "Create a test notification");
-    lv_obj_set_style_text_font(info_label, &lv_font_montserrat_20, 0);
-    save_10s_button = lv_button_create(cont);
-    lv_obj_t* save_10s_label = lv_label_create(save_10s_button);
-    lv_label_set_text(save_10s_label, "Create (10s Delay)");
-    lv_obj_add_event_cb(save_10s_button, save_10s_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_add_style(save_10s_button, &style_btn_default, LV_STATE_DEFAULT);
-    lv_obj_add_style(save_10s_button, &style_btn_focused, LV_STATE_FOCUSED);
-    save_1min_button = lv_button_create(cont);
-    lv_obj_t* save_1min_label = lv_label_create(save_1min_button);
-    lv_label_set_text(save_1min_label, "Create (1 min Delay)");
-    lv_obj_add_event_cb(save_1min_button, save_1min_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_add_style(save_1min_button, &style_btn_default, LV_STATE_DEFAULT);
-    lv_obj_add_style(save_1min_button, &style_btn_focused, LV_STATE_FOCUSED);
+    init_styles();
+
+    lv_obj_t* title = lv_label_create(parent);
+    lv_label_set_text(title, "Add Test Notification");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 15);
+
+    lv_obj_t* main_cont = lv_obj_create(parent);
+    lv_obj_set_size(main_cont, 200, 120);
+    lv_obj_center(main_cont);
+    lv_obj_set_layout(main_cont, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(main_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(main_cont, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
     input_group = lv_group_create();
-    lv_group_add_obj(input_group, save_10s_button);
-    lv_group_add_obj(input_group, save_1min_button);
     lv_group_set_wrap(input_group, true);
+
+    save_10s_button = lv_button_create(main_cont);
+    lv_obj_set_size(save_10s_button, 180, 40);
+    lv_obj_add_style(save_10s_button, &style_btn_default, 0);
+    lv_obj_add_style(save_10s_button, &style_btn_focused, LV_STATE_FOCUSED);
+    lv_obj_add_event_cb(save_10s_button, save_10s_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_t* label_10s = lv_label_create(save_10s_button);
+    lv_label_set_text(label_10s, "Test Notif. in 10s");
+    lv_obj_center(label_10s);
+    lv_group_add_obj(input_group, save_10s_button);
+
+    save_1min_button = lv_button_create(main_cont);
+    lv_obj_set_size(save_1min_button, 180, 40);
+    lv_obj_add_style(save_1min_button, &style_btn_default, 0);
+    lv_obj_add_style(save_1min_button, &style_btn_focused, LV_STATE_FOCUSED);
+    lv_obj_add_event_cb(save_1min_button, save_1min_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_t* label_1min = lv_label_create(save_1min_button);
+    lv_label_set_text(label_1min, "Test Notif. in 1min");
+    lv_obj_center(label_1min);
+    lv_group_add_obj(input_group, save_1min_button);
 }
 
 void AddNotificationView::setup_button_handlers() {
-    button_manager_unregister_view_handlers();
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ok_press_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, cancel_press_cb, true, this);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, [](void* d) { lv_group_focus_prev(static_cast<AddNotificationView*>(d)->input_group); }, true, this);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, [](void* d) { lv_group_focus_next(static_cast<AddNotificationView*>(d)->input_group); }, true, this);
+    // Navigation is handled by the group
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, [](void* user_data){
+        auto* view = static_cast<AddNotificationView*>(user_data);
+        if (view && view->input_group) lv_group_focus_prev(view->input_group);
+    }, true, this);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, [](void* user_data){
+        auto* view = static_cast<AddNotificationView*>(user_data);
+        if (view && view->input_group) lv_group_focus_next(view->input_group);
+    }, true, this);
 }
 
+// --- Instance Methods for Actions ---
 void AddNotificationView::save_notification(int delay_seconds) {
-    ESP_LOGI(TAG, "Creating notification with %d-second delay.", delay_seconds);
+    time_t now = time(nullptr);
+    time_t target_time = now + delay_seconds;
 
-    // Calculate the exact future time the notification should trigger.
-    time_t future_timestamp = time(NULL) + delay_seconds;
+    std::string title = "Test Notification";
+    std::string message = "This is a test notification scheduled for " + std::to_string(delay_seconds) + " seconds from now.";
 
-    // Create a descriptive title and message.
-    std::string title = "Scheduled Alert";
-    char message_buf[128];
-    snprintf(message_buf, sizeof(message_buf), "This alert was scheduled to trigger after %d seconds.", delay_seconds);
-    std::string message = message_buf;
+    NotificationManager::add_notification(title, message, target_time);
 
-    // Immediately add the notification with its future timestamp to the manager.
-    NotificationManager::add_notification(title, message, future_timestamp);
-    
-    // Show a temporary confirmation message on the screen.
-    lv_obj_t* label = lv_label_create(lv_screen_active());
-    lv_label_set_text(label, "Notification Scheduled!");
-    lv_obj_center(label);
-    
-    // Create a one-shot timer to automatically return to the menu.
-    lv_timer_t* timer = lv_timer_create([](lv_timer_t* t){
-        // The object attached to the timer is deleted, so we can navigate away.
-        void* user_data = lv_timer_get_user_data(t);
-        lv_obj_del(static_cast<lv_obj_t*>(user_data)); 
-        view_manager_load_view(VIEW_ID_MENU);
-    }, 1500, label);
-    lv_timer_set_repeat_count(timer, 1);
+    // Create a temporary feedback label
+    lv_obj_t* feedback_label = lv_label_create(container);
+    lv_label_set_text(feedback_label, "Notification Saved!");
+    lv_obj_set_style_bg_color(feedback_label, lv_palette_main(LV_PALETTE_GREEN), 0);
+    lv_obj_set_style_bg_opa(feedback_label, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(feedback_label, lv_color_white(), 0);
+    lv_obj_set_style_pad_all(feedback_label, 5, 0);
+    lv_obj_set_style_radius(feedback_label, 3, 0);
+    lv_obj_align(feedback_label, LV_ALIGN_BOTTOM_MID, 0, -5);
+
+    // Create a one-shot timer to delete the label
+    lv_timer_t* t = lv_timer_create([](lv_timer_t* timer){
+        lv_obj_del_async((lv_obj_t*)lv_timer_get_user_data(timer));
+    }, 1500, feedback_label);
+    lv_timer_set_repeat_count(t, 1);
 }
 
 void AddNotificationView::on_ok_press() {
-    if (!input_group) return;
-    lv_obj_t* focused_obj = lv_group_get_focused(input_group);
-    if (focused_obj) {
-        lv_obj_send_event(focused_obj, LV_EVENT_CLICKED, nullptr);
+    if (input_group) {
+        lv_obj_t* focused_obj = lv_group_get_focused(input_group);
+        if (focused_obj) {
+            lv_obj_send_event(focused_obj, LV_EVENT_CLICKED, nullptr);
+        }
     }
 }
 
 void AddNotificationView::on_cancel_press() {
-    ESP_LOGI(TAG, "Cancel pressed, returning to menu.");
     view_manager_load_view(VIEW_ID_MENU);
 }
 
+// --- Static Callbacks ---
 void AddNotificationView::ok_press_cb(void* user_data) {
     static_cast<AddNotificationView*>(user_data)->on_ok_press();
 }
@@ -136,10 +146,14 @@ void AddNotificationView::cancel_press_cb(void* user_data) {
 
 void AddNotificationView::save_10s_event_cb(lv_event_t* e) {
     auto* view = static_cast<AddNotificationView*>(lv_event_get_user_data(e));
-    view->save_notification(10);
+    if (view) {
+        view->save_notification(10);
+    }
 }
 
 void AddNotificationView::save_1min_event_cb(lv_event_t* e) {
     auto* view = static_cast<AddNotificationView*>(lv_event_get_user_data(e));
-    view->save_notification(60);
+    if (view) {
+        view->save_notification(60);
+    }
 }
