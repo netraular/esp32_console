@@ -8,11 +8,20 @@
 static const char *TAG = "ADD_NOTIF_VIEW";
 
 // --- Lifecycle Methods ---
-AddNotificationView::AddNotificationView() : input_group(nullptr), styles_initialized(false) {
+AddNotificationView::AddNotificationView() : 
+    input_group(nullptr), 
+    feedback_label(nullptr), 
+    feedback_timer(nullptr), 
+    styles_initialized(false) 
+{
     ESP_LOGI(TAG, "AddNotificationView constructed");
 }
 
 AddNotificationView::~AddNotificationView() {
+    // Crucially, delete the timer if it's still active.
+    // This prevents it from firing after the view object is destroyed.
+    cleanup_feedback_ui();
+
     if (input_group) {
         lv_group_del(input_group);
         input_group = nullptr;
@@ -96,6 +105,18 @@ void AddNotificationView::setup_button_handlers() {
 }
 
 // --- Instance Methods for Actions ---
+
+void AddNotificationView::cleanup_feedback_ui() {
+    if (feedback_timer) {
+        lv_timer_delete(feedback_timer);
+        feedback_timer = nullptr;
+    }
+    if (feedback_label) {
+        lv_obj_del(feedback_label);
+        feedback_label = nullptr;
+    }
+}
+
 void AddNotificationView::save_notification(int delay_seconds) {
     time_t now = time(nullptr);
     time_t target_time = now + delay_seconds;
@@ -104,9 +125,12 @@ void AddNotificationView::save_notification(int delay_seconds) {
     std::string message = "This is a test notification scheduled for " + std::to_string(delay_seconds) + " seconds from now.";
 
     NotificationManager::add_notification(title, message, target_time);
+    
+    // If a feedback message is already showing, clean it up before showing a new one.
+    cleanup_feedback_ui();
 
-    // Create a temporary feedback label
-    lv_obj_t* feedback_label = lv_label_create(container);
+    // Create a temporary feedback label and store the handle
+    feedback_label = lv_label_create(container);
     lv_label_set_text(feedback_label, "Notification Saved!");
     lv_obj_set_style_bg_color(feedback_label, lv_palette_main(LV_PALETTE_GREEN), 0);
     lv_obj_set_style_bg_opa(feedback_label, LV_OPA_COVER, 0);
@@ -115,11 +139,10 @@ void AddNotificationView::save_notification(int delay_seconds) {
     lv_obj_set_style_radius(feedback_label, 3, 0);
     lv_obj_align(feedback_label, LV_ALIGN_BOTTOM_MID, 0, -5);
 
-    // Create a one-shot timer to delete the label
-    lv_timer_t* t = lv_timer_create([](lv_timer_t* timer){
-        lv_obj_del_async((lv_obj_t*)lv_timer_get_user_data(timer));
-    }, 1500, feedback_label);
-    lv_timer_set_repeat_count(t, 1);
+    // Create a one-shot timer to delete the label and store its handle.
+    // The user_data for the timer now points to this view instance.
+    feedback_timer = lv_timer_create(feedback_timer_cb, 1500, this);
+    lv_timer_set_repeat_count(feedback_timer, 1);
 }
 
 void AddNotificationView::on_ok_press() {
@@ -136,6 +159,14 @@ void AddNotificationView::on_cancel_press() {
 }
 
 // --- Static Callbacks ---
+void AddNotificationView::feedback_timer_cb(lv_timer_t* timer) {
+    auto* view = static_cast<AddNotificationView*>(lv_timer_get_user_data(timer));
+    if (view) {
+        // The timer is one-shot, so it deletes itself. We just need to clean up our UI.
+        view->cleanup_feedback_ui();
+    }
+}
+
 void AddNotificationView::ok_press_cb(void* user_data) {
     static_cast<AddNotificationView*>(user_data)->on_ok_press();
 }

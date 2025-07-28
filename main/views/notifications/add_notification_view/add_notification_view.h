@@ -21,6 +21,10 @@ private:
     lv_obj_t* save_10s_button = nullptr;
     lv_obj_t* save_1min_button = nullptr;
     lv_group_t* input_group = nullptr;
+    
+    // --- Feedback UI and Timer ---
+    lv_obj_t* feedback_label = nullptr; // The "Notification Saved!" label
+    lv_timer_t* feedback_timer = nullptr; // Timer to manage the feedback label
 
     // --- Style Objects ---
     lv_style_t style_btn_default;
@@ -34,6 +38,7 @@ private:
 
     // --- Private Methods for UI Logic ---
     void save_notification(int delay_seconds);
+    void cleanup_feedback_ui();
     
     // --- Instance Methods for Button Actions ---
     void on_ok_press();
@@ -44,6 +49,7 @@ private:
     static void cancel_press_cb(void* user_data);
     static void save_10s_event_cb(lv_event_t* e);
     static void save_1min_event_cb(lv_event_t* e);
+    static void feedback_timer_cb(lv_timer_t* timer);
 };
 
 #endif // ADD_NOTIFICATION_VIEW_H
