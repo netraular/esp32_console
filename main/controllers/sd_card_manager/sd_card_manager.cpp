@@ -8,16 +8,19 @@
 #include <sys/unistd.h>
 #include <sys/stat.h>
 #include <errno.h> 
-#include <stdio.h>  
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char* TAG = "SD_MGR";
+#define MOUNT_ATTEMPT_COUNT 3
+#define MOUNT_RETRY_DELAY_MS 200
 
 static bool s_bus_initialized = false;
 static bool s_is_mounted = false;
 static sdmmc_card_t* s_card;
 static const char* MOUNT_POINT = "/sdcard";
 
-// --- Funciones existentes ---
 bool sd_manager_init(void) {
     if (s_bus_initialized) {
         ESP_LOGW(TAG, "SPI bus already initialized.");
@@ -50,9 +53,14 @@ bool sd_manager_mount(void) {
         ESP_LOGE(TAG, "SPI bus has not been initialized. Call sd_manager_init() first.");
         return false;
     }
-    ESP_LOGI(TAG, "Attempting to mount SD card...");
+
+    // Give the card a moment to power on and stabilize before the first attempt.
+    ESP_LOGD(TAG, "Waiting for SD card power-on stabilization...");
+    vTaskDelay(pdMS_TO_TICKS(100));
+
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
     host.slot = SD_HOST;
+
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_config.gpio_cs = SD_CS_PIN;
     slot_config.host_id = SD_HOST;
@@ -62,20 +70,32 @@ bool sd_manager_mount(void) {
     mount_config.max_files = 10;
     mount_config.allocation_unit_size = 16 * 1024;
 
-    esp_err_t ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &s_card);
-    if (ret != ESP_OK) {
-        if (ret == ESP_FAIL) {
-            ESP_LOGE(TAG, "Failed to mount filesystem. It may be missing a FAT format.");
-        } else {
-            ESP_LOGE(TAG, "Failed to initialize card (%s).", esp_err_to_name(ret));
+    esp_err_t ret = ESP_FAIL;
+    for (int i = 1; i <= MOUNT_ATTEMPT_COUNT; ++i) {
+        ESP_LOGI(TAG, "Attempting to mount SD card (attempt %d/%d)...", i, MOUNT_ATTEMPT_COUNT);
+        ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &s_card);
+
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "SD Card mounted successfully at %s", MOUNT_POINT);
+            sdmmc_card_print_info(stdout, s_card);
+            s_is_mounted = true;
+            return true;
         }
-        s_is_mounted = false;
-        return false;
+
+        ESP_LOGW(TAG, "Mount attempt %d failed (%s).", i, esp_err_to_name(ret));
+        
+        // Unmount before retrying to ensure a clean state
+        esp_vfs_fat_sdcard_unmount(MOUNT_POINT, s_card);
+        s_card = NULL;
+
+        if (i < MOUNT_ATTEMPT_COUNT) {
+            vTaskDelay(pdMS_TO_TICKS(MOUNT_RETRY_DELAY_MS));
+        }
     }
-    ESP_LOGI(TAG, "SD Card mounted successfully at %s", MOUNT_POINT);
-    sdmmc_card_print_info(stdout, s_card);
-    s_is_mounted = true;
-    return true;
+
+    ESP_LOGE(TAG, "Failed to mount SD card after %d attempts.", MOUNT_ATTEMPT_COUNT);
+    s_is_mounted = false;
+    return false;
 }
 
 void sd_manager_unmount(void) {
@@ -107,13 +127,16 @@ bool sd_manager_check_ready(void) {
         }
     }
 
+    // A simple check to see if the root directory can be opened.
+    // This can detect if the card has been physically removed.
     DIR* dir = opendir(MOUNT_POINT);
     if (dir) {
         closedir(dir);
         return true;
     }
 
-    ESP_LOGW(TAG, "Check ready failed: opendir could not read the root directory. Card may be disconnected.");
+    ESP_LOGW(TAG, "Check ready failed: opendir could not access root directory. Card may be disconnected.");
+    // If the check fails, unmount to force a full re-initialization next time.
     sd_manager_unmount();
     return false;
 }
@@ -128,12 +151,11 @@ bool sd_manager_list_files(const char* path, file_iterator_cb_t cb, void* user_d
     }
     DIR* dir = opendir(path);
     if (!dir) {
-        ESP_LOGE(TAG, "Failed to open directory: %s", path);
+        ESP_LOGE(TAG, "Failed to open directory: %s. Error: %s", path, strerror(errno));
         return false;
     }
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
-        ESP_LOGI(TAG, "FATFS readdir() returned: '%s'", entry->d_name);
         bool is_dir = (entry->d_type == DT_DIR);
         cb(entry->d_name, is_dir, user_data);
     }
@@ -144,7 +166,7 @@ bool sd_manager_list_files(const char* path, file_iterator_cb_t cb, void* user_d
 bool sd_manager_delete_item(const char* path) {
     struct stat st;
     if (stat(path, &st) != 0) {
-        ESP_LOGE(TAG, "Cannot stat path: %s. Error: %s", path, strerror(errno));
+        ESP_LOGW(TAG, "Cannot stat path for deletion: %s. Error: %s", path, strerror(errno));
         return false;
     }
 
@@ -179,6 +201,11 @@ bool sd_manager_create_directory(const char* path) {
         ESP_LOGI(TAG, "Created directory: %s", path);
         return true;
     }
+    // It's not an error if the directory already exists
+    if (errno == EEXIST) {
+        ESP_LOGD(TAG, "Directory already exists: %s", path);
+        return true;
+    }
     ESP_LOGE(TAG, "Failed to create directory: %s. Error: %s", path, strerror(errno));
     return false;
 }
@@ -197,7 +224,9 @@ bool sd_manager_create_file(const char* path) {
 bool sd_manager_read_file(const char* path, char** buffer, size_t* size) {
     FILE* f = fopen(path, "rb");
     if (!f) {
-        ESP_LOGE(TAG, "Failed to open file for reading: %s. Error: %s", path, strerror(errno));
+        if (errno != ENOENT) { // Don't log an error if file simply doesn't exist
+            ESP_LOGE(TAG, "Failed to open file for reading: %s. Error: %s", path, strerror(errno));
+        }
         return false;
     }
 
@@ -222,7 +251,7 @@ bool sd_manager_read_file(const char* path, char** buffer, size_t* size) {
 
     (*buffer)[*size] = '\0';
     fclose(f);
-    ESP_LOGI(TAG, "Read %zu bytes from %s", *size, path);
+    ESP_LOGD(TAG, "Read %zu bytes from %s", *size, path);
     return true;
 }
 

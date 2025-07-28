@@ -1,12 +1,7 @@
-Implementar notificaciones.
-Las notificaciones quiero que sean más como alertas o popups que requieran interacción siempre, aunque sea un simple botón para confirmar que has leido el contenido por lo que en vez de usar toasts, querría reutilizar el sistema de popups actual.
-Querría que las notificaciones visuales solo se mostraran en la vista de standby. En cualquier otra vista no debe haber notificaciones. Y querría que fueran popups (con sonido al aparecer).
-Además, si hay un popup activo no quiero que aparezca otro en la misma pantalla por lo que las otras notificaciones se quedarían guardadas en una "cola" que podríamos ver dentro de otra vista como si fuera un historial de notificaciones pendientes.
-Además, en el caso de que el dispositivo esté dormido, si había una notificación programada, quiero que despierte al dispositivo sin encender la pantalla, reproduzca un sonido de la micro sd y vuelva a light sleep.
-Implement Sleep/Wake Functionality for notifications.
-```
-Create the AlarmManager and integrate it with the PowerManager to handle waking the device for scheduled notifications.
-```
+Si tengo un error con la micro sd no quiero que no pueda volver a accederse a la micro sd hasta reiniciar el dispositivo. Quiero que se monte de nuevo si es necesario o se gestione de forma que pueda volver a intentarse.
+
+Al estar en light sleep y tener una notificación que despierte la esp32, quiero que simplemente haga el sonido de la notificación (sin mostrarla) y vuelva a entrar en light sleep.
+Extra: no quiero que encienda la pantalla al despertar por una notificación.
 
 Realizar vista de settings que permita guardar ajustes como si queremos obtener hora de wifi al iniciar el dispositivo o no.
 Permitir guardar valores de forma persistente; por ejemplo la hora actual.
