@@ -10,22 +10,19 @@
 #define STT_MANAGER_H
 
 #include <stdbool.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <string>
+#include <functional>
 
 /**
  * @brief Callback to notify the result of the transcription.
  *
- * @warning The receiver of this callback is responsible for freeing the `result`
- *          buffer with `free()` regardless of success or failure.
+ * This callback is memory-safe. The `result` string is passed by const reference
+ * and is managed internally by the stt_manager.
  *
  * @param success true if the transcription was successful.
- * @param result Pointer to the transcribed text (on success) or an error message (on failure).
- * @param user_data A user-provided pointer, passed during the `stt_manager_transcribe` call.
+ * @param result The transcribed text (on success) or an error message (on failure).
  */
-typedef void (*stt_result_callback_t)(bool success, char* result, void* user_data);
+typedef std::function<void(bool success, const std::string& result)> stt_result_callback_t;
 
 /**
  * @brief Initializes the Speech-to-Text manager.
@@ -40,13 +37,8 @@ void stt_manager_init(void);
  *
  * @param file_path Full path of the .wav file to transcribe.
  * @param cb The callback that will be executed upon completion or failure.
- * @param user_data A user-defined pointer that will be passed to the callback for context.
  * @return true if the transcription task was successfully started, false otherwise.
  */
-bool stt_manager_transcribe(const char* file_path, stt_result_callback_t cb, void* user_data);
-
-#ifdef __cplusplus
-}
-#endif
+bool stt_manager_transcribe(const std::string& file_path, stt_result_callback_t cb);
 
 #endif // STT_MANAGER_H

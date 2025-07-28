@@ -70,6 +70,21 @@ bool littlefs_manager_read_file(const char* filename, char** buffer, size_t* siz
  */
 bool littlefs_manager_write_file(const char* filename, const char* content);
 
+/**
+ * @brief Deletes a file from the LittleFS filesystem.
+ * @param filename The name of the file to delete (without the mount point).
+ * @return true on success, false on failure (e.g., file not found).
+ */
+bool littlefs_manager_delete_file(const char* filename);
+
+/**
+ * @brief Renames a file in the LittleFS filesystem.
+ * @param old_name The current name of the file (without the mount point).
+ * @param new_name The desired new name for the file (without the mount point).
+ * @return true on success, false on failure.
+ */
+bool littlefs_manager_rename_file(const char* old_name, const char* new_name);
+
 
 #ifdef __cplusplus
 }

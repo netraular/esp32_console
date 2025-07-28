@@ -6,15 +6,27 @@
 #include "components/audio_player_component/audio_player_component.h"
 #include "components/text_viewer/text_viewer.h"
 #include "esp_log.h"
-#include <string.h>
+#include <string>
 #include <sys/stat.h>
+#include <memory> 
+#include <string.h> // Include for strdup
 
 static const char *TAG = "VOICE_NOTE_PLAYER_VIEW";
 static const char *NOTES_DIR = "/sdcard/notes";
 
+// Struct for passing data from background task to LVGL UI thread.
+// Using std::string makes it memory-safe.
+struct transcription_result_data_t {
+    bool success;
+    std::string result_text;
+    VoiceNotePlayerView* instance; // Pass context back to the UI thread
+};
+
+
 // --- Lifecycle Methods ---
-VoiceNotePlayerView::VoiceNotePlayerView() {
+VoiceNotePlayerView::VoiceNotePlayerView() : loading_indicator(nullptr), action_menu_container(nullptr), file_explorer_host_container(nullptr), action_menu_group(nullptr), styles_initialized(false) {
     ESP_LOGI(TAG, "VoiceNotePlayerView constructed");
+    selected_item_path[0] = '\0';
 }
 
 VoiceNotePlayerView::~VoiceNotePlayerView() {
@@ -170,16 +182,6 @@ void VoiceNotePlayerView::on_viewer_exit() {
     show_file_explorer();
 }
 
-void VoiceNotePlayerView::on_transcription_complete(bool success, char* result) {
-    auto* result_data = new transcription_result_t{success, result, this};
-    if (result_data) {
-        lv_async_call(on_transcription_complete_ui_thread, result_data);
-    } else {
-        ESP_LOGE(TAG, "Failed to allocate memory for async call, result will be lost.");
-        free(result);
-    }
-}
-
 void VoiceNotePlayerView::on_action_menu_ok() {
     if (!action_menu_group) return;
     lv_obj_t* selected_btn = lv_group_get_focused(action_menu_group);
@@ -188,16 +190,33 @@ void VoiceNotePlayerView::on_action_menu_ok() {
     const char* action_text = lv_list_get_button_text(lv_obj_get_parent(selected_btn), selected_btn);
     ESP_LOGI(TAG, "Action '%s' selected for: %s", action_text, selected_item_path);
 
+    std::string path_str = selected_item_path;
+
     if (strcmp(action_text, "Delete") == 0) {
-        sd_manager_delete_item(selected_item_path);
+        sd_manager_delete_item(path_str.c_str());
         destroy_action_menu(true);
     } else if (strcmp(action_text, "Transcribe") == 0) {
         if (!wifi_manager_is_connected()) {
-             wifi_manager_init_sta(); // Attempt to connect
+             wifi_manager_init_sta(); 
         }
         destroy_action_menu(false);
         show_loading_indicator("Transcribing...");
-        if (!stt_manager_transcribe(selected_item_path, stt_callback_c, this)) {
+        
+        // Create a lambda function for the callback.
+        // It captures `this` to access the current view instance.
+        auto stt_lambda_cb = [this](bool success, const std::string& result) {
+            // This code runs in the context of the stt_manager task.
+            // We need to pass the result to the UI thread safely.
+            auto result_data = std::make_unique<transcription_result_data_t>();
+            result_data->success = success;
+            result_data->result_text = result;
+            result_data->instance = this;
+
+            // lv_async_call is thread-safe and will execute the function on the LVGL thread.
+            lv_async_call(on_transcription_complete_ui_thread, result_data.release());
+        };
+
+        if (!stt_manager_transcribe(path_str, stt_lambda_cb)) {
             hide_loading_indicator();
             ESP_LOGE(TAG, "Failed to start transcription task.");
             show_file_explorer();
@@ -230,13 +249,12 @@ void VoiceNotePlayerView::file_long_pressed_cb_c(const char* path, void* user_da
 void VoiceNotePlayerView::explorer_exit_cb_c(void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_explorer_exit(); }
 void VoiceNotePlayerView::player_exit_cb_c(void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_player_exit(); }
 void VoiceNotePlayerView::viewer_exit_cb_c(void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_viewer_exit(); }
-void VoiceNotePlayerView::stt_callback_c(bool success, char* result, void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_transcription_complete(success, result); }
+
 
 void VoiceNotePlayerView::explorer_cleanup_cb(lv_event_t * e) {
     ESP_LOGD(TAG, "Explorer host container deleted. Calling file_explorer_destroy().");
     file_explorer_destroy();
     
-    // --- FIX: Use the correct accessor function ---
     void* user_data = lv_event_get_user_data(e);
     if(user_data) {
         static_cast<VoiceNotePlayerView*>(user_data)->file_explorer_host_container = nullptr;
@@ -244,26 +262,34 @@ void VoiceNotePlayerView::explorer_cleanup_cb(lv_event_t * e) {
 }
 
 void VoiceNotePlayerView::on_transcription_complete_ui_thread(void *user_data) {
-    auto* result_data = static_cast<transcription_result_t*>(user_data);
-    auto* instance = static_cast<VoiceNotePlayerView*>(result_data->user_data);
+    // Take ownership of the data with a unique_ptr to ensure it's deleted.
+    std::unique_ptr<transcription_result_data_t> result_data(static_cast<transcription_result_data_t*>(user_data));
+    
+    VoiceNotePlayerView* instance = result_data->instance;
 
-    if (!instance) {
-        ESP_LOGE(TAG, "Player view instance is null, cannot process transcription result.");
-        free(result_data->result_text);
-        delete result_data;
+    if (!instance || !instance->container) {
+        ESP_LOGE(TAG, "Player view instance or its container is null, cannot process transcription result.");
         return;
     }
 
     instance->hide_loading_indicator();
     
+    // The text_viewer now owns the memory of the C-string.
+    // We must convert the std::string to a dynamically allocated char*.
+    char* content_for_viewer = strdup(result_data->result_text.c_str());
+    if (!content_for_viewer) {
+         ESP_LOGE(TAG, "Failed to allocate memory for text viewer content.");
+         instance->show_file_explorer();
+         return;
+    }
+
     if(result_data->success) {
         ESP_LOGI(TAG, "UI THREAD: Transcription success. Showing result.");
         lv_obj_clean(instance->container);
-        text_viewer_create(instance->container, "Transcription", result_data->result_text, viewer_exit_cb_c, instance);
+        text_viewer_create(instance->container, "Transcription", content_for_viewer, viewer_exit_cb_c, instance);
     } else {
-        ESP_LOGE(TAG, "UI THREAD: Transcription failed: %s", result_data->result_text);
-        free(result_data->result_text);
+        ESP_LOGE(TAG, "UI THREAD: Transcription failed: %s", content_for_viewer);
+        free(content_for_viewer); // Free the memory if not used by the viewer
         instance->show_file_explorer();
     }
-    delete result_data;
 }

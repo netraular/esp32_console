@@ -19,8 +19,6 @@ idf_component_register(
         # --- Componentes del Registro IDF (de idf_component.yml) ---
         button              # Para iot_button en button_manager
         littlefs            # Para esp_littlefs en littlefs_manager
-        json_parser         # <<< PARA notification_manager
-        json_generator      # <<< PARA notification_manager
 
         # --- Componentes del Sistema ESP-IDF (usados por los controladores) ---
         driver              # Para GPIO, SPI, I2S
@@ -35,7 +33,7 @@ idf_component_register(
         esp-tls             # PARA stt_manager (HTTPS)
         esp_system          # PARA power_manager (esp_sleep.h)
         esp_rom             # PARA funciones ROM (ej. en audio_manager)
-        json                # PARA stt_manager (cJSON.h)
+        json                # PARA stt_manager (cJSON.h) Y notification_manager
 
     EMBED_FILES 
         "./server_certs/groq_api_ca.pem"
