@@ -16,6 +16,7 @@ typedef enum {
     // Core Views
     VIEW_ID_STANDBY,
     VIEW_ID_MENU,
+    VIEW_ID_SETTINGS,
 
     // Test Views from the menu
     VIEW_ID_MIC_TEST,
@@ -41,7 +42,7 @@ typedef enum {
 
     // Notification System Views
     VIEW_ID_ADD_NOTIFICATION,
-    VIEW_ID_NOTIFICATION_HISTORY, // <-- ADDED
+    VIEW_ID_NOTIFICATION_HISTORY,
     
     // Add other views here as they are converted
     VIEW_ID_COUNT // Total number of views, must be last

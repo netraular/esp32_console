@@ -10,6 +10,7 @@
 // Core Views
 #include "views/core/standby_view/standby_view.h"
 #include "views/core/menu_view/menu_view.h"
+#include "views/core/settings_view/settings_view.h"
 // Habit Views
 #include "views/habits/habit_add_view/habit_add_view.h"
 #include "views/habits/habit_category_manager_view/habit_category_manager_view.h"
@@ -51,6 +52,7 @@ static std::map<view_id_t, std::function<View*()>> s_view_factory;
 static void initialize_view_factory() {
     s_view_factory[VIEW_ID_STANDBY] = []() { return new StandbyView(); };
     s_view_factory[VIEW_ID_MENU] = []() { return new MenuView(); };
+    s_view_factory[VIEW_ID_SETTINGS] = []() { return new SettingsView(); };
     s_view_factory[VIEW_ID_MULTI_CLICK_TEST] = []() { return new MultiClickTestView(); };
     s_view_factory[VIEW_ID_CLICK_COUNTER_TEST] = []() { return new ClickCounterView(); };
     s_view_factory[VIEW_ID_IMAGE_TEST] = []() { return new ImageTestView(); };
@@ -70,7 +72,7 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_TRACK_HABITS] = []() { return new TrackHabitsView(); };
     s_view_factory[VIEW_ID_HABIT_HISTORY] = []() { return new HabitHistoryView(); };
     s_view_factory[VIEW_ID_ADD_NOTIFICATION] = []() { return new AddNotificationView(); };
-    s_view_factory[VIEW_ID_NOTIFICATION_HISTORY] = []() { return new NotificationHistoryView(); }; // <-- ADDED
+    s_view_factory[VIEW_ID_NOTIFICATION_HISTORY] = []() { return new NotificationHistoryView(); };
 }
 
 void view_manager_init(void) {
@@ -80,7 +82,6 @@ void view_manager_init(void) {
     view_manager_load_view(VIEW_ID_STANDBY);
 }
 
-// ... (rest of the file remains unchanged)
 void view_manager_load_view(view_id_t view_id) {
     static view_id_t s_initializing_view_id = VIEW_ID_COUNT; 
     if (view_id >= VIEW_ID_COUNT) {

@@ -79,8 +79,10 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
 
 void StandbyView::setup_main_button_handlers() {
     button_manager_unregister_view_handlers();
-    // Use CANCEL button to go to the menu
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, menu_press_cb, true, this);
+    // OK button to go to the menu
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, menu_press_cb, true, this);
+    // CANCEL button to go to settings
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, settings_press_cb, true, this);
     
     // ON/OFF button for sleep (tap) and shutdown (long press)
     button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, sleep_press_cb, true, this);
@@ -122,6 +124,10 @@ void StandbyView::update_clock() {
 // --- Instance Methods for Actions ---
 void StandbyView::on_menu_press() {
     view_manager_load_view(VIEW_ID_MENU);
+}
+
+void StandbyView::on_settings_press() {
+    view_manager_load_view(VIEW_ID_SETTINGS);
 }
 
 void StandbyView::on_sleep_press() {
@@ -220,6 +226,10 @@ void StandbyView::update_clock_cb(lv_timer_t* timer) {
 
 void StandbyView::menu_press_cb(void* user_data) {
     static_cast<StandbyView*>(user_data)->on_menu_press();
+}
+
+void StandbyView::settings_press_cb(void* user_data) {
+    static_cast<StandbyView*>(user_data)->on_settings_press();
 }
 
 void StandbyView::sleep_press_cb(void* user_data) {

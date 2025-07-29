@@ -1,0 +1,177 @@
+#include "settings_view.h"
+#include "views/view_manager.h"
+#include "controllers/button_manager/button_manager.h"
+#include "components/status_bar_component/status_bar_component.h"
+#include "components/popup_manager/popup_manager.h"
+#include "controllers/wifi_manager/wifi_manager.h"
+#include "secret_copy.h" // For WIFI_SSID
+#include "esp_log.h"
+#include <string>
+
+static const char *TAG = "SETTINGS_VIEW";
+
+// --- Lifecycle Methods ---
+SettingsView::SettingsView() {
+    ESP_LOGI(TAG, "SettingsView constructed");
+}
+
+SettingsView::~SettingsView() {
+    if (group) {
+        lv_group_del(group);
+        group = nullptr;
+    }
+    reset_styles();
+    ESP_LOGI(TAG, "SettingsView destructed");
+}
+
+void SettingsView::create(lv_obj_t* parent) {
+    container = lv_obj_create(parent);
+    lv_obj_remove_style_all(container);
+    lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
+    lv_obj_center(container);
+    
+    setup_ui(parent);
+    setup_button_handlers();
+}
+
+// --- Style Management ---
+void SettingsView::init_styles() {
+    if (styles_initialized) return;
+    lv_style_init(&style_focused);
+    lv_style_set_bg_color(&style_focused, lv_palette_main(LV_PALETTE_BLUE));
+    lv_style_set_text_color(&style_focused, lv_color_white());
+    styles_initialized = true;
+}
+
+void SettingsView::reset_styles() {
+    if (!styles_initialized) return;
+    lv_style_reset(&style_focused);
+    styles_initialized = false;
+}
+
+// --- UI & Handler Setup ---
+void SettingsView::setup_ui(lv_obj_t* parent) {
+    status_bar_create(parent);
+    init_styles();
+
+    list = lv_list_create(parent);
+    lv_obj_set_size(list, LV_PCT(100), LV_PCT(100) - 20); // Account for status bar
+    lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+    group = lv_group_create();
+    lv_group_set_wrap(group, true);
+
+    populate_settings_list();
+}
+
+void SettingsView::populate_settings_list() {
+    // --- General Section ---
+    lv_list_add_text(list, "General");
+
+    add_setting_item("WiFi SSID", WIFI_SSID);
+
+    char ip_buffer[16] = "Not Connected";
+    wifi_manager_get_ip_address(ip_buffer, sizeof(ip_buffer));
+    add_setting_item("IP Address", ip_buffer);
+
+    // --- User Profile Section ---
+    lv_list_add_text(list, "User Profile");
+    add_setting_item("Bedtime", "22:00");
+    add_setting_item("Birthday", "January 1st");
+    add_setting_item("Age", "30");
+}
+
+void SettingsView::add_setting_item(const char* name, const std::string& value) {
+    lv_obj_t* btn = lv_list_add_button(list, NULL, name);
+    lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
+    lv_group_add_obj(group, btn);
+
+    // This makes the button non-clickable for the user.
+    // It's a list item, not a real button. The OK press is handled by the view.
+    lv_obj_clear_flag(btn, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t* value_label = lv_label_create(btn);
+    lv_label_set_text(value_label, value.c_str());
+    lv_obj_set_style_text_color(value_label, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_align(value_label, LV_ALIGN_RIGHT_MID, -10, 0);
+}
+
+
+void SettingsView::setup_button_handlers() {
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ok_press_cb, true, this);
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, cancel_press_cb, true, this);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, left_press_cb, true, this);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, right_press_cb, true, this);
+}
+
+// --- Instance Methods for Actions ---
+void SettingsView::on_ok_press() {
+    if (!group) return;
+
+    lv_obj_t* focused_obj = lv_group_get_focused(group);
+    if (!focused_obj) return;
+
+    // Check if the focused object is a button (a setting item) and not text (a header)
+    if (lv_obj_check_type(focused_obj, &lv_button_class)) {
+       const char* setting_name = lv_list_get_button_text(list, focused_obj);
+       ESP_LOGI(TAG, "OK pressed on setting: %s", setting_name);
+       popup_manager_show_alert("Not Implemented", "Editing this setting is not implemented yet.", nullptr, nullptr);
+    }
+}
+
+void SettingsView::on_cancel_press() {
+    view_manager_load_view(VIEW_ID_STANDBY);
+}
+
+void SettingsView::on_nav_press(bool is_next) {
+    if (!group) return;
+
+    if (is_next) {
+        lv_group_focus_next(group);
+    } else {
+        lv_group_focus_prev(group);
+    }
+    
+    lv_obj_t* focused_obj = lv_group_get_focused(group);
+    if (!focused_obj) return;
+
+    // Find the very first button (the first real setting item) in the list.
+    // We do this because the list can start with a text header.
+    lv_obj_t* first_button = nullptr;
+    for (uint32_t i = 0; i < lv_obj_get_child_count(list); i++) {
+        lv_obj_t* child = lv_obj_get_child(list, i);
+        if (lv_obj_check_type(child, &lv_button_class)) {
+            first_button = child;
+            break; // Found it, stop searching.
+        }
+    }
+
+    // Check if the currently focused item IS the first button.
+    // This happens when navigating up to the first item or wrapping around from the last.
+    if (focused_obj == first_button) {
+        // If it's the first item, force the scroll to the absolute top of the list
+        // to ensure the "General" header is visible.
+        lv_obj_scroll_to(list, 0, 0, LV_ANIM_ON);
+    } else {
+        // For all other items, use the default behavior which just brings the
+        // item into view. This is more efficient and provides a smoother scroll.
+        lv_obj_scroll_to_view(focused_obj, LV_ANIM_ON);
+    }
+}
+
+// --- Static Callbacks ---
+void SettingsView::ok_press_cb(void* user_data) {
+    static_cast<SettingsView*>(user_data)->on_ok_press();
+}
+
+void SettingsView::cancel_press_cb(void* user_data) {
+    static_cast<SettingsView*>(user_data)->on_cancel_press();
+}
+
+void SettingsView::left_press_cb(void* user_data) {
+    static_cast<SettingsView*>(user_data)->on_nav_press(false);
+}
+
+void SettingsView::right_press_cb(void* user_data) {
+    static_cast<SettingsView*>(user_data)->on_nav_press(true);
+}

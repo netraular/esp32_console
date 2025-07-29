@@ -52,6 +52,7 @@ private:
 
     // --- Instance Methods for Button Actions ---
     void on_menu_press();
+    void on_settings_press();
     void on_sleep_press();
     void on_shutdown_long_press();
     void on_volume_up_long_press_start();
@@ -63,6 +64,7 @@ private:
     static void screen_delete_event_cb(lv_event_t* e); // Handles screen cleanup
     static void update_clock_cb(lv_timer_t* timer);
     static void menu_press_cb(void* user_data);
+    static void settings_press_cb(void* user_data);
     static void sleep_press_cb(void* user_data);
     static void shutdown_long_press_cb(void* user_data);
     static void volume_up_long_press_start_cb(void* user_data);

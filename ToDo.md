@@ -1,8 +1,5 @@
 Si tengo un error con la micro sd no quiero que no pueda volver a accederse a la micro sd hasta reiniciar el dispositivo. Quiero que se monte de nuevo si es necesario o se gestione de forma que pueda volver a intentarse.
 
-Al estar en light sleep y tener una notificación que despierte la esp32, quiero que simplemente haga el sonido de la notificación (sin mostrarla) y vuelva a entrar en light sleep.
-Extra: no quiero que encienda la pantalla al despertar por una notificación.
-
 Realizar vista de settings que permita guardar ajustes como si queremos obtener hora de wifi al iniciar el dispositivo o no.
 Permitir guardar valores de forma persistente; por ejemplo la hora actual.
 

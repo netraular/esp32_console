@@ -7,6 +7,15 @@ file(GLOB_RECURSE MAIN_SRCS
     "*.c"
 )
 
+# --- Explicitly Add New Files ---
+# This ensures that new source files are included in the build even if the GLOB
+# command hasn't been re-run, which resolves potential linker errors.
+list(APPEND MAIN_SRCS
+    "views/core/settings_view/settings_view.cpp"
+)
+list(REMOVE_DUPLICATES MAIN_SRCS)
+
+
 # --- Registro del Componente 'main' ---
 idf_component_register(
     # Variable que ahora contiene todos nuestros ficheros fuente
