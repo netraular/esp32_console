@@ -1,7 +1,5 @@
 Si tengo un error con la micro sd no quiero que no pueda volver a accederse a la micro sd hasta reiniciar el dispositivo. Quiero que se monte de nuevo si es necesario o se gestione de forma que pueda volver a intentarse.
 
-Realizar vista de settings que permita guardar ajustes como si queremos obtener hora de wifi al iniciar el dispositivo o no.
-Permitir guardar valores de forma persistente; por ejemplo la hora actual.
 
 Se debería esprar a hacer las inicializaciones de forma progresiva evitando que se avanze la pantalla de standby y mostrando "Loading..." hasta que todo esté funcional en vez de dejar que el usuario se mueva entre menus mientras se conecta al wifi?
 

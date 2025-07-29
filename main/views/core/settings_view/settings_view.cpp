@@ -133,28 +133,9 @@ void SettingsView::on_nav_press(bool is_next) {
     }
     
     lv_obj_t* focused_obj = lv_group_get_focused(group);
-    if (!focused_obj) return;
-
-    // Find the very first button (the first real setting item) in the list.
-    // We do this because the list can start with a text header.
-    lv_obj_t* first_button = nullptr;
-    for (uint32_t i = 0; i < lv_obj_get_child_count(list); i++) {
-        lv_obj_t* child = lv_obj_get_child(list, i);
-        if (lv_obj_check_type(child, &lv_button_class)) {
-            first_button = child;
-            break; // Found it, stop searching.
-        }
-    }
-
-    // Check if the currently focused item IS the first button.
-    // This happens when navigating up to the first item or wrapping around from the last.
-    if (focused_obj == first_button) {
-        // If it's the first item, force the scroll to the absolute top of the list
-        // to ensure the "General" header is visible.
-        lv_obj_scroll_to(list, 0, 0, LV_ANIM_ON);
-    } else {
-        // For all other items, use the default behavior which just brings the
-        // item into view. This is more efficient and provides a smoother scroll.
+    if (focused_obj) {
+        // Automatically scroll the list to make the focused item visible.
+        // This provides a smooth and consistent scrolling experience.
         lv_obj_scroll_to_view(focused_obj, LV_ANIM_ON);
     }
 }
