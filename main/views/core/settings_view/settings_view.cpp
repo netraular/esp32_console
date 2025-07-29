@@ -86,6 +86,11 @@ void SettingsView::add_setting_item(const char* name, const std::string& value) 
     lv_obj_add_style(btn, &style_focused, LV_STATE_FOCUSED);
     lv_group_add_obj(group, btn);
 
+    // Capture the first item added to the list for special scroll handling.
+    if (!first_setting_item) {
+        first_setting_item = btn;
+    }
+
     // This makes the button non-clickable for the user.
     // It's a list item, not a real button. The OK press is handled by the view.
     lv_obj_clear_flag(btn, LV_OBJ_FLAG_CLICKABLE);
@@ -98,27 +103,12 @@ void SettingsView::add_setting_item(const char* name, const std::string& value) 
 
 
 void SettingsView::setup_button_handlers() {
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ok_press_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, cancel_press_cb, true, this);
     button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, left_press_cb, true, this);
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, right_press_cb, true, this);
 }
 
 // --- Instance Methods for Actions ---
-void SettingsView::on_ok_press() {
-    if (!group) return;
-
-    lv_obj_t* focused_obj = lv_group_get_focused(group);
-    if (!focused_obj) return;
-
-    // Check if the focused object is a button (a setting item) and not text (a header)
-    if (lv_obj_check_type(focused_obj, &lv_button_class)) {
-       const char* setting_name = lv_list_get_button_text(list, focused_obj);
-       ESP_LOGI(TAG, "OK pressed on setting: %s", setting_name);
-       popup_manager_show_alert("Not Implemented", "Editing this setting is not implemented yet.", nullptr, nullptr);
-    }
-}
-
 void SettingsView::on_cancel_press() {
     view_manager_load_view(VIEW_ID_STANDBY);
 }
@@ -134,17 +124,17 @@ void SettingsView::on_nav_press(bool is_next) {
     
     lv_obj_t* focused_obj = lv_group_get_focused(group);
     if (focused_obj) {
-        // Automatically scroll the list to make the focused item visible.
-        // This provides a smooth and consistent scrolling experience.
-        lv_obj_scroll_to_view(focused_obj, LV_ANIM_ON);
+        // If the focused item is the very first one, scroll the whole list to the top.
+        // Otherwise, just scroll to bring the focused item into view.
+        if (focused_obj == first_setting_item) {
+            lv_obj_scroll_to(list, 0, 0, LV_ANIM_ON);
+        } else {
+            lv_obj_scroll_to_view(focused_obj, LV_ANIM_ON);
+        }
     }
 }
 
 // --- Static Callbacks ---
-void SettingsView::ok_press_cb(void* user_data) {
-    static_cast<SettingsView*>(user_data)->on_ok_press();
-}
-
 void SettingsView::cancel_press_cb(void* user_data) {
     static_cast<SettingsView*>(user_data)->on_cancel_press();
 }

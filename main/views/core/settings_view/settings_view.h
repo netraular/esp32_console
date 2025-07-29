@@ -20,6 +20,7 @@ public:
 private:
     // --- UI Widgets ---
     lv_obj_t* list = nullptr;
+    lv_obj_t* first_setting_item = nullptr;
     lv_group_t* group = nullptr;
     lv_style_t style_focused;
     bool styles_initialized = false;
@@ -35,12 +36,10 @@ private:
     void add_setting_item(const char* name, const std::string& value);
     
     // --- Instance Methods for Button Actions ---
-    void on_ok_press();
     void on_cancel_press();
     void on_nav_press(bool is_next);
 
     // --- Static Callbacks (Bridge to C-style APIs) ---
-    static void ok_press_cb(void* user_data);
     static void cancel_press_cb(void* user_data);
     static void left_press_cb(void* user_data);
     static void right_press_cb(void* user_data);
