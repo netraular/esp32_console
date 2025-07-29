@@ -20,14 +20,10 @@ static const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
 std::vector<Notification> NotificationManager::s_notifications;
 uint32_t NotificationManager::s_next_id = 1;
 lv_timer_t* NotificationManager::s_dispatcher_timer = nullptr;
-bool NotificationManager::s_wakeup_sound_pending = false;
-static uint32_t s_dispatcher_paused_until = 0;
 
 void NotificationManager::init() {
     s_notifications.clear();
     s_next_id = 1;
-    s_wakeup_sound_pending = false;
-    s_dispatcher_paused_until = 0;
     if (littlefs_manager_ensure_dir_exists(DATA_DIR)) {
         load_notifications();
     } else {
@@ -38,33 +34,16 @@ void NotificationManager::init() {
     ESP_LOGI(TAG, "Notification Manager initialized and dispatcher started.");
 }
 
-// ... (dispatcher_task and other methods remain the same) ...
 void NotificationManager::dispatcher_task(lv_timer_t* timer) {
-    if (s_wakeup_sound_pending) {
-        s_wakeup_sound_pending = false; 
-        ESP_LOGI(TAG, "Dispatcher playing wake-up notification sound.");
-        if (sd_manager_check_ready()) {
-            struct stat st;
-            if (stat(NOTIFICATION_SOUND_PATH, &st) == 0) {
-                audio_manager_play(NOTIFICATION_SOUND_PATH);
-            } else {
-                ESP_LOGW(TAG, "Notification sound file not found at %s", NOTIFICATION_SOUND_PATH);
-            }
-        } else {
-            ESP_LOGW(TAG, "SD card not ready, cannot play notification sound.");
-        }
-        s_dispatcher_paused_until = esp_log_timestamp() + 2000;
-    }
-
-    if (esp_log_timestamp() < s_dispatcher_paused_until) {
-        return;
-    }
-
+    // If the view is not the standby screen, or a popup is active, do nothing.
+    // This prevents notifications from appearing over other applications.
     if (view_manager_get_current_view_id() != VIEW_ID_STANDBY || popup_manager_is_active()) {
         return;
     }
 
     time_t now = time(NULL);
+    // Check for a notification that is due in the current second.
+    // We check a 1-second window to prevent missing a notification if the timer fires slightly late.
     time_t one_second_ago = now - 1;
 
     auto it = std::find_if(s_notifications.begin(), s_notifications.end(), 
@@ -74,17 +53,24 @@ void NotificationManager::dispatcher_task(lv_timer_t* timer) {
 
     if (it != s_notifications.end()) {
         Notification& notif_to_show = *it;
-        ESP_LOGI(TAG, "Dispatching visual notification popup for ID: %lu to StandbyView", notif_to_show.id);
+        ESP_LOGI(TAG, "Dispatching visual notification for ID: %lu to StandbyView", notif_to_show.id);
         
+        // Show the popup on the standby screen.
         StandbyView::show_notification_popup(notif_to_show);
         
+        // Also play a sound for notifications that occur while the device is awake.
+        if (sd_manager_check_ready()) {
+            struct stat st;
+            if (stat(NOTIFICATION_SOUND_PATH, &st) == 0) {
+                audio_manager_play(NOTIFICATION_SOUND_PATH);
+            } else {
+                ESP_LOGW(TAG, "Notification sound file not found at %s", NOTIFICATION_SOUND_PATH);
+            }
+        }
+
+        // Mark the notification as read so it doesn't show again.
         mark_as_read(notif_to_show.id);
     }
-}
-
-void NotificationManager::handle_wakeup_event() {
-    s_wakeup_sound_pending = true;
-    ESP_LOGI(TAG, "Wake-up event received. Sound playback is pending for the next dispatcher cycle.");
 }
 
 time_t NotificationManager::get_next_notification_timestamp() {
@@ -199,25 +185,22 @@ void NotificationManager::save_notifications() {
         return;
     }
 
-    // --- Atomic Write Implementation ---
-    // 1. Write to temporary file
+    // Atomic Write Implementation
     if (!littlefs_manager_write_file(NOTIFICATIONS_TEMP_PATH, json_string)) {
         ESP_LOGE(TAG, "Failed to write to temporary notifications file.");
         free(json_string);
         return;
     }
 
-    // 2. Delete original file (if it exists)
     if (littlefs_manager_file_exists(NOTIFICATIONS_FILE_PATH)) {
         if (!littlefs_manager_delete_file(NOTIFICATIONS_FILE_PATH)) {
              ESP_LOGE(TAG, "Failed to delete old notifications file. Aborting atomic save.");
-             littlefs_manager_delete_file(NOTIFICATIONS_TEMP_PATH); // Clean up temp file
+             littlefs_manager_delete_file(NOTIFICATIONS_TEMP_PATH);
              free(json_string);
              return;
         }
     }
 
-    // 3. Rename temporary file to original
     if (!littlefs_manager_rename_file(NOTIFICATIONS_TEMP_PATH, NOTIFICATIONS_FILE_PATH)) {
         ESP_LOGE(TAG, "CRITICAL: Failed to rename temp notifications file. Data may be in '.tmp' file!");
     } else {
@@ -228,11 +211,9 @@ void NotificationManager::save_notifications() {
 }
 
 void NotificationManager::load_notifications() {
-    // --- Atomic Load/Recovery Implementation ---
-    // 1. Check if a temporary file exists. This indicates a failed write.
+    // Atomic Load/Recovery
     if (littlefs_manager_file_exists(NOTIFICATIONS_TEMP_PATH)) {
         ESP_LOGW(TAG, "Found temporary notifications file, indicating an incomplete write.");
-        // Attempt to restore by renaming it. If this fails, delete it to prevent loops.
         if (littlefs_manager_rename_file(NOTIFICATIONS_TEMP_PATH, NOTIFICATIONS_FILE_PATH)) {
             ESP_LOGI(TAG, "Successfully restored from temporary file.");
         } else {
@@ -257,13 +238,13 @@ void NotificationManager::load_notifications() {
         if (error_ptr != NULL) {
             ESP_LOGE(TAG, "Failed to parse JSON file. Error near: %s", error_ptr);
         } else {
-            ESP_LOGE(TAG, "Failed to parse JSON file. Unknown error (possibly out of memory).");
+            ESP_LOGE(TAG, "Failed to parse JSON file. Unknown error.");
         }
         free(file_buffer);
         return;
     }
     
-    free(file_buffer); // Buffer is no longer needed after successful parsing
+    free(file_buffer);
 
     if (!cJSON_IsArray(root)) {
         ESP_LOGE(TAG, "JSON root is not an array.");
