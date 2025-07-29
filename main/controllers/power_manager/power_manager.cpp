@@ -13,6 +13,23 @@
 #include "controllers/notification_manager/notification_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
+#include "controllers/screen_manager/screen_manager.h"
+
+/**
+ * @brief DESIGN NOTE: Light Sleep Notification Handling
+ *
+ * This is the INTENTIONAL behavior for timer-based (notification) wakeups:
+ * - The device wakes.
+ * - It plays the notification sound ONLY.
+ * - The screen remains OFF.
+ * - It immediately returns to sleep.
+ *
+ * This is critical for battery saving. The user can view missed notifications
+ * in the history view after manually waking the device.
+ *
+ * *** DO NOT attempt to show UI/popups from this power manager. ***
+ */
+// --- END NEW COMMENT ---
 
 static const char* TAG = "POWER_MGR";
 static const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
@@ -44,6 +61,9 @@ sleep_entry_point:
         ESP_LOGI(TAG, "System time not synced, skipping timer wakeup setup.");
     }
 
+    ESP_LOGI(TAG, "Turning backlight OFF for sleep.");
+    screen_set_backlight(false);
+    
     ESP_LOGI(TAG, "Entering light sleep. Wake-up source(s) configured. System will now pause.");
     vTaskDelay(pdMS_TO_TICKS(30)); // Allow logs to be flushed
 
@@ -59,6 +79,7 @@ sleep_entry_point:
 
     // --- Handle Wake-up Cause ---
     if (cause == ESP_SLEEP_WAKEUP_TIMER) {
+        // Woken by notification timer. Play sound and go back to sleep.
         ESP_LOGI(TAG, "Wakeup by timer. Playing notification sound and returning to sleep.");
         
         if (sd_manager_check_ready()) {
@@ -77,10 +98,13 @@ sleep_entry_point:
             ESP_LOGW(TAG, "SD card not ready, cannot play notification sound.");
         }
         
-        goto sleep_entry_point; // Re-enter sleep cycle
+        goto sleep_entry_point; // Re-enter sleep cycle, screen remains OFF
     }
 
     // --- Woken up by GPIO (user) or other source. Resume normal operation. ---
+    ESP_LOGI(TAG, "Woken up by user, turning backlight ON.");
+    screen_set_backlight(true);
+
     ESP_LOGI(TAG, "Waiting for wake-up button to be released...");
     while (gpio_get_level(BUTTON_ON_OFF_PIN) == 0) {
         vTaskDelay(pdMS_TO_TICKS(50));

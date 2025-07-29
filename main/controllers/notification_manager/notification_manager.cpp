@@ -44,6 +44,17 @@ void NotificationManager::dispatcher_task(lv_timer_t* timer) {
     time_t now = time(NULL);
     // Check for a notification that is due in the current second.
     // We check a 1-second window to prevent missing a notification if the timer fires slightly late.
+     /**
+     * @brief DESIGN NOTE: Dispatcher Logic
+     * This dispatcher is INTENTIONALLY designed to only show popups for
+     * notifications that trigger in real-time (within the last second)
+     * while the device is awake and on the Standby screen.
+     *
+     * This prevents a "popup storm" of old notifications when the user
+     * manually wakes the device. Notifications that occurred during sleep
+     * only play a sound (handled by Power Manager) and can be viewed
+     * in the history screen.
+     */
     time_t one_second_ago = now - 1;
 
     auto it = std::find_if(s_notifications.begin(), s_notifications.end(), 

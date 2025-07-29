@@ -87,7 +87,7 @@ screen_t* screen_init() {
     bk_gpio_config.mode = GPIO_MODE_OUTPUT;
     
     ESP_ERROR_CHECK(gpio_config(&bk_gpio_config));
-    gpio_set_level(TFT_BL, 1); // Turn backlight on
+    screen_set_backlight(true); // Turn backlight on using the new function
     ESP_LOGI(TAG, "Backlight enabled");
 
     // 6. LVGL initialization
@@ -125,4 +125,9 @@ void screen_deinit(screen_t* screen) {
         delete screen;
         ESP_LOGI(TAG, "Screen deinitialized");
     }
+}
+
+void screen_set_backlight(bool on) {
+    ESP_LOGI(TAG, "Setting backlight %s", on ? "ON" : "OFF");
+    gpio_set_level(TFT_BL, on ? 1 : 0);
 }

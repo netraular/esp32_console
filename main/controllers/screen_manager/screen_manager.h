@@ -43,4 +43,11 @@ screen_t* screen_init();
  */
 void screen_deinit(screen_t* screen);
 
+/**
+ * @brief Turns the display backlight on or off.
+ *
+ * @param on Set to true to turn the backlight on, false to turn it off.
+ */
+void screen_set_backlight(bool on);
+
 #endif
