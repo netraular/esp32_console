@@ -11,6 +11,7 @@
  *
  * It displays the current time and date, provides volume controls, and handles
  * power management actions like light sleep and deep sleep (shutdown). It serves
+
  * as the entry point to the rest of the application's UI.
  */
 class StandbyView : public View {

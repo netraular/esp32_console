@@ -76,19 +76,11 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     
     status_bar_create(parent);
 
-    // Container for the central content (image and clock), positioned from the top
-    lv_obj_t* central_content_cont = lv_obj_create(parent);
-    lv_obj_remove_style_all(central_content_cont);
-    lv_obj_set_size(central_content_cont, LV_PCT(100), LV_PCT(70));
-    lv_obj_align(central_content_cont, LV_ALIGN_TOP_MID, 0, 25); // Move container up
-    lv_obj_set_layout(central_content_cont, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(central_content_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(central_content_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_BETWEEN);
-    add_debug_border(central_content_cont);
-
     // Top section: Image placeholder
-    lv_obj_t* image_placeholder = lv_obj_create(central_content_cont);
-    lv_obj_set_size(image_placeholder, 50, 50);
+    // This container's height is implicitly set by its content (the 64px tall image placeholder).
+    lv_obj_t* image_placeholder = lv_obj_create(parent);
+    lv_obj_set_size(image_placeholder, 128, 64);
+    lv_obj_align(image_placeholder, LV_ALIGN_TOP_MID, 0, 5); // Align to top, with small padding
     lv_obj_set_style_bg_color(image_placeholder, lv_palette_main(LV_PALETTE_ORANGE), 0);
     lv_obj_set_style_radius(image_placeholder, 8, 0);
     lv_obj_set_style_border_width(image_placeholder, 0, 0);
@@ -98,37 +90,36 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     add_debug_border(image_placeholder);
 
     // Middle section: Clock and Date container
-    lv_obj_t* clock_container = lv_obj_create(central_content_cont);
+    // Positioned relative to the image, and enlarged to allow its content to be moved up.
+    lv_obj_t* clock_container = lv_obj_create(parent);
     lv_obj_remove_style_all(clock_container);
-    lv_obj_set_width(clock_container, LV_PCT(100)); // Crucial: give container full width to center its content
-    lv_obj_set_height(clock_container, LV_SIZE_CONTENT);
+    lv_obj_set_width(clock_container, LV_PCT(100)); // Full width for horizontal centering of content
+    lv_obj_set_height(clock_container, 130);       // Enlarged height to provide layout space
+    lv_obj_align_to(clock_container, image_placeholder, LV_ALIGN_OUT_BOTTOM_MID, 0, 0); // Position below image
     lv_obj_set_layout(clock_container, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(clock_container, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(clock_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    // Align content at the top of this container, making it appear higher on screen
+    lv_obj_set_flex_align(clock_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(clock_container, 12, 0); // Spacing between time and date
     add_debug_border(clock_container);
 
     center_time_label = lv_label_create(clock_container);
-    // Let the label auto-size. The parent flex container will center it horizontally.
     lv_obj_set_style_text_font(center_time_label, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(center_time_label, lv_color_white(), 0);
 
-    // Set placeholder text to calculate initial size for pivot
     lv_label_set_text(center_time_label, "00:00");
-    // Force layout update to get correct dimensions before setting pivot
     lv_obj_update_layout(center_time_label);
 
-    // Set pivot to the label's center using style properties *before* applying zoom
     lv_obj_set_style_transform_pivot_x(center_time_label, lv_obj_get_width(center_time_label) / 2, 0);
     lv_obj_set_style_transform_pivot_y(center_time_label, lv_obj_get_height(center_time_label) / 2, 0);
     
-    // Apply zoom. It will now scale from the new pivot.
     lv_obj_set_style_transform_zoom(center_time_label, 384, 0); // 1.5x zoom
     add_debug_border(center_time_label);
 
     center_date_label = lv_label_create(clock_container);
     lv_obj_set_style_text_font(center_date_label, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_color(center_date_label, lv_color_white(), 0);
+    lv_obj_set_style_translate_y(center_date_label, 0, 0);
     add_debug_border(center_date_label);
     
     // Bottom section: Weather forecast placeholders, pinned to the bottom of the screen
@@ -138,8 +129,7 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_layout(forecast_container, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(forecast_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(forecast_container, 5, 0); // 5px spacing between widgets
-    // Move the entire widget group 5px up from the bottom edge
-    lv_obj_align(forecast_container, LV_ALIGN_BOTTOM_MID, 0, 0); 
+    lv_obj_align(forecast_container, LV_ALIGN_BOTTOM_MID, 0, 0); //touching the bottom border
     add_debug_border(forecast_container);
 
     create_forecast_widget(forecast_container, "11 AM");
@@ -148,7 +138,7 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     
     // Syncing label (overlaid on the screen)
     loading_label = lv_label_create(parent);
-    lv_obj_align(loading_label, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_align(loading_label, LV_ALIGN_BOTTOM_MID, 0, -5); // Align with forecast widgets
     lv_obj_set_style_text_color(loading_label, lv_color_white(), 0);
     lv_label_set_text(loading_label, "Syncing time...");
 
@@ -163,11 +153,9 @@ void StandbyView::create_forecast_widget(lv_obj_t* parent, const char* time_text
     lv_obj_set_layout(widget_cont, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(widget_cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(widget_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    // Reduce the space between the icon and the text to bring them closer
     lv_obj_set_style_pad_row(widget_cont, 2, 0);
     add_debug_border(widget_cont);
 
-    // Icon placeholder (a colored circle)
     lv_obj_t* icon_placeholder = lv_obj_create(widget_cont);
     lv_obj_set_size(icon_placeholder, 50, 50);
     lv_obj_set_style_radius(icon_placeholder, LV_RADIUS_CIRCLE, 0);
@@ -175,7 +163,6 @@ void StandbyView::create_forecast_widget(lv_obj_t* parent, const char* time_text
     lv_obj_set_style_border_width(icon_placeholder, 0, 0);
     add_debug_border(icon_placeholder);
 
-    // Time label
     lv_obj_t* time_label = lv_label_create(widget_cont);
     lv_label_set_text(time_label, time_text);
     lv_obj_set_style_text_color(time_label, lv_color_white(), 0);
@@ -184,20 +171,12 @@ void StandbyView::create_forecast_widget(lv_obj_t* parent, const char* time_text
 
 void StandbyView::setup_main_button_handlers() {
     button_manager_unregister_view_handlers();
-    // OK button to go to the menu
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, menu_press_cb, true, this);
-    // CANCEL button to go to settings
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, settings_press_cb, true, this);
-    
-    // ON/OFF button for sleep (tap) and shutdown (long press)
     button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, sleep_press_cb, true, this);
     button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_LONG_PRESS_START, shutdown_long_press_cb, true, this);
-    
-    // RIGHT button long press for volume up
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_START, volume_up_long_press_start_cb, true, this);
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_PRESS_UP, volume_up_press_up_cb, true, this);
-    
-    // LEFT button long press for volume down
     button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_LONG_PRESS_START, volume_down_long_press_start_cb, true, this);
     button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_PRESS_UP, volume_down_press_up_cb, true, this);
 }
@@ -205,7 +184,6 @@ void StandbyView::setup_main_button_handlers() {
 // --- UI Logic ---
 void StandbyView::update_clock() {
     time_t now = time(NULL);
-    // Check for a valid time (after year 2023)
     if (now > 1672531200) {
         if (!is_time_synced) {
             is_time_synced = true;
@@ -250,7 +228,6 @@ void StandbyView::handle_shutdown_result(popup_result_t result) {
     if (result == POPUP_RESULT_PRIMARY) {
         power_manager_enter_deep_sleep();
     } else {
-        // User cancelled, re-register handlers
         setup_main_button_handlers();
     }
 }
@@ -291,7 +268,6 @@ void StandbyView::show_notification_popup(const Notification& notif) {
 
     ESP_LOGI(TAG, "Showing notification popup: %s", notif.title.c_str());
 
-    // Play a sound if the file exists on the SD card
     if (sd_manager_is_mounted()) {
         struct stat st;
         if (stat(NOTIFICATION_SOUND_PATH, &st) == 0) {
@@ -303,7 +279,6 @@ void StandbyView::show_notification_popup(const Notification& notif) {
         ESP_LOGW(TAG, "SD card not mounted, cannot play notification sound.");
     }
     
-    // Show the popup
     popup_manager_show_alert(
         notif.title.c_str(),
         notif.message.c_str(),

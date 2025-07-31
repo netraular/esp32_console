@@ -110,9 +110,8 @@ void view_manager_load_view(view_id_t view_id) {
 
     // Reset all local styles on the screen object itself. This removes any styles
     // (like gradients) that a misbehaving view might have applied directly to the screen.
-    // We cast the result to silence the C++ enum-enum conversion warning.
-    // LV_STATE_ANY ensures we clean styles from all states (default, focused, etc.).
-    lv_obj_remove_style(scr, NULL, (lv_style_selector_t)(LV_PART_MAIN | LV_STATE_ANY));
+    // The correct way to combine enums is to cast each one *before* the bitwise OR.
+    lv_obj_remove_style(scr, NULL, (lv_style_selector_t)LV_PART_MAIN | (lv_style_selector_t)LV_STATE_ANY);
 
 
     // Now, apply a clean, default background to the screen. All views will be
