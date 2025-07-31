@@ -12,7 +12,8 @@
 static const char* TAG = "WEATHER_MGR";
 
 // --- API Configuration ---
-#define OPEN_METEO_URL "https://api.open-meteo.com/v1/forecast?latitude=41.39&longitude=2.16&hourly=weather_code&forecast_days=1&timezone=Europe%2FBerlin"
+// FIX: Request 2 days of data to ensure look-ahead (+12h) is always valid.
+#define OPEN_METEO_URL "https://api.open-meteo.com/v1/forecast?latitude=41.39&longitude=2.16&hourly=weather_code&forecast_days=2&timezone=Europe%2FBerlin"
 #define WEATHER_FETCH_INTERVAL_MS (30 * 60 * 1000) // 30 minutes
 
 // --- Static Members ---
@@ -91,7 +92,7 @@ void WeatherManager::weather_fetch_task(void* pvParameters) {
                     cJSON *hourly = cJSON_GetObjectItem(root, "hourly");
                     if (hourly) {
                         cJSON *time_array = cJSON_GetObjectItem(hourly, "time");
-                        cJSON *wcode_array = cJSON_GetObjectItem(hourly, "weather_code"); // FIX: Use correct key "weather_code"
+                        cJSON *wcode_array = cJSON_GetObjectItem(hourly, "weather_code");
 
                         if (cJSON_IsArray(time_array) && cJSON_IsArray(wcode_array)) {
                             std::vector<ForecastData> new_forecast;
@@ -113,30 +114,35 @@ void WeatherManager::weather_fetch_task(void* pvParameters) {
 
                             if (current_hour_idx != -1) {
                                 int hours_to_get[] = {1, 8, 12}; // Forecast for +1, +8, +12 hours
-                                ESP_LOGI(TAG, "--- Parsed Weather Forecast ---");
                                 for (int h : hours_to_get) {
                                     int forecast_idx = current_hour_idx + h;
                                     if (forecast_idx < cJSON_GetArraySize(wcode_array) && forecast_idx < cJSON_GetArraySize(time_array)) {
                                         ForecastData fd;
                                         fd.weather_code = cJSON_GetArrayItem(wcode_array, forecast_idx)->valueint;
                                         
-                                        // Create a proper timestamp for the forecast hour
                                         struct tm forecast_tm = timeinfo;
                                         forecast_tm.tm_hour += h;
-                                        // mktime handles day/month rollovers correctly
                                         fd.timestamp = mktime(&forecast_tm);
                                         new_forecast.push_back(fd);
+                                    }
+                                }
 
+                                if (!new_forecast.empty()) {
+                                    ESP_LOGI(TAG, "--- Parsed Weather Forecast ---");
+                                    for(const auto& fd : new_forecast) {
+                                        struct tm forecast_tm;
+                                        localtime_r(&fd.timestamp, &forecast_tm);
                                         char time_buf[20];
                                         strftime(time_buf, sizeof(time_buf), "%H:00", &forecast_tm);
                                         ESP_LOGI(TAG, "  - Time: %s, Weather Code: %d, Symbol: %s", time_buf, fd.weather_code, wmo_code_to_lvgl_symbol(fd.weather_code));
                                     }
+                                    ESP_LOGI(TAG, "-------------------------------");
+                                    xSemaphoreTake(s_data_mutex, portMAX_DELAY);
+                                    s_cached_forecast = new_forecast;
+                                    xSemaphoreGive(s_data_mutex);
+                                } else {
+                                     ESP_LOGW(TAG, "Parsing resulted in an empty forecast list.");
                                 }
-                                ESP_LOGI(TAG, "-------------------------------");
-
-                                xSemaphoreTake(s_data_mutex, portMAX_DELAY);
-                                s_cached_forecast = new_forecast;
-                                xSemaphoreGive(s_data_mutex);
                             } else {
                                 ESP_LOGE(TAG, "Could not find current hour in API response.");
                             }
