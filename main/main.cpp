@@ -23,6 +23,7 @@
 #include "controllers/notification_manager/notification_manager.h"
 #include "views/view_manager.h"
 #include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
+#include "controllers/weather_manager/weather_manager.h"
 
 
 
@@ -123,13 +124,17 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "WiFi manager initialized.");
     wifi_streamer_init();
     ESP_LOGI(TAG, "WiFi streamer initialized.");
+    
+    // Initialize the Weather Manager (depends on WiFi)
+    WeatherManager::init();
+    ESP_LOGI(TAG, "Weather manager initialized.");
 
     // Initialize the Speech-to-Text manager
     stt_manager_init();
     ESP_LOGI(TAG, "STT manager initialized.");
 
     // Initialize Notification Manager
-    NotificationManager::init(); // <-- ADDED
+    NotificationManager::init();
     ESP_LOGI(TAG, "Notification manager initialized.");
 
     // Initialize the view manager, which creates the main UI.

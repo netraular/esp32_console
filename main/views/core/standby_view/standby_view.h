@@ -5,13 +5,13 @@
 #include "lvgl.h"
 #include "components/popup_manager/popup_manager.h"
 #include "models/notification_data_model.h"
+#include <array>
 
 /**
  * @brief The StandbyView class represents the main idle/clock screen.
  *
  * It displays the current time and date, provides volume controls, and handles
  * power management actions like light sleep and deep sleep (shutdown). It serves
-
  * as the entry point to the rest of the application's UI.
  */
 class StandbyView : public View {
@@ -28,6 +28,12 @@ public:
     static void show_notification_popup(const Notification& notif);
 
 private:
+    // --- UI Widget Structs ---
+    struct ForecastWidgetUI {
+        lv_obj_t* time_label;
+        lv_obj_t* icon_label;
+    };
+
     // --- Singleton-like instance for static callbacks ---
     static StandbyView* s_instance;
 
@@ -35,6 +41,7 @@ private:
     lv_obj_t* center_time_label = nullptr;
     lv_obj_t* center_date_label = nullptr;
     lv_obj_t* loading_label = nullptr;
+    std::array<ForecastWidgetUI, 3> forecast_widgets;
     
     // --- Timers ---
     lv_timer_t* update_timer = nullptr;
@@ -47,10 +54,12 @@ private:
     // --- Private Methods for Setup ---
     void setup_ui(lv_obj_t* parent);
     void setup_main_button_handlers();
-    void create_forecast_widget(lv_obj_t* parent, const char* time_text);
+    ForecastWidgetUI create_forecast_widget(lv_obj_t* parent);
 
     // --- Private Methods for UI Logic ---
     void update_clock();
+    void update_weather();
+    void show_weather_placeholders();
 
     // --- Instance Methods for Button Actions ---
     void on_menu_press();

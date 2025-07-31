@@ -38,14 +38,15 @@ idf_component_register(
         nvs_flash           # Para data_manager y wifi_manager
         fatfs               # PARA sd_card_manager (esp_vfs_fat.h)
         sdmmc               # PARA sd_card_manager
-        esp_http_client     # PARA stt_manager
-        esp-tls             # PARA stt_manager (HTTPS)
+        esp_http_client     # PARA stt_manager y weather_manager
+        esp-tls             # PARA stt_manager (HTTPS) y weather_manager
         esp_system          # PARA power_manager (esp_sleep.h)
         esp_rom             # PARA funciones ROM (ej. en audio_manager)
         json                # PARA stt_manager (cJSON.h) Y notification_manager
 
     EMBED_FILES 
         "./server_certs/groq_api_ca.pem"
+        "./server_certs/open_meteo_ca.pem"
         "./littlefs/welcome.txt"
 )
 

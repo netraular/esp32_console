@@ -6,10 +6,12 @@
 #include "controllers/audio_manager/audio_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "components/status_bar_component/status_bar_component.h"
+#include "controllers/weather_manager/weather_manager.h"
 #include "esp_log.h"
 #include <time.h>
 #include <sys/stat.h>
 #include <string>
+#include <array>
 
 static const char *TAG = "STANDBY_VIEW";
 const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
@@ -137,21 +139,26 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_style_pad_column(forecast_container, 10, 0); // 10px spacing between widgets
     add_debug_border(forecast_container);
 
-    create_forecast_widget(forecast_container, "11 AM");
-    create_forecast_widget(forecast_container, "1 PM");
-    create_forecast_widget(forecast_container, "3 PM");
+    // Create the 3 forecast widgets and store their UI elements
+    for (int i = 0; i < 3; ++i) {
+        forecast_widgets[i] = create_forecast_widget(forecast_container);
+    }
     
+    show_weather_placeholders(); // Set the initial "loading" state
+
     // Syncing label (overlaid on the screen, not part of the flex layout)
     loading_label = lv_label_create(lv_screen_active()); // Create on screen to overlay everything
     lv_obj_align(loading_label, LV_ALIGN_BOTTOM_MID, 0, -5); 
     lv_obj_set_style_text_color(loading_label, lv_color_white(), 0);
     lv_label_set_text(loading_label, "Syncing time...");
 
-    update_clock(); // Initial update
-    update_timer = lv_timer_create(update_clock_cb, 500, this);
+    update_clock(); // Initial update (which will also call update_weather)
+    update_timer = lv_timer_create(update_clock_cb, 1000, this); // Check every second
 }
 
-void StandbyView::create_forecast_widget(lv_obj_t* parent, const char* time_text) {
+StandbyView::ForecastWidgetUI StandbyView::create_forecast_widget(lv_obj_t* parent) {
+    ForecastWidgetUI ui;
+
     lv_obj_t* widget_cont = lv_obj_create(parent);
     lv_obj_remove_style_all(widget_cont);
     lv_obj_set_size(widget_cont, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -159,21 +166,21 @@ void StandbyView::create_forecast_widget(lv_obj_t* parent, const char* time_text
     lv_obj_set_flex_flow(widget_cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(widget_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(widget_cont, 2, 0);
-    // Add 2px padding to the top and bottom of the widget container
     lv_obj_set_style_pad_ver(widget_cont, 2, 0);
     add_debug_border(widget_cont);
 
-    lv_obj_t* icon_placeholder = lv_obj_create(widget_cont);
-    lv_obj_set_size(icon_placeholder, 50, 50);
-    lv_obj_set_style_radius(icon_placeholder, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(icon_placeholder, lv_color_hex(0x222222), 0);
-    lv_obj_set_style_border_width(icon_placeholder, 0, 0);
-    add_debug_border(icon_placeholder);
+    // The icon is a label that will hold a symbol font character
+    ui.icon_label = lv_label_create(widget_cont);
+    lv_obj_set_style_text_font(ui.icon_label, &lv_font_montserrat_24, 0); // Use a larger font for the icon
+    lv_obj_set_style_text_color(ui.icon_label, lv_color_white(), 0);
+    add_debug_border(ui.icon_label);
 
-    lv_obj_t* time_label = lv_label_create(widget_cont);
-    lv_label_set_text(time_label, time_text);
-    lv_obj_set_style_text_color(time_label, lv_color_white(), 0);
-    add_debug_border(time_label);
+    // The time for the forecast point
+    ui.time_label = lv_label_create(widget_cont);
+    lv_obj_set_style_text_color(ui.time_label, lv_color_white(), 0);
+    add_debug_border(ui.time_label);
+    
+    return ui;
 }
 
 void StandbyView::setup_main_button_handlers() {
@@ -205,9 +212,49 @@ void StandbyView::update_clock() {
             (const char*[]){"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"}[timeinfo.tm_mon],
             timeinfo.tm_mday
         );
+        // Update weather information along with the clock
+        update_weather();
     } else {
         lv_label_set_text(center_time_label, "--:--");
         lv_label_set_text(center_date_label, "No Time Sync");
+    }
+}
+
+void StandbyView::show_weather_placeholders() {
+    for (auto& widget : forecast_widgets) {
+        lv_label_set_text(widget.icon_label, LV_SYMBOL_REFRESH);
+        lv_label_set_text(widget.time_label, "--:--");
+    }
+}
+
+void StandbyView::update_weather() {
+    // Only update weather if time is synced, otherwise the forecast is meaningless
+    if (!is_time_synced) {
+        return;
+    }
+    
+    auto forecast_data = WeatherManager::get_forecast();
+    
+    if (forecast_data.empty()) {
+        ESP_LOGD(TAG, "Weather data not yet available from manager. Placeholders will be shown.");
+        return; // Do nothing, keep the placeholders visible
+    }
+
+    if (forecast_data.size() != forecast_widgets.size()) {
+        ESP_LOGW(TAG, "Mismatch between forecast data (%zu) and UI widgets (%zu)", forecast_data.size(), forecast_widgets.size());
+    }
+
+    for (size_t i = 0; i < forecast_widgets.size() && i < forecast_data.size(); ++i) {
+        const auto& data = forecast_data[i];
+        auto& ui = forecast_widgets[i];
+
+        // Update the weather icon using the helper function
+        lv_label_set_text(ui.icon_label, WeatherManager::wmo_code_to_lvgl_symbol(data.weather_code));
+
+        // Update the time label for the forecast point
+        struct tm timeinfo;
+        localtime_r(&data.timestamp, &timeinfo);
+        lv_label_set_text_fmt(ui.time_label, "%d:00", timeinfo.tm_hour);
     }
 }
 
