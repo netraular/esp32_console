@@ -88,9 +88,8 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
 
     // Top section: Image placeholder container (Flex item 1)
     lv_obj_t* image_placeholder = lv_obj_create(parent);
-    lv_obj_set_size(image_placeholder, 128, 72);
+    lv_obj_set_size(image_placeholder, 128, 96);
     lv_obj_set_style_margin_top(image_placeholder, 5, 0);
-    lv_obj_set_style_margin_bottom(image_placeholder, 5, 0);
     lv_obj_set_style_bg_color(image_placeholder, lv_palette_main(LV_PALETTE_ORANGE), 0);
     lv_obj_set_style_radius(image_placeholder, 8, 0);
     lv_obj_set_style_border_width(image_placeholder, 0, 0);
@@ -110,8 +109,8 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     center_time_label = lv_label_create(clock_container);
     lv_obj_set_style_text_font(center_time_label, &lv_font_unscii_16, 0);
     lv_obj_set_style_text_color(center_time_label, lv_color_white(), 0);
-    // Align to the center of its parent and move it 10px up.
-    lv_obj_align(center_time_label, LV_ALIGN_CENTER, 0, -10);
+    // Align to the center of its parent and move it 15px up.
+    lv_obj_align(center_time_label, LV_ALIGN_CENTER, 0, -15);
 
     lv_label_set_text(center_time_label, "00:00");
     lv_obj_update_layout(center_time_label);
@@ -125,8 +124,8 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     center_date_label = lv_label_create(clock_container);
     lv_obj_set_style_text_font(center_date_label, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_color(center_date_label, lv_color_white(), 0);
-    // Align to the bottom-middle of its parent and move it 5px up.
-    lv_obj_align(center_date_label, LV_ALIGN_BOTTOM_MID, 0, -5);
+    // Align to the bottom-middle of its parent and move it 10px up.
+    lv_obj_align(center_date_label, LV_ALIGN_BOTTOM_MID, 0, -10);
     add_debug_border(center_date_label);
     
     // Bottom section: Weather forecast container (Flex item 3)
@@ -136,7 +135,8 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_layout(forecast_container, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(forecast_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(forecast_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(forecast_container, 10, 0); // 10px spacing between widgets
+    lv_obj_set_style_pad_column(forecast_container, 20, 0); // 10px spacing between widgets
+    lv_obj_set_style_pad_ver(forecast_container, 5, 0); // Add 5px top/bottom padding to increase height
     add_debug_border(forecast_container);
 
     // Create the 3 forecast widgets and store their UI elements
