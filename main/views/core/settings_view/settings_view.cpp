@@ -4,7 +4,7 @@
 #include "components/status_bar_component/status_bar_component.h"
 #include "components/popup_manager/popup_manager.h"
 #include "controllers/wifi_manager/wifi_manager.h"
-#include "secret_copy.h" // For WIFI_SSID
+#include "secret.h" // For WIFI_SSID
 #include "esp_log.h"
 #include <string>
 
@@ -29,8 +29,12 @@ void SettingsView::create(lv_obj_t* parent) {
     lv_obj_remove_style_all(container);
     lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
     lv_obj_center(container);
+
+    // Explicitly set a solid white background for this view's container
+    lv_obj_set_style_bg_color(container, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(container, LV_OPA_COVER, 0);
     
-    setup_ui(parent);
+    setup_ui(container);
     setup_button_handlers();
 }
 

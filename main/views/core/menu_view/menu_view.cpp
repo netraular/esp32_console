@@ -11,7 +11,7 @@ const char *MenuView::view_options[] = {
     "Test Microphone", "Test Speaker", "Test SD Card",
     "Test Image", "Test LittleFS", "Test Button Events", "WiFi Audio Stream",
     "Pomodoro Clock", "Click Counter", "Voice Notes", "Test Popups",
-    "Volume Tester", "Habit Tracker", "Add Notification", "Notification History" // <-- ADDED
+    "Volume Tester", "Habit Tracker", "Add Notification", "Notification History"
 };
 
 // The corresponding view IDs for each option. The order must match view_options.
@@ -19,7 +19,7 @@ const view_id_t MenuView::view_ids[] = {
     VIEW_ID_MIC_TEST, VIEW_ID_SPEAKER_TEST, VIEW_ID_SD_TEST,
     VIEW_ID_IMAGE_TEST, VIEW_ID_LITTLEFS_TEST, VIEW_ID_MULTI_CLICK_TEST, VIEW_ID_WIFI_STREAM_TEST,
     VIEW_ID_POMODORO, VIEW_ID_CLICK_COUNTER_TEST, VIEW_ID_VOICE_NOTE, VIEW_ID_POPUP_TEST,
-    VIEW_ID_VOLUME_TESTER, VIEW_ID_HABIT_MANAGER, VIEW_ID_ADD_NOTIFICATION, VIEW_ID_NOTIFICATION_HISTORY // <-- ADDED
+    VIEW_ID_VOLUME_TESTER, VIEW_ID_HABIT_MANAGER, VIEW_ID_ADD_NOTIFICATION, VIEW_ID_NOTIFICATION_HISTORY
 };
 
 // Calculate the number of options at compile time.
@@ -40,6 +40,10 @@ void MenuView::create(lv_obj_t* parent) {
     lv_obj_remove_style_all(container);
     lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
     lv_obj_center(container);
+
+    // Explicitly set a solid white background for this view's container
+    lv_obj_set_style_bg_color(container, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(container, LV_OPA_COVER, 0);
     
     setup_ui(container);
     setup_button_handlers();

@@ -46,6 +46,7 @@ private:
     // --- Private Methods for Setup ---
     void setup_ui(lv_obj_t* parent);
     void setup_main_button_handlers();
+    void create_forecast_widget(lv_obj_t* parent, const char* time_text);
 
     // --- Private Methods for UI Logic ---
     void update_clock();
@@ -61,7 +62,6 @@ private:
     void handle_shutdown_result(popup_result_t result);
 
     // --- Static Callbacks (Bridge to C-style APIs) ---
-    static void screen_delete_event_cb(lv_event_t* e); // Handles screen cleanup
     static void update_clock_cb(lv_timer_t* timer);
     static void menu_press_cb(void* user_data);
     static void settings_press_cb(void* user_data);

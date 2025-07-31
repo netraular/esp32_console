@@ -104,8 +104,22 @@ void view_manager_load_view(view_id_t view_id) {
         ESP_LOGD(TAG, "Destroying previous view (ID: %d)", s_current_view_id);
         s_current_view.reset();
     }
-
+    
+    // Deletes all children of the screen (i.e., the old view's container)
     lv_obj_clean(scr);
+
+    // Reset all local styles on the screen object itself. This removes any styles
+    // (like gradients) that a misbehaving view might have applied directly to the screen.
+    // We cast the result to silence the C++ enum-enum conversion warning.
+    // LV_STATE_ANY ensures we clean styles from all states (default, focused, etc.).
+    lv_obj_remove_style(scr, NULL, (lv_style_selector_t)(LV_PART_MAIN | LV_STATE_ANY));
+
+
+    // Now, apply a clean, default background to the screen. All views will be
+    // placed on top of this. Views with transparent backgrounds will show this color.
+    lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+
 
     auto it = s_view_factory.find(view_id);
     if (it != s_view_factory.end()) {

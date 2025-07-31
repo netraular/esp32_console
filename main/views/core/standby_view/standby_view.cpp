@@ -14,6 +14,17 @@
 static const char *TAG = "STANDBY_VIEW";
 const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
 
+// To see the borders of all UI elements for layout debugging, set this to true.
+constexpr bool DEBUG_LAYOUT = true;
+
+// Helper function to add a debug border to an object
+static void add_debug_border(lv_obj_t* obj) {
+    if (DEBUG_LAYOUT) {
+        lv_obj_set_style_border_width(obj, 1, 0);
+        lv_obj_set_style_border_color(obj, lv_palette_main(LV_PALETTE_RED), 0);
+    }
+}
+
 // Initialize static member
 StandbyView* StandbyView::s_instance = nullptr;
 
@@ -40,41 +51,135 @@ StandbyView::~StandbyView() {
 
 void StandbyView::create(lv_obj_t* parent) {
     ESP_LOGI(TAG, "Creating Standby View");
-    container = parent;
-    lv_obj_add_event_cb(container, screen_delete_event_cb, LV_EVENT_DELETE, this);
-    setup_ui(parent);
+
+    // Create a main container for this view
+    container = lv_obj_create(parent);
+    lv_obj_remove_style_all(container); // Clean slate for custom styling
+    lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
+    lv_obj_center(container);
+
+    // All UI elements will be children of 'container'
+    setup_ui(container); 
     setup_main_button_handlers();
 }
 
 // --- UI & Handler Setup ---
 void StandbyView::setup_ui(lv_obj_t* parent) {
+    // 'parent' is now the view's own container, not the screen.
+    add_debug_border(parent);
+
+    // Set a dark, gradient, and fully opaque background for this view's container
+    lv_obj_set_style_bg_color(parent, lv_palette_darken(LV_PALETTE_BLUE, 4), 0);
+    lv_obj_set_style_bg_grad_color(parent, lv_palette_darken(LV_PALETTE_BLUE, 2), 0);
+    lv_obj_set_style_bg_grad_dir(parent, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_bg_opa(parent, LV_OPA_COVER, 0);
+    
     status_bar_create(parent);
 
-    // Create a central container to ensure clock and date are always centered together
-    lv_obj_t* center_container = lv_obj_create(parent);
-    lv_obj_remove_style_all(center_container);
-    lv_obj_set_size(center_container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_layout(center_container, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(center_container, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(center_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(center_container, 10, 0);
-    lv_obj_center(center_container);
-    
-    // Time and Date labels are now children of the center_container
-    center_time_label = lv_label_create(center_container);
-    lv_obj_set_style_text_font(center_time_label, &lv_font_montserrat_48, 0);
+    // Container for the central content (image and clock), positioned from the top
+    lv_obj_t* central_content_cont = lv_obj_create(parent);
+    lv_obj_remove_style_all(central_content_cont);
+    lv_obj_set_size(central_content_cont, LV_PCT(100), LV_PCT(70));
+    lv_obj_align(central_content_cont, LV_ALIGN_TOP_MID, 0, 25); // Move container up
+    lv_obj_set_layout(central_content_cont, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(central_content_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(central_content_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_BETWEEN);
+    add_debug_border(central_content_cont);
 
-    center_date_label = lv_label_create(center_container);
-    lv_obj_set_style_text_font(center_date_label, &lv_font_montserrat_22, 0);
+    // Top section: Image placeholder
+    lv_obj_t* image_placeholder = lv_obj_create(central_content_cont);
+    lv_obj_set_size(image_placeholder, 50, 50);
+    lv_obj_set_style_bg_color(image_placeholder, lv_palette_main(LV_PALETTE_ORANGE), 0);
+    lv_obj_set_style_radius(image_placeholder, 8, 0);
+    lv_obj_set_style_border_width(image_placeholder, 0, 0);
+    lv_obj_t* img_label = lv_label_create(image_placeholder);
+    lv_label_set_text(img_label, "IMG");
+    lv_obj_center(img_label);
+    add_debug_border(image_placeholder);
+
+    // Middle section: Clock and Date container
+    lv_obj_t* clock_container = lv_obj_create(central_content_cont);
+    lv_obj_remove_style_all(clock_container);
+    lv_obj_set_width(clock_container, LV_PCT(100)); // Crucial: give container full width to center its content
+    lv_obj_set_height(clock_container, LV_SIZE_CONTENT);
+    lv_obj_set_layout(clock_container, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(clock_container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(clock_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(clock_container, 12, 0); // Spacing between time and date
+    add_debug_border(clock_container);
+
+    center_time_label = lv_label_create(clock_container);
+    // Let the label auto-size. The parent flex container will center it horizontally.
+    lv_obj_set_style_text_font(center_time_label, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(center_time_label, lv_color_white(), 0);
+
+    // Set placeholder text to calculate initial size for pivot
+    lv_label_set_text(center_time_label, "00:00");
+    // Force layout update to get correct dimensions before setting pivot
+    lv_obj_update_layout(center_time_label);
+
+    // Set pivot to the label's center using style properties *before* applying zoom
+    lv_obj_set_style_transform_pivot_x(center_time_label, lv_obj_get_width(center_time_label) / 2, 0);
+    lv_obj_set_style_transform_pivot_y(center_time_label, lv_obj_get_height(center_time_label) / 2, 0);
     
-    // The "syncing" label remains at the bottom of the screen
+    // Apply zoom. It will now scale from the new pivot.
+    lv_obj_set_style_transform_zoom(center_time_label, 384, 0); // 1.5x zoom
+    add_debug_border(center_time_label);
+
+    center_date_label = lv_label_create(clock_container);
+    lv_obj_set_style_text_font(center_date_label, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(center_date_label, lv_color_white(), 0);
+    add_debug_border(center_date_label);
+    
+    // Bottom section: Weather forecast placeholders, pinned to the bottom of the screen
+    lv_obj_t* forecast_container = lv_obj_create(parent);
+    lv_obj_remove_style_all(forecast_container);
+    lv_obj_set_size(forecast_container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_layout(forecast_container, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(forecast_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(forecast_container, 5, 0); // 5px spacing between widgets
+    // Move the entire widget group 5px up from the bottom edge
+    lv_obj_align(forecast_container, LV_ALIGN_BOTTOM_MID, 0, 0); 
+    add_debug_border(forecast_container);
+
+    create_forecast_widget(forecast_container, "11 AM");
+    create_forecast_widget(forecast_container, "1 PM");
+    create_forecast_widget(forecast_container, "3 PM");
+    
+    // Syncing label (overlaid on the screen)
     loading_label = lv_label_create(parent);
-    lv_obj_align(loading_label, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_align(loading_label, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_text_color(loading_label, lv_color_white(), 0);
     lv_label_set_text(loading_label, "Syncing time...");
 
     update_clock(); // Initial update
-
     update_timer = lv_timer_create(update_clock_cb, 500, this);
+}
+
+void StandbyView::create_forecast_widget(lv_obj_t* parent, const char* time_text) {
+    lv_obj_t* widget_cont = lv_obj_create(parent);
+    lv_obj_remove_style_all(widget_cont);
+    lv_obj_set_size(widget_cont, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_layout(widget_cont, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(widget_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(widget_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    // Reduce the space between the icon and the text to bring them closer
+    lv_obj_set_style_pad_row(widget_cont, 2, 0);
+    add_debug_border(widget_cont);
+
+    // Icon placeholder (a colored circle)
+    lv_obj_t* icon_placeholder = lv_obj_create(widget_cont);
+    lv_obj_set_size(icon_placeholder, 50, 50);
+    lv_obj_set_style_radius(icon_placeholder, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(icon_placeholder, lv_color_hex(0x222222), 0);
+    lv_obj_set_style_border_width(icon_placeholder, 0, 0);
+    add_debug_border(icon_placeholder);
+
+    // Time label
+    lv_obj_t* time_label = lv_label_create(widget_cont);
+    lv_label_set_text(time_label, time_text);
+    lv_obj_set_style_text_color(time_label, lv_color_white(), 0);
+    add_debug_border(time_label);
 }
 
 void StandbyView::setup_main_button_handlers() {
@@ -110,10 +215,10 @@ void StandbyView::update_clock() {
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
         lv_label_set_text_fmt(center_time_label, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
-        lv_label_set_text_fmt(center_date_label, "%s, %02d %s", 
-            (const char*[]){"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}[timeinfo.tm_wday],
-            timeinfo.tm_mday,
-            (const char*[]){"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}[timeinfo.tm_mon]
+        lv_label_set_text_fmt(center_date_label, "%s, %s %02d", 
+            (const char*[]){"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"}[timeinfo.tm_wday],
+            (const char*[]){"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"}[timeinfo.tm_mon],
+            timeinfo.tm_mday
         );
     } else {
         lv_label_set_text(center_time_label, "--:--");
@@ -208,15 +313,6 @@ void StandbyView::show_notification_popup(const Notification& notif) {
 }
 
 // --- Static Callbacks (Bridge to C-style APIs and instance methods) ---
-void StandbyView::screen_delete_event_cb(lv_event_t* e) {
-    // The destructor will be called by ViewManager's unique_ptr,
-    // which will handle timer deletion. We just ensure we don't use the instance after this.
-    auto* instance = static_cast<StandbyView*>(lv_event_get_user_data(e));
-    if (instance) {
-        ESP_LOGD(TAG, "StandbyView screen is being deleted.");
-    }
-}
-
 void StandbyView::update_clock_cb(lv_timer_t* timer) {
     auto* instance = static_cast<StandbyView*>(lv_timer_get_user_data(timer));
     if (instance) {
