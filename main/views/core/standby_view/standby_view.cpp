@@ -22,10 +22,9 @@ constexpr bool DEBUG_LAYOUT = false;
 // Helper function to add a debug border to an object
 static void add_debug_border(lv_obj_t* obj) {
     if (DEBUG_LAYOUT) {
-        lv_obj_set_style_border_width(obj, 1, 0);
-        lv_obj_set_style_border_color(obj, lv_palette_main(LV_PALETTE_RED), 0);
-        // Draw the border inside the widget's boundaries so it doesn't affect the layout size
-        lv_obj_set_style_border_post(obj, true, 0);
+        lv_obj_set_style_outline_width(obj, 1, 0);
+        lv_obj_set_style_outline_color(obj, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_obj_set_style_outline_pad(obj, 0, 0);
     }
 }
 
@@ -69,7 +68,6 @@ void StandbyView::create(lv_obj_t* parent) {
 
 // --- UI & Handler Setup ---
 void StandbyView::setup_ui(lv_obj_t* parent) {
-    // 'parent' is now the view's own container, not the screen.
     add_debug_border(parent);
 
     // Set a dark, gradient, and fully opaque background for this view's container
@@ -78,65 +76,80 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_style_bg_grad_dir(parent, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_bg_opa(parent, LV_OPA_COVER, 0);
     
-    // Use a flexbox layout for the main container to manage the three vertical sections
-    lv_obj_set_layout(parent, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(parent, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+    // We will position 3 main blocks with fixed sizes and positions.
 
-    // Create the status bar on the screen to act as an overlay, independent of the flex layout.
+    // Create the status bar on the screen to act as an overlay
     status_bar_create(lv_screen_active());
 
-    // Top section: Image placeholder container (Flex item 1)
-    lv_obj_t* image_placeholder = lv_obj_create(parent);
-    lv_obj_set_size(image_placeholder, 128, 96);
-    lv_obj_set_style_margin_top(image_placeholder, 5, 0);
+    // --- Bloque 1: Superior (Imagen) ---
+    // Altura total de 105px (5px pad top + 96px content + 4px pad bottom)
+    lv_obj_t* top_container = lv_obj_create(parent);
+    lv_obj_remove_style_all(top_container);
+    lv_obj_set_size(top_container, LV_PCT(100), 105);
+    lv_obj_align(top_container, LV_ALIGN_TOP_MID, 0, 0); // Anclar arriba
+    lv_obj_set_style_pad_top(top_container, 5, 0);
+    lv_obj_set_style_pad_bottom(top_container, 4, 0);
+    add_debug_border(top_container);
+
+    lv_obj_t* image_placeholder = lv_obj_create(top_container);
+    lv_obj_set_size(image_placeholder, 224, 96);
+    lv_obj_align(image_placeholder, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_bg_color(image_placeholder, lv_palette_main(LV_PALETTE_ORANGE), 0);
     lv_obj_set_style_radius(image_placeholder, 8, 0);
     lv_obj_set_style_border_width(image_placeholder, 0, 0);
+    
     lv_obj_t* img_label = lv_label_create(image_placeholder);
     lv_label_set_text(img_label, "IMG");
     lv_obj_center(img_label);
     add_debug_border(image_placeholder);
 
-    // Middle section: Clock and Date container (Flex item 2)
-    lv_obj_t* clock_container = lv_obj_create(parent);
-    lv_obj_remove_style_all(clock_container);
-    lv_obj_set_width(clock_container, LV_PCT(100));
-    lv_obj_set_flex_grow(clock_container, 1); // Make this container fill the available vertical space
-    // NO LAYOUT on this container. We will use absolute alignment for its children.
-    add_debug_border(clock_container);
+    // --- Bloque 2: Central (Reloj y Fecha) ---
+    // Altura fija de 70px
+    lv_obj_t* middle_container = lv_obj_create(parent);
+    lv_obj_remove_style_all(middle_container);
+    lv_obj_set_size(middle_container, LV_PCT(100), 70);
+    lv_obj_align_to(middle_container, top_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 0); // Posicionar debajo del bloque superior
+    add_debug_border(middle_container);
 
-    center_time_label = lv_label_create(clock_container);
+    // Reloj - centrado en el medio del bloque central
+    center_time_label = lv_label_create(middle_container);
     lv_obj_set_style_text_font(center_time_label, &lv_font_unscii_16, 0);
     lv_obj_set_style_text_color(center_time_label, lv_color_white(), 0);
-    // Align to the center of its parent and move it 15px up.
-    lv_obj_align(center_time_label, LV_ALIGN_CENTER, 0, -15);
-
     lv_label_set_text(center_time_label, "00:00");
-    lv_obj_update_layout(center_time_label);
-
+    lv_obj_update_layout(center_time_label); // Update layout to get dimensions for transform pivot
     lv_obj_set_style_transform_pivot_x(center_time_label, lv_obj_get_width(center_time_label) / 2, 0);
     lv_obj_set_style_transform_pivot_y(center_time_label, lv_obj_get_height(center_time_label) / 2, 0);
-    
     lv_obj_set_style_transform_zoom(center_time_label, 768, 0); // 3x zoom
+    lv_obj_align(center_time_label, LV_ALIGN_CENTER, 0, -10);
     add_debug_border(center_time_label);
 
-    center_date_label = lv_label_create(clock_container);
+    // Fecha - centrada horizontalmente y 20px por debajo del centro vertical
+    center_date_label = lv_label_create(middle_container);
     lv_obj_set_style_text_font(center_date_label, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_color(center_date_label, lv_color_white(), 0);
-    // Align to the bottom-middle of its parent and move it 10px up.
-    lv_obj_align(center_date_label, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_align(center_date_label, LV_ALIGN_CENTER, 0, 25); // Centrar y mover 20px hacia abajo
     add_debug_border(center_date_label);
     
-    // Bottom section: Weather forecast container (Flex item 3)
-    lv_obj_t* forecast_container = lv_obj_create(parent);
+    // --- Bloque 3: Inferior (Clima) ---
+    // Altura fija de 65px
+    lv_obj_t* bottom_container = lv_obj_create(parent);
+    lv_obj_remove_style_all(bottom_container);
+    lv_obj_set_size(bottom_container, LV_PCT(100), 65);
+    lv_obj_align(bottom_container, LV_ALIGN_BOTTOM_MID, 0, 0); // Anclar abajo
+    lv_obj_set_style_pad_bottom(bottom_container, 2, 0); // 2px de padding inferior
+    add_debug_border(bottom_container);
+    
+    // Contenedor para los widgets del clima (usará Flexbox para alinearlos en fila)
+    lv_obj_t* forecast_container = lv_obj_create(bottom_container);
     lv_obj_remove_style_all(forecast_container);
-    lv_obj_set_size(forecast_container, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_width(forecast_container, LV_SIZE_CONTENT); // Ancho se adapta al contenido
+    lv_obj_set_height(forecast_container, LV_PCT(100));     // Alto ocupa el espacio disponible
     lv_obj_set_layout(forecast_container, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(forecast_container, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(forecast_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(forecast_container, 20, 0); // 10px spacing between widgets
-    lv_obj_set_style_pad_ver(forecast_container, 5, 0); // Add 5px top/bottom padding to increase height
+    lv_obj_set_flex_align(forecast_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END);
+    lv_obj_set_style_pad_column(forecast_container, 15, 0);
+    // Centrar este contenedor en la parte inferior del bloque
+    lv_obj_align(forecast_container, LV_ALIGN_BOTTOM_MID, 0, 0);
     add_debug_border(forecast_container);
 
     // Create the 3 forecast widgets and store their UI elements
@@ -144,16 +157,10 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
         forecast_widgets[i] = create_forecast_widget(forecast_container);
     }
     
-    show_weather_placeholders(); // Set the initial "loading" state
+    show_weather_placeholders();
 
-    // Syncing label (overlaid on the screen, not part of the flex layout)
-    loading_label = lv_label_create(lv_screen_active()); // Create on screen to overlay everything
-    lv_obj_align(loading_label, LV_ALIGN_BOTTOM_MID, 0, -5); 
-    lv_obj_set_style_text_color(loading_label, lv_color_white(), 0);
-    lv_label_set_text(loading_label, "Syncing time...");
-
-    update_clock(); // Initial update (which will also call update_weather)
-    update_timer = lv_timer_create(update_clock_cb, 1000, this); // Check every second
+    update_clock();
+    update_timer = lv_timer_create(update_clock_cb, 1000, this);
 }
 
 StandbyView::ForecastWidgetUI StandbyView::create_forecast_widget(lv_obj_t* parent) {
@@ -164,7 +171,7 @@ StandbyView::ForecastWidgetUI StandbyView::create_forecast_widget(lv_obj_t* pare
     lv_obj_set_size(widget_cont, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_layout(widget_cont, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(widget_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(widget_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(widget_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END);
     lv_obj_set_style_pad_row(widget_cont, 2, 0);
     lv_obj_set_style_pad_ver(widget_cont, 2, 0);
     add_debug_border(widget_cont);
@@ -201,15 +208,14 @@ void StandbyView::update_clock() {
     if (now > 1672531200) { // A reasonable epoch time check (start of 2023)
         if (!is_time_synced) {
             is_time_synced = true;
-            lv_obj_add_flag(loading_label, LV_OBJ_FLAG_HIDDEN);
             ESP_LOGI(TAG, "Time has been synchronized.");
         }
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
         lv_label_set_text_fmt(center_time_label, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
         lv_label_set_text_fmt(center_date_label, "%s, %s %02d", 
-            (const char*[]){"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"}[timeinfo.tm_wday],
-            (const char*[]){"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"}[timeinfo.tm_mon],
+            (const char*[]){"DOM", "LUN", "MAR", "MIE", "JUE", "VIE", "SAB"}[timeinfo.tm_wday],
+            (const char*[]){"ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DEC"}[timeinfo.tm_mon],
             timeinfo.tm_mday
         );
         // Update weather information along with the clock
