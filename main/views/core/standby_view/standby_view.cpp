@@ -15,13 +15,15 @@ static const char *TAG = "STANDBY_VIEW";
 const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
 
 // To see the borders of all UI elements for layout debugging, set this to true.
-constexpr bool DEBUG_LAYOUT = true;
+constexpr bool DEBUG_LAYOUT = false;
 
 // Helper function to add a debug border to an object
 static void add_debug_border(lv_obj_t* obj) {
     if (DEBUG_LAYOUT) {
         lv_obj_set_style_border_width(obj, 1, 0);
         lv_obj_set_style_border_color(obj, lv_palette_main(LV_PALETTE_RED), 0);
+        // Draw the border inside the widget's boundaries so it doesn't affect the layout size
+        lv_obj_set_style_border_post(obj, true, 0);
     }
 }
 
@@ -74,13 +76,19 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_style_bg_grad_dir(parent, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_bg_opa(parent, LV_OPA_COVER, 0);
     
-    status_bar_create(parent);
+    // Use a flexbox layout for the main container to manage the three vertical sections
+    lv_obj_set_layout(parent, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(parent, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
 
-    // Top section: Image placeholder
-    // This container's height is implicitly set by its content (the 64px tall image placeholder).
+    // Create the status bar on the screen to act as an overlay, independent of the flex layout.
+    status_bar_create(lv_screen_active());
+
+    // Top section: Image placeholder container (Flex item 1)
     lv_obj_t* image_placeholder = lv_obj_create(parent);
-    lv_obj_set_size(image_placeholder, 128, 64);
-    lv_obj_align(image_placeholder, LV_ALIGN_TOP_MID, 0, 5); // Align to top, with small padding
+    lv_obj_set_size(image_placeholder, 128, 72);
+    lv_obj_set_style_margin_top(image_placeholder, 5, 0);
+    lv_obj_set_style_margin_bottom(image_placeholder, 5, 0);
     lv_obj_set_style_bg_color(image_placeholder, lv_palette_main(LV_PALETTE_ORANGE), 0);
     lv_obj_set_style_radius(image_placeholder, 8, 0);
     lv_obj_set_style_border_width(image_placeholder, 0, 0);
@@ -89,23 +97,19 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_center(img_label);
     add_debug_border(image_placeholder);
 
-    // Middle section: Clock and Date container
-    // Positioned relative to the image, and enlarged to allow its content to be moved up.
+    // Middle section: Clock and Date container (Flex item 2)
     lv_obj_t* clock_container = lv_obj_create(parent);
     lv_obj_remove_style_all(clock_container);
-    lv_obj_set_width(clock_container, LV_PCT(100)); // Full width for horizontal centering of content
-    lv_obj_set_height(clock_container, 130);       // Enlarged height to provide layout space
-    lv_obj_align_to(clock_container, image_placeholder, LV_ALIGN_OUT_BOTTOM_MID, 0, 0); // Position below image
-    lv_obj_set_layout(clock_container, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(clock_container, LV_FLEX_FLOW_COLUMN);
-    // Align content at the top of this container, making it appear higher on screen
-    lv_obj_set_flex_align(clock_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(clock_container, 12, 0); // Spacing between time and date
+    lv_obj_set_width(clock_container, LV_PCT(100));
+    lv_obj_set_flex_grow(clock_container, 1); // Make this container fill the available vertical space
+    // NO LAYOUT on this container. We will use absolute alignment for its children.
     add_debug_border(clock_container);
 
     center_time_label = lv_label_create(clock_container);
-    lv_obj_set_style_text_font(center_time_label, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_font(center_time_label, &lv_font_unscii_16, 0);
     lv_obj_set_style_text_color(center_time_label, lv_color_white(), 0);
+    // Align to the center of its parent and move it 10px up.
+    lv_obj_align(center_time_label, LV_ALIGN_CENTER, 0, -10);
 
     lv_label_set_text(center_time_label, "00:00");
     lv_obj_update_layout(center_time_label);
@@ -113,32 +117,33 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_style_transform_pivot_x(center_time_label, lv_obj_get_width(center_time_label) / 2, 0);
     lv_obj_set_style_transform_pivot_y(center_time_label, lv_obj_get_height(center_time_label) / 2, 0);
     
-    lv_obj_set_style_transform_zoom(center_time_label, 384, 0); // 1.5x zoom
+    lv_obj_set_style_transform_zoom(center_time_label, 768, 0); // 3x zoom
     add_debug_border(center_time_label);
 
     center_date_label = lv_label_create(clock_container);
     lv_obj_set_style_text_font(center_date_label, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_color(center_date_label, lv_color_white(), 0);
-    lv_obj_set_style_translate_y(center_date_label, 0, 0);
+    // Align to the bottom-middle of its parent and move it 5px up.
+    lv_obj_align(center_date_label, LV_ALIGN_BOTTOM_MID, 0, -5);
     add_debug_border(center_date_label);
     
-    // Bottom section: Weather forecast placeholders, pinned to the bottom of the screen
+    // Bottom section: Weather forecast container (Flex item 3)
     lv_obj_t* forecast_container = lv_obj_create(parent);
     lv_obj_remove_style_all(forecast_container);
-    lv_obj_set_size(forecast_container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_size(forecast_container, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_layout(forecast_container, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(forecast_container, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(forecast_container, 5, 0); // 5px spacing between widgets
-    lv_obj_align(forecast_container, LV_ALIGN_BOTTOM_MID, 0, 0); //touching the bottom border
+    lv_obj_set_flex_align(forecast_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(forecast_container, 10, 0); // 10px spacing between widgets
     add_debug_border(forecast_container);
 
     create_forecast_widget(forecast_container, "11 AM");
     create_forecast_widget(forecast_container, "1 PM");
     create_forecast_widget(forecast_container, "3 PM");
     
-    // Syncing label (overlaid on the screen)
-    loading_label = lv_label_create(parent);
-    lv_obj_align(loading_label, LV_ALIGN_BOTTOM_MID, 0, -5); // Align with forecast widgets
+    // Syncing label (overlaid on the screen, not part of the flex layout)
+    loading_label = lv_label_create(lv_screen_active()); // Create on screen to overlay everything
+    lv_obj_align(loading_label, LV_ALIGN_BOTTOM_MID, 0, -5); 
     lv_obj_set_style_text_color(loading_label, lv_color_white(), 0);
     lv_label_set_text(loading_label, "Syncing time...");
 
@@ -154,6 +159,8 @@ void StandbyView::create_forecast_widget(lv_obj_t* parent, const char* time_text
     lv_obj_set_flex_flow(widget_cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(widget_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(widget_cont, 2, 0);
+    // Add 2px padding to the top and bottom of the widget container
+    lv_obj_set_style_pad_ver(widget_cont, 2, 0);
     add_debug_border(widget_cont);
 
     lv_obj_t* icon_placeholder = lv_obj_create(widget_cont);
@@ -184,7 +191,7 @@ void StandbyView::setup_main_button_handlers() {
 // --- UI Logic ---
 void StandbyView::update_clock() {
     time_t now = time(NULL);
-    if (now > 1672531200) {
+    if (now > 1672531200) { // A reasonable epoch time check (start of 2023)
         if (!is_time_synced) {
             is_time_synced = true;
             lv_obj_add_flag(loading_label, LV_OBJ_FLAG_HIDDEN);
