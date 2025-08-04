@@ -46,6 +46,23 @@ static view_id_t s_current_view_id = VIEW_ID_COUNT; // Initialize to invalid
 // The View Factory: Maps a view_id_t to a function that creates a new view instance.
 static std::map<view_id_t, std::function<View*()>> s_view_factory;
 
+// --- View Name Helpers ---
+
+// Macro to generate string literals from the X-Macro list
+#define GENERATE_STRING(STRING) #STRING,
+
+// Array of string names, automatically generated from FOR_EACH_VIEW
+static const char* s_view_names[] = {
+    FOR_EACH_VIEW(GENERATE_STRING)
+};
+
+const char* view_manager_get_view_name(view_id_t view_id) {
+    if (view_id < VIEW_ID_COUNT) {
+        return s_view_names[view_id];
+    }
+    return "UNKNOWN_VIEW";
+}
+
 /**
  * @brief Populates the view factory with all available views.
  */
@@ -90,18 +107,18 @@ void view_manager_load_view(view_id_t view_id) {
     }
 
     if ((s_current_view && s_current_view_id == view_id) || s_initializing_view_id == view_id) {
-        ESP_LOGW(TAG, "Attempted to load the same view (ID: %d) again. Ignoring.", view_id);
+        ESP_LOGW(TAG, "Attempted to load the same view (%s) again. Ignoring.", view_manager_get_view_name(view_id));
         return;
     }
 
-    ESP_LOGI(TAG, "Request to load view %d", view_id);
+    ESP_LOGI(TAG, "Request to load view %s (ID: %d)", view_manager_get_view_name(view_id), view_id);
     s_initializing_view_id = view_id;
     lv_obj_t *scr = lv_screen_active();
 
     button_manager_unregister_view_handlers();
 
     if (s_current_view) {
-        ESP_LOGD(TAG, "Destroying previous view (ID: %d)", s_current_view_id);
+        ESP_LOGD(TAG, "Destroying previous view (%s)", view_manager_get_view_name(s_current_view_id));
         s_current_view.reset();
     }
     
@@ -110,34 +127,31 @@ void view_manager_load_view(view_id_t view_id) {
 
     // Reset all local styles on the screen object itself. This removes any styles
     // (like gradients) that a misbehaving view might have applied directly to the screen.
-    // The correct way to combine enums is to cast each one *before* the bitwise OR.
     lv_obj_remove_style(scr, NULL, (lv_style_selector_t)LV_PART_MAIN | (lv_style_selector_t)LV_STATE_ANY);
-
 
     // Now, apply a clean, default background to the screen. All views will be
     // placed on top of this. Views with transparent backgrounds will show this color.
     lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-
     auto it = s_view_factory.find(view_id);
     if (it != s_view_factory.end()) {
         s_current_view.reset(it->second());
         s_current_view_id = view_id;
-        ESP_LOGD(TAG, "New view instance created for ID: %d", view_id);
+        ESP_LOGD(TAG, "New view instance created for %s", view_manager_get_view_name(view_id));
         
         s_current_view->create(scr);
     } else {
-        ESP_LOGE(TAG, "View ID %d not found in factory!", view_id);
+        ESP_LOGE(TAG, "View %s (ID: %d) not found in factory!", view_manager_get_view_name(view_id), view_id);
         lv_obj_t* label = lv_label_create(scr);
         lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
-        lv_label_set_text_fmt(label, "Error: View %d\nnot implemented.", view_id);
-        s_current_view.reset();
+        lv_label_set_text_fmt(label, "Error: View %s\nnot implemented.", view_manager_get_view_name(view_id));
+        s_current_view.reset(); // Reset to null, but keep the ID to show the error
         s_current_view_id = view_id;
     }
 
     s_initializing_view_id = VIEW_ID_COUNT;
-    ESP_LOGI(TAG, "View %d loaded successfully.", view_id);
+    ESP_LOGI(TAG, "View %s loaded successfully.", view_manager_get_view_name(view_id));
 }
 
 view_id_t view_manager_get_current_view_id(void) {

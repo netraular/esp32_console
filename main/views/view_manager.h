@@ -11,40 +11,46 @@
 
 #include "lvgl.h"
 
-// Enum to uniquely identify each view
+// X-Macro to define the list of all views. This is the single source of truth.
+// To add a new view, add its name here without the "VIEW_ID_" prefix.
+#define FOR_EACH_VIEW(V) \
+    /* Core Views */ \
+    V(STANDBY) \
+    V(MENU) \
+    V(SETTINGS) \
+    /* Test Views */ \
+    V(MIC_TEST) \
+    V(SPEAKER_TEST) \
+    V(SD_TEST) \
+    V(IMAGE_TEST) \
+    V(LITTLEFS_TEST) \
+    V(MULTI_CLICK_TEST) \
+    V(WIFI_STREAM_TEST) \
+    V(POMODORO) \
+    V(CLICK_COUNTER_TEST) \
+    V(VOICE_NOTE) \
+    V(VOICE_NOTE_PLAYER) \
+    V(VOLUME_TESTER) \
+    V(POPUP_TEST) \
+    /* Habit Tracker Views */ \
+    V(HABIT_MANAGER) \
+    V(HABIT_CATEGORY_MANAGER) \
+    V(HABIT_ADD) \
+    V(TRACK_HABITS) \
+    V(HABIT_HISTORY) \
+    /* Notification System Views */ \
+    V(ADD_NOTIFICATION) \
+    V(NOTIFICATION_HISTORY)
+
+// Macro to generate enum members from the list
+#define GENERATE_ENUM(NAME) VIEW_ID_##NAME,
+
+/**
+ * @brief Enum to uniquely identify each view.
+ * This is automatically generated from the FOR_EACH_VIEW macro.
+ */
 typedef enum {
-    // Core Views
-    VIEW_ID_STANDBY,
-    VIEW_ID_MENU,
-    VIEW_ID_SETTINGS,
-
-    // Test Views from the menu
-    VIEW_ID_MIC_TEST,
-    VIEW_ID_SPEAKER_TEST,
-    VIEW_ID_SD_TEST,
-    VIEW_ID_IMAGE_TEST,
-    VIEW_ID_LITTLEFS_TEST,
-    VIEW_ID_MULTI_CLICK_TEST,
-    VIEW_ID_WIFI_STREAM_TEST,
-    VIEW_ID_POMODORO,
-    VIEW_ID_CLICK_COUNTER_TEST,
-    VIEW_ID_VOICE_NOTE,
-    VIEW_ID_VOICE_NOTE_PLAYER,
-    VIEW_ID_VOLUME_TESTER,
-    VIEW_ID_POPUP_TEST,
-    
-    // Habit Tracker Views
-    VIEW_ID_HABIT_MANAGER,
-    VIEW_ID_HABIT_CATEGORY_MANAGER,
-    VIEW_ID_HABIT_ADD,
-    VIEW_ID_TRACK_HABITS,
-    VIEW_ID_HABIT_HISTORY,
-
-    // Notification System Views
-    VIEW_ID_ADD_NOTIFICATION,
-    VIEW_ID_NOTIFICATION_HISTORY,
-    
-    // Add other views here as they are converted
+    FOR_EACH_VIEW(GENERATE_ENUM)
     VIEW_ID_COUNT // Total number of views, must be last
 } view_id_t;
 
@@ -66,5 +72,12 @@ void view_manager_load_view(view_id_t view_id);
  * @return The view_id_t of the current view.
  */
 view_id_t view_manager_get_current_view_id(void);
+
+/**
+ * @brief Gets the string name of a view from its ID.
+ * @param view_id The ID of the view.
+ * @return A constant string pointer to the view's name, or "UNKNOWN_VIEW" if invalid.
+ */
+const char* view_manager_get_view_name(view_id_t view_id);
 
 #endif // VIEW_MANAGER_H
