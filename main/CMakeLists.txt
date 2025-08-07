@@ -12,6 +12,8 @@ file(GLOB_RECURSE MAIN_SRCS
 # command hasn't been re-run, which resolves potential linker errors.
 list(APPEND MAIN_SRCS
     "views/core/settings_view/settings_view.cpp"
+    "controllers/pet_manager/pet_manager.cpp"
+    "views/game/pet_view/pet_view.cpp"
 )
 list(REMOVE_DUPLICATES MAIN_SRCS)
 

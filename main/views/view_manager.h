@@ -18,6 +18,8 @@
     V(STANDBY) \
     V(MENU) \
     V(SETTINGS) \
+    /* Game/Gamification Views */ \
+    V(PET_VIEW) \
     /* Test Views */ \
     V(MIC_TEST) \
     V(SPEAKER_TEST) \

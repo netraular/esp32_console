@@ -24,6 +24,7 @@
 #include "views/view_manager.h"
 #include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
 #include "controllers/weather_manager/weather_manager.h"
+#include "controllers/pet_manager/pet_manager.h"
 
 
 
@@ -128,6 +129,9 @@ extern "C" void app_main(void) {
     // Initialize the Weather Manager (depends on WiFi)
     WeatherManager::init();
     ESP_LOGI(TAG, "Weather manager initialized.");
+
+    // Initialize the Pet Manager (depends on time sync)
+    PetManager::get_instance().init();
 
     // Initialize the Speech-to-Text manager
     stt_manager_init();

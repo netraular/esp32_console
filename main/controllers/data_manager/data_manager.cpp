@@ -79,3 +79,57 @@ bool data_manager_get_u32(const char* key, uint32_t* value) {
             return false;
     }
 }
+
+bool data_manager_set_str(const char* key, const char* value) {
+    if (!s_is_initialized) {
+        ESP_LOGE(TAG, "Manager not initialized.");
+        return false;
+    }
+
+    nvs_handle_t my_handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
+        return false;
+    }
+
+    err = nvs_set_str(my_handle, key, value);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error (%s) writing key '%s' to NVS!", esp_err_to_name(err), key);
+        nvs_close(my_handle);
+        return false;
+    }
+    
+    err = nvs_commit(my_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error (%s) committing NVS changes!", esp_err_to_name(err));
+    }
+
+    nvs_close(my_handle);
+    return err == ESP_OK;
+}
+
+bool data_manager_get_str(const char* key, char* buffer, size_t* buffer_size) {
+    if (!s_is_initialized || !buffer || !buffer_size) {
+        ESP_LOGE(TAG, "Manager not initialized or buffer/size pointer is null.");
+        return false;
+    }
+
+    nvs_handle_t my_handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &my_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
+        return false;
+    }
+
+    err = nvs_get_str(my_handle, key, buffer, buffer_size);
+    nvs_close(my_handle);
+
+    if (err == ESP_OK) {
+        return true;
+    }
+    if (err != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGE(TAG, "Error (%s) reading key '%s' from NVS!", esp_err_to_name(err), key);
+    }
+    return false;
+}
