@@ -8,7 +8,7 @@
 static const char* TAG = "PET_COLLECTION_VIEW";
 constexpr uint8_t GRID_COLUMNS = 2;
 
-PetCollectionView::PetCollectionView() {
+PetCollectionView::PetCollectionView() : selected_index(0) { // Initialize selected_index
     ESP_LOGI(TAG, "PetCollectionView constructed");
 }
 
@@ -27,14 +27,20 @@ void PetCollectionView::create(lv_obj_t* parent) {
 }
 
 void PetCollectionView::setup_ui(lv_obj_t* parent) {
+    // --- Main Container Setup ---
     lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(parent, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_add_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(parent, LV_SCROLLBAR_MODE_ACTIVE);
 
+    // Title
     lv_obj_t* title = lv_label_create(parent);
     lv_label_set_text(title, "Pet Collection");
     lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_margin_top(title, 5, 0);
     lv_obj_set_style_margin_bottom(title, 15, 0);
 
+    // Grid setup
     static lv_coord_t col_dsc[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST};
     static lv_coord_t row_dsc[] = {LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST};
 
@@ -46,13 +52,13 @@ void PetCollectionView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_style_pad_row(grid, 10, 0);
     lv_obj_set_style_pad_column(grid, 10, 0);
 
+    // Populate the Grid
     auto& pet_manager = PetManager::get_instance();
     auto collection = pet_manager.get_collection();
 
     uint8_t col = 0;
     uint8_t row = 0;
     for (const auto& entry : collection) {
-        // Create the widget and store its pointer
         lv_obj_t* widget = create_pet_widget(grid, entry, col, row);
         pet_widgets.push_back(widget);
         
@@ -63,7 +69,6 @@ void PetCollectionView::setup_ui(lv_obj_t* parent) {
         }
     }
 
-    // Apply the initial selection style
     update_selection_style();
 }
 
@@ -103,23 +108,33 @@ lv_obj_t* PetCollectionView::create_pet_widget(lv_obj_t* parent_grid, const PetC
         lv_obj_set_style_text_color(content_label, lv_palette_darken(LV_PALETTE_GREY, 2), 0);
     }
     
-    return widget_cont; // Return the pointer to the main container
+    return widget_cont;
 }
 
 void PetCollectionView::update_selection_style() {
     if (pet_widgets.empty()) return;
 
+    // First, update the visual style of the borders
     for (size_t i = 0; i < pet_widgets.size(); ++i) {
         lv_obj_t* widget = pet_widgets[i];
         if (i == selected_index) {
-            // Apply selected style: thick, colored border
             lv_obj_set_style_border_width(widget, 3, 0);
             lv_obj_set_style_border_color(widget, lv_palette_main(LV_PALETTE_BLUE), 0);
         } else {
-            // Apply default style: thin, grey border
             lv_obj_set_style_border_width(widget, 1, 0);
             lv_obj_set_style_border_color(widget, lv_palette_main(LV_PALETTE_GREY), 0);
         }
+    }
+    
+    // --- NEW SCROLL LOGIC ---
+    // Now, handle the scrolling based on the selection
+    if (selected_index == 0) {
+        // If the very first item is selected, scroll the entire view to the top
+        // to ensure the title is visible.
+        lv_obj_scroll_to(container, 0, 0, LV_ANIM_ON);
+    } else {
+        // For any other item, just scroll enough to bring that specific item into view.
+        lv_obj_scroll_to_view_recursive(pet_widgets[selected_index], LV_ANIM_ON);
     }
 }
 
@@ -134,7 +149,7 @@ void PetCollectionView::on_left_press() {
 
     selected_index--;
     if (selected_index < 0) {
-        selected_index = pet_widgets.size() - 1; // Wrap around to the end
+        selected_index = pet_widgets.size() - 1;
     }
     update_selection_style();
 }
@@ -144,7 +159,7 @@ void PetCollectionView::on_right_press() {
 
     selected_index++;
     if (selected_index >= pet_widgets.size()) {
-        selected_index = 0; // Wrap around to the beginning
+        selected_index = 0;
     }
     update_selection_style();
 }
@@ -154,7 +169,6 @@ void PetCollectionView::go_back_to_menu() {
 }
 
 // --- Static Callbacks ---
-
 void PetCollectionView::back_button_cb(void* user_data) {
     static_cast<PetCollectionView*>(user_data)->go_back_to_menu();
 }
