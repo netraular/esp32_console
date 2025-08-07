@@ -14,6 +14,7 @@ list(APPEND MAIN_SRCS
     "views/core/settings_view/settings_view.cpp"
     "controllers/pet_manager/pet_manager.cpp"
     "views/game/pet_view/pet_view.cpp"
+    "views/game/pet_collection_view/pet_collection_view.cpp"
 )
 list(REMOVE_DUPLICATES MAIN_SRCS)
 

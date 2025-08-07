@@ -20,6 +20,7 @@
     V(SETTINGS) \
     /* Game/Gamification Views */ \
     V(PET_VIEW) \
+    V(PET_COLLECTION) \
     /* Test Views */ \
     V(MIC_TEST) \
     V(SPEAKER_TEST) \

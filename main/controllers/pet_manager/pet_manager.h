@@ -54,15 +54,19 @@ public:
      * @return A string representing the pet's name.
      */
     std::string get_pet_display_name(const PetState& state) const;
+
+    /**
+     * @brief Gets the base name for a given pet type.
+     * @param type The type of the pet.
+     * @return The base name of the pet (e.g., "Fluffle").
+     */
+    std::string get_pet_base_name(PetType type) const;
     
     /**
      * @brief Gets the collection status for all pets.
      * @return A vector containing the collection status for each pet type.
      */
     std::vector<PetCollectionEntry> get_collection() const;
-
-    // The set_custom_pet_name method is no longer needed for now, but can be
-    // re-added later when a text input view is created.
 
 private:
     PetManager() = default; // Private constructor for singleton

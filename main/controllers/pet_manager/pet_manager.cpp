@@ -199,13 +199,19 @@ std::string PetManager::get_pet_display_name(const PetState& state) const {
     return PET_NAMES[(int)state.type];
 }
 
+std::string PetManager::get_pet_base_name(PetType type) const {
+    if (type < PetType::COUNT) {
+        return PET_NAMES[(int)type];
+    }
+    return "Unknown";
+}
+
 void PetManager::load_state() {
     uint32_t u32_val;
     
     if (data_manager_get_u32(PET_STATE_TYPE_KEY, &u32_val)) {
         s_pet_state.type = (PetType)u32_val;
     }
-    // Remove the incorrect semicolon
     if (data_manager_get_u32(PET_STATE_POINTS_KEY, &s_pet_state.care_points)) {
         // This body is intentionally empty, the value is loaded via the pointer.
     }
