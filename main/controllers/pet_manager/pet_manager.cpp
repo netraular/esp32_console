@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "esp_random.h"
 #include <algorithm>
+#include <cstdio> // For snprintf
 
 static const char* TAG = "PET_MGR";
 
@@ -28,6 +29,21 @@ constexpr float TEEN_STAGE_END_PERCENT = 0.70f; // Teen lasts from 35% to 70% (3
 
 // --- Pet Name Data ---
 const char* PET_NAMES[] = {"Fluffle", "Rocky", "Sprout", "Ember", "Aquabub"};
+
+// --- Sprite Configuration ---
+// This section defines how and where to find the pet sprites on the SD card.
+const char* SPRITE_BASE_PATH = "S:/sdcard/sprites/";
+const char* EGG_SPRITE_PATH = "eggs/";
+const char* PET_SPRITE_PATH = "pets/";
+
+// For now, we use single placeholder files as requested.
+// This structure can be easily expanded later.
+const int NUM_EGG_SPRITES = 1; 
+const char* EGG_SPRITE_FILENAME = "egg.png";
+const char* BABY_SPRITE_FILENAME = "baby.png";
+const char* TEEN_SPRITE_FILENAME = "teen.png";
+const char* ADULT_SPRITE_FILENAME = "adult.png";
+
 
 PetManager& PetManager::get_instance() {
     static PetManager instance;
@@ -119,6 +135,9 @@ void PetManager::start_new_cycle() {
     s_pet_state.custom_name = "pet_name"; // Set default name
     s_pet_state.cycle_start_timestamp = now;
 
+    // Pick a random egg sprite for this cycle
+    s_current_egg_sprite_index = esp_random() % NUM_EGG_SPRITES;
+
     // --- Cycle End Date Calculation ---
     // The end date is calculated to ensure two things:
     // 1. The cycle lasts for at least MIN_CYCLE_DURATION_DAYS.
@@ -171,13 +190,9 @@ PetType PetManager::select_random_new_pet() {
 }
 
 void PetManager::add_care_points(uint32_t points) {
-    if (s_pet_state.stage > PetStage::EGG) {
-        s_pet_state.care_points += points;
-        ESP_LOGI(TAG, "Added %lu care points. Total: %lu", points, s_pet_state.care_points);
-        save_state();
-    } else {
-        ESP_LOGI(TAG, "Cannot add care points to an egg.");
-    }
+    s_pet_state.care_points += points;
+    ESP_LOGI(TAG, "Added %lu care points. Total: %lu", points, s_pet_state.care_points);
+    save_state();
 }
 
 PetState PetManager::get_current_pet_state() const {
@@ -204,6 +219,69 @@ std::string PetManager::get_pet_base_name(PetType type) const {
         return PET_NAMES[(int)type];
     }
     return "Unknown";
+}
+
+std::string PetManager::get_current_pet_sprite_path() const {
+    char path_buffer[100];
+    const char* filename = nullptr;
+    const char* subfolder = "";
+
+    switch (s_pet_state.stage) {
+        case PetStage::EGG:
+            subfolder = EGG_SPRITE_PATH;
+            // When multiple egg sprites are available, this can be expanded:
+            // snprintf(filename_buffer, sizeof(filename_buffer), "egg_%d.png", s_current_egg_sprite_index);
+            filename = EGG_SPRITE_FILENAME;
+            break;
+        case PetStage::BABY:
+            subfolder = PET_SPRITE_PATH;
+            filename = BABY_SPRITE_FILENAME;
+            break;
+        case PetStage::TEEN:
+            subfolder = PET_SPRITE_PATH;
+            filename = TEEN_SPRITE_FILENAME;
+            break;
+        case PetStage::ADULT:
+            subfolder = PET_SPRITE_PATH;
+            filename = ADULT_SPRITE_FILENAME;
+            break;
+        case PetStage::NONE:
+        default:
+            return ""; // Return empty path if no pet or unknown stage
+    }
+
+    if (filename) {
+        snprintf(path_buffer, sizeof(path_buffer), "%s%s%s", SPRITE_BASE_PATH, subfolder, filename);
+        return std::string(path_buffer);
+    }
+    
+    return "";
+}
+
+time_t PetManager::get_time_to_next_stage(const PetState& state) const {
+    time_t now = time(NULL);
+    if (now < SECONDS_IN_DAY) return 0; // Time not synced
+
+    time_t total_duration = state.cycle_end_timestamp - state.cycle_start_timestamp;
+    if (total_duration <= 0) return 0;
+
+    float next_stage_percent = 0.0f;
+    switch(state.stage) {
+        case PetStage::EGG:  next_stage_percent = EGG_STAGE_END_PERCENT; break;
+        case PetStage::BABY: next_stage_percent = BABY_STAGE_END_PERCENT; break;
+        case PetStage::TEEN: next_stage_percent = TEEN_STAGE_END_PERCENT; break;
+        case PetStage::ADULT:
+        default:
+            return 0; // At final stage or unknown
+    }
+    
+    time_t next_stage_timestamp = state.cycle_start_timestamp + (time_t)(total_duration * next_stage_percent);
+
+    if (next_stage_timestamp > now) {
+        return next_stage_timestamp - now;
+    }
+    
+    return 0; // Should not happen if stage is correct, but a safe fallback
 }
 
 void PetManager::load_state() {

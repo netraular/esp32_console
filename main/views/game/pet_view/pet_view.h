@@ -17,9 +17,10 @@ public:
 
 private:
     // --- UI Widgets ---
-    lv_obj_t* pet_display_obj = nullptr;
+    lv_obj_t* pet_display_obj = nullptr; // This will be an lv_image widget
     lv_obj_t* pet_name_label = nullptr;
     lv_obj_t* pet_points_label = nullptr;
+    lv_obj_t* pet_time_label = nullptr;
     lv_obj_t* pet_cycle_label = nullptr;
 
     // --- Timer ---

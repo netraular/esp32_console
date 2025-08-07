@@ -68,6 +68,20 @@ public:
      */
     std::vector<PetCollectionEntry> get_collection() const;
 
+    /**
+     * @brief Gets the full LVGL-compatible path to the current pet's sprite.
+     * The path is ready to be used with `lv_image_set_src`.
+     * @return A string with the path (e.g., "S:/sdcard/sprites/pets/baby.png").
+     */
+    std::string get_current_pet_sprite_path() const;
+
+    /**
+     * @brief Calculates the remaining time in seconds until the next evolution stage.
+     * @param state The current state of the pet.
+     * @return The number of seconds until the next stage, or 0 if the pet is at the final stage.
+     */
+    time_t get_time_to_next_stage(const PetState& state) const;
+
 private:
     PetManager() = default; // Private constructor for singleton
     
@@ -75,6 +89,7 @@ private:
     PetState s_pet_state;
     std::vector<PetCollectionEntry> s_collection;
     bool s_is_initialized = false;
+    int s_current_egg_sprite_index = 0;
 
     // --- Persistence ---
     void load_state();

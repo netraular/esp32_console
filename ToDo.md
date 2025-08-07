@@ -1,10 +1,10 @@
 
-Por ahora solo quiero añadir las funcionalidades para el crecimiento de la mascota (pero teniendo en cuenta las funcionalidades a implementar futuras).
-Realiza la implementación de la mascota en una vista donde se simule con un cuadrado y el nombre del estado de la mascota la "evolución" en la que está (huevo, bebé, niño y adulto). Y además querré tener un personaje principal que suba de nivel y pueda decorar como personaje del jugador y tenga dinero y niveles.
-Por ahora crea la estructura de datos para el jugador y la mascota pero solo implementa la visión y gestión de la mascota.
-Quiero que la mascota evolucione durante 2 semanas empezando siempre un lunes y que, empieze siendo 1 huevo el lunes, luego del martes al jueves sea un bebé y el viernes evolucione a niño (teen). Luego, si el domingo se ha cuidado la mascota (por ejemplo haciendo habitos, pomodoros, diarios... que le den puntos de cuidado) evolucionará a adulto durante toda la siguiente semana. En caso de que no tenga suficientes puntos de cuidado empezaremos con un huevo de nuevo ya que perderemos la mascota actual.
-Si conseguimos el adulto, al llegar al domingo de la siguiente semana se mirarán de nuevo los puntos de cuidado y si tiene suficientes lo guardaremos como conseguido en la colección. Si no tiene suficientes puntos de cuidado lo perderemos (pero quedará marcado como encontrado).
-Crea toda la gestión de la mascota con, por ejemplo, 5 mascotas distintas con nombres placeholder distintos como "pet1_baby","pet1_teen","pet1_adult".
+Estoy realizando la gestión de la mascota para el proyecto. Haz que en la vista de la mascota se muestre el tiempo restante hasta la siguiente fase y los puntos de cuidado actuales (ya que actualmente siempre se muestran 0 puntos) (Puede ser porqué está en fase huevo? aquí también debería poder tener puntos de cuidado).
+Por último, se tendrán sprites para los huevos (que serán siempre los mismos sprites para cualquier tipo de mascota y serán aleatorios) y también se tendrán sprites para las mascotas (estos serán específicos para cada especie y para cada fase de cada especie).
+Los sprites se obtendrán de la tarjeta micro sd y tendrán el siguiente tamaño: Huevo (16x16px), mascota(32x32px).
+Por ahora no tengo todos los sprites generados por lo que quiero que uses el mismo archivo egg.png (16x16) para mostrar el huevo y baby.png, teen.png y adult.png para mostrar la mascota.
+Decide donde guardar las imagenes en la micro sd y haz que se pueda definir en el código las propiedades de los sprites de los huevos y las mascotas y definir como y de donde obtenerlos.
+Genera toda la lógica relacionada con la lectura, obtención y muestra de estos sprites.
 
 Añade la pantalla de colección con la información de todas las mascotas encontradas, las que queden por encontrar y mostrando un cuadrado con '?' si no se se ha encontrado nunca la mascota, un icono negro si se ha visto en modo adulto pero no se ha quedado y en color si se ha visto y se ha quedado la mascota.
 
