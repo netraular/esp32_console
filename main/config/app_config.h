@@ -27,4 +27,8 @@
 // Time in milliseconds to hold a button to trigger a LONG_PRESS event.
 #define BUTTON_LONG_PRESS_MS        1000
 
+// --- API & NETWORK CONFIGURATION ---
+#define WEATHER_API_URL "https://api.open-meteo.com/v1/forecast?latitude=41.39&longitude=2.16&hourly=weather_code&forecast_days=2&timezone=Europe%2FBerlin"
+#define WEATHER_FETCH_INTERVAL_MS (30 * 60 * 1000) // 30 minutes
+
 #endif // APP_CONFIG_H
