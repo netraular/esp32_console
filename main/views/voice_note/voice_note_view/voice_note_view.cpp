@@ -1,6 +1,7 @@
 #include "voice_note_view.h"
 #include "views/view_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
+#include "models/asset_config.h" // Include the asset configuration
 #include <time.h>
 #include <sys/stat.h>
 #include <cstring>
@@ -22,7 +23,6 @@ VoiceNoteView::~VoiceNoteView() {
         ui_update_timer = nullptr;
     }
 
-    // If the view is destroyed mid-recording, cancel it to avoid an orphaned task/file.
     if (audio_recorder_get_state() == RECORDER_STATE_RECORDING) {
         ESP_LOGW(TAG, "View deleted during recording. Cancelling operation.");
         audio_recorder_cancel();
@@ -80,7 +80,7 @@ void VoiceNoteView::update_ui_for_state(audio_recorder_state_t state) {
         case RECORDER_STATE_IDLE:
             lv_label_set_text(status_label, "OK: Record | Right: Play Notes");
             lv_label_set_text(time_label, "00:00");
-            lv_label_set_text(icon_label, LV_SYMBOL_AUDIO); // Microphone icon
+            lv_label_set_text(icon_label, LV_SYMBOL_AUDIO);
             lv_obj_set_style_text_color(icon_label, lv_color_white(), 0);
             break;
         case RECORDER_STATE_RECORDING:
@@ -134,14 +134,19 @@ void VoiceNoteView::on_ok_press() {
             return;
         }
 
-        const char* notes_dir = "/sdcard/notes";
-        struct stat st;
-        if (stat(notes_dir, &st) == -1) {
-            ESP_LOGI(TAG, "Directory '%s' not found. Creating...", notes_dir);
-            if (!sd_manager_create_directory(notes_dir)) {
-                update_ui_for_state(RECORDER_STATE_ERROR);
-                return;
-            }
+        char notes_dir_path[128];
+        snprintf(notes_dir_path, sizeof(notes_dir_path), "%s%s%s",
+                 SD_CARD_ROOT_PATH,
+                 USER_DATA_BASE_SUBPATH,
+                 USER_DATA_VOICE_NOTES_SUBPATH);
+        
+        // Remove trailing slash for the create_directory call
+        notes_dir_path[strlen(notes_dir_path) - 1] = '\0';
+
+        if (!sd_manager_create_directory(notes_dir_path)) {
+            ESP_LOGE(TAG, "Failed to create voice notes directory: %s", notes_dir_path);
+            update_ui_for_state(RECORDER_STATE_ERROR);
+            return;
         }
         
         time_t now = time(NULL);
@@ -149,7 +154,8 @@ void VoiceNoteView::on_ok_press() {
         localtime_r(&now, &timeinfo);
         char filename[64];
         strftime(filename, sizeof(filename), "note_%Y%m%d_%H%M%S.wav", &timeinfo);
-        snprintf(current_filepath, sizeof(current_filepath), "%s/%s", notes_dir, filename);
+        
+        snprintf(current_filepath, sizeof(current_filepath), "%s/%s", notes_dir_path, filename);
 
         ESP_LOGI(TAG, "Starting new voice note: %s", current_filepath);
         if (!audio_recorder_start(current_filepath)) {

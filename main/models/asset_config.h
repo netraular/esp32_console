@@ -29,8 +29,9 @@ constexpr const char* SOUNDS_EFFECTS_SUBPATH = "effects/";
 constexpr const char* SOUNDS_MUSIC_SUBPATH   = "music/";
 
 // --- User-Generated Content Directories (relative to SD_CARD_ROOT_PATH) ---
-constexpr const char* USER_DATA_BASE_SUBPATH       = "/userdata/";
-constexpr const char* USER_DATA_RECORDINGS_SUBPATH = "recordings/";
+constexpr const char* USER_DATA_BASE_SUBPATH         = "/userdata/";
+constexpr const char* USER_DATA_RECORDINGS_SUBPATH   = "recordings/";
+constexpr const char* USER_DATA_VOICE_NOTES_SUBPATH  = "notes/";
 
 // --- System-wide UI Asset Filenames ---
 // Filenames for common UI elements not tied to a specific complex data model (e.g., a pet).
@@ -38,6 +39,6 @@ constexpr const char* UI_SOUND_NOTIFICATION = "notification.wav";
 constexpr const char* UI_SOUND_SUCCESS      = "bright_earn.wav";
 constexpr const char* UI_SOUND_ERROR        = "error.wav";
 constexpr const char* UI_SOUND_CLICK        = "click.wav";
-constexpr const char* UI_SOUND_TEST         = "test.wav"; // ADDED for the volume tester
+constexpr const char* UI_SOUND_TEST         = "test.wav";
 
 #endif // ASSET_CONFIG_H
