@@ -38,6 +38,6 @@ constexpr const char* UI_SOUND_NOTIFICATION = "notification.wav";
 constexpr const char* UI_SOUND_SUCCESS      = "bright_earn.wav";
 constexpr const char* UI_SOUND_ERROR        = "error.wav";
 constexpr const char* UI_SOUND_CLICK        = "click.wav";
-
+constexpr const char* UI_SOUND_TEST         = "test.wav"; // ADDED for the volume tester
 
 #endif // ASSET_CONFIG_H
