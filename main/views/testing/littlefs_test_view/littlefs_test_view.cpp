@@ -1,5 +1,6 @@
 #include "littlefs_test_view.h"
 #include "controllers/littlefs_manager/littlefs_manager.h"
+#include "models/asset_config.h" // Include central asset configuration
 
 static const char *TAG = "LITTLEFS_TEST_VIEW";
 
@@ -37,16 +38,16 @@ void LittlefsTestView::setup_ui(lv_obj_t* parent) {
     lv_obj_align(content_label, LV_ALIGN_CENTER, 0, 10);
     lv_label_set_long_mode(content_label, LV_LABEL_LONG_WRAP);
 
-    // Attempt to read the file from LittleFS
+    // Attempt to read the file from LittleFS using the centralized filename
     char* file_content = nullptr;
     size_t file_size = 0;
-    if (littlefs_manager_read_file("welcome.txt", &file_content, &file_size) && file_content) {
-        ESP_LOGI(TAG, "Successfully read 'welcome.txt'");
+    if (littlefs_manager_read_file(PROVISIONED_WELCOME_FILENAME, &file_content, &file_size) && file_content) {
+        ESP_LOGI(TAG, "Successfully read '%s'", PROVISIONED_WELCOME_FILENAME);
         lv_label_set_text(content_label, file_content);
         free(file_content); // Free the buffer after LVGL has copied the text
     } else {
-        ESP_LOGE(TAG, "Failed to read 'welcome.txt'");
-        lv_label_set_text(content_label, "Error:\nCould not read 'welcome.txt' from LittleFS. Check logs.");
+        ESP_LOGE(TAG, "Failed to read '%s'", PROVISIONED_WELCOME_FILENAME);
+        lv_label_set_text_fmt(content_label, "Error:\nCould not read '%s' from LittleFS. Check logs.", PROVISIONED_WELCOME_FILENAME);
     }
 }
 

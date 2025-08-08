@@ -33,9 +33,12 @@ constexpr const char* NOTIFICATIONS_SUBPATH      = "notifications/";
 constexpr const char* NOTIFICATIONS_FILENAME     = "notifications.json";
 constexpr const char* NOTIFICATIONS_TEMP_FILENAME = "notifications.json.tmp";
 
-// --- User Data: Recordings Sub-structure ---
-constexpr const char* RECORDINGS_SUBPATH = "recordings/";
-constexpr const char* VOICE_NOTES_SUBPATH = "notes/";
+// --- User Data: Recordings & Notes Sub-structure ---
+constexpr const char* RECORDINGS_SUBPATH = "recordings/"; // For mic test recordings
+constexpr const char* VOICE_NOTES_SUBPATH = "notes/";      // For the voice notes feature
+
+// --- Provisioned/Test Filenames (in LittleFS root) ---
+constexpr const char* PROVISIONED_WELCOME_FILENAME = "welcome.txt";
 
 
 // =================================================================================

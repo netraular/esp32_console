@@ -37,12 +37,12 @@ static const char *TAG = "main";
 
 // This function will write the embedded file to LittleFS if it doesn't exist.
 static void provision_filesystem_data() {
-    if (littlefs_manager_file_exists("welcome.txt")) {
-        ESP_LOGI(TAG, "'welcome.txt' already exists, skipping provisioning.");
+    if (littlefs_manager_file_exists(PROVISIONED_WELCOME_FILENAME)) {
+        ESP_LOGI(TAG, "'%s' already exists, skipping provisioning.", PROVISIONED_WELCOME_FILENAME);
         return;
     }
 
-    ESP_LOGI(TAG, "Provisioning 'welcome.txt' to LittleFS...");
+    ESP_LOGI(TAG, "Provisioning '%s' to LittleFS...", PROVISIONED_WELCOME_FILENAME);
     
     extern const uint8_t welcome_txt_start[] asm("_binary_welcome_txt_start");
     extern const uint8_t welcome_txt_end[]   asm("_binary_welcome_txt_end");
@@ -56,10 +56,10 @@ static void provision_filesystem_data() {
     memcpy(content, welcome_txt_start, welcome_txt_size);
     content[welcome_txt_size] = '\0';
 
-    if (littlefs_manager_write_file("welcome.txt", content)) {
-        ESP_LOGI(TAG, "Successfully wrote 'welcome.txt'");
+    if (littlefs_manager_write_file(PROVISIONED_WELCOME_FILENAME, content)) {
+        ESP_LOGI(TAG, "Successfully wrote '%s'", PROVISIONED_WELCOME_FILENAME);
     } else {
-        ESP_LOGE(TAG, "Failed to write 'welcome.txt'");
+        ESP_LOGE(TAG, "Failed to write '%s'", PROVISIONED_WELCOME_FILENAME);
     }
     free(content);
 }
@@ -90,7 +90,7 @@ extern "C" void app_main(void) {
     if (littlefs_manager_init("storage")) {
         ESP_LOGI(TAG, "LittleFS manager initialized.");
         
-        // Ensure base directories for the data architecture exist, using constants from asset_config.h
+        // Ensure base directories for the data architecture exist
         littlefs_manager_ensure_dir_exists(USER_DATA_BASE_PATH);
         littlefs_manager_ensure_dir_exists(GAME_DATA_BASE_PATH);
 
