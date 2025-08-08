@@ -1,11 +1,11 @@
 #include "click_counter_view.h"
 #include "views/view_manager.h"
-#include "models/asset_config.h" // Include the asset path configuration
+#include "models/asset_config.h" 
+#include "controllers/sd_card_manager/sd_card_manager.h" // Include SD card manager for checking status
 
 static const char *TAG = "CLICK_COUNTER_VIEW";
 
 // --- Constants Initialization ---
-// The hardcoded path string has been removed.
 const char* ClickCounterView::CLICK_COUNT_KEY = "click_count";
 
 // --- Lifecycle Methods ---
@@ -55,19 +55,26 @@ void ClickCounterView::on_ok_press() {
     if (click_count > 0 && click_count % 10 == 0) {
         ESP_LOGI(TAG, "Count reached %lu, playing sound and showing animation.", click_count);
         
-        char sound_path[256];
-        snprintf(sound_path, sizeof(sound_path), "%s%s%s%s%s",
-                 SD_CARD_ROOT_PATH,        // "/sdcard"
-                 ASSETS_BASE_SUBPATH,      // "/assets/"
-                 ASSETS_SOUNDS_SUBPATH,    // "sounds/"
-                 SOUNDS_EFFECTS_SUBPATH,   // "effects/"
-                 UI_SOUND_SUCCESS);        // "success.wav" (from asset_config.h)
+        // Defensive check: only try to play sound if the SD card is available.
+        if (sd_manager_is_mounted()) {
+            char sound_path[256];
+            snprintf(sound_path, sizeof(sound_path), "%s%s%s%s%s",
+                     SD_CARD_ROOT_PATH,        // "/sdcard"
+                     ASSETS_BASE_SUBPATH,      // "/assets/"
+                     ASSETS_SOUNDS_SUBPATH,    // "sounds/"
+                     SOUNDS_EFFECTS_SUBPATH,   // "effects/"
+                     UI_SOUND_SUCCESS);        // Refers to "bright_earn.wav"
 
-        audio_manager_play(sound_path);
+            audio_manager_play(sound_path);
+        } else {
+            ESP_LOGW(TAG, "SD card not mounted, skipping sound playback.");
+        }
+        
         start_fade_out_animation();
     }
 }
-// ... (The rest of the file remains unchanged) ...
+
+// ... (El resto del archivo no cambia) ...
 // --- UI Setup ---
 void ClickCounterView::setup_ui(lv_obj_t* parent) {
     // Create a title label

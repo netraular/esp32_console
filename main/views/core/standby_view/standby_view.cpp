@@ -91,6 +91,7 @@ void StandbyView::show_notification_popup(const Notification& notif) {
             ESP_LOGW(TAG, "Notification sound file not found at %s", sound_path);
         }
     } else {
+        // This warning is now more accurate: the card really wasn't mounted at startup.
         ESP_LOGW(TAG, "SD card not mounted, cannot play notification sound.");
     }
     
@@ -101,7 +102,8 @@ void StandbyView::show_notification_popup(const Notification& notif) {
         s_instance
     );
 }
-// ... (The rest of the file remains unchanged as it doesn't use the hardcoded path) ...
+
+// ... (El resto de standby_view.cpp no necesita cambios) ...
 // --- UI & Handler Setup ---
 void StandbyView::setup_ui(lv_obj_t* parent) {
     add_debug_border(parent);

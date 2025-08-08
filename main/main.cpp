@@ -8,6 +8,12 @@
 #include "lvgl.h"
 #include <cstring>
 
+// Include all configuration headers
+#include "config/board_config.h"
+#include "config/app_config.h"
+#include "config/secrets.h"
+
+// Include all manager headers
 #include "controllers/screen_manager/screen_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
@@ -21,12 +27,10 @@
 #include "controllers/power_manager/power_manager.h"
 #include "controllers/habit_data_manager/habit_data_manager.h"
 #include "controllers/notification_manager/notification_manager.h"
-#include "views/view_manager.h"
 #include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
 #include "controllers/weather_manager/weather_manager.h"
 #include "controllers/pet_manager/pet_manager.h"
-
-
+#include "views/view_manager.h"
 
 static const char *TAG = "main";
 
@@ -102,7 +106,13 @@ extern "C" void app_main(void) {
 
     // Initialize SD card hardware.
     if (sd_manager_init()) {
-        ESP_LOGI(TAG, "SD Card manager hardware initialized successfully.");
+        ESP_LOGI(TAG, "SD Card manager hardware initialized.");
+        // Proactively mount the SD card at startup.
+        if (sd_manager_mount()) {
+            ESP_LOGI(TAG, "SD Card mounted successfully during startup.");
+        } else {
+            ESP_LOGW(TAG, "Failed to mount SD Card during startup. Assets will not be available.");
+        }
     } else {
         ESP_LOGE(TAG, "Failed to initialize SD Card manager hardware.");
     }
