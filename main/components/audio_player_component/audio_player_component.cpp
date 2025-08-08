@@ -2,7 +2,8 @@
 #include "controllers/audio_manager/audio_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "components/audio_visualizer/audio_visualizer.h"
-#include "config.h"
+#include "config/board_config.h"
+#include "config/app_config.h"
 #include "esp_log.h"
 #include <string.h>
 #include <math.h>

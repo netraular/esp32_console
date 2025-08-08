@@ -4,7 +4,7 @@
 #include "components/status_bar_component/status_bar_component.h"
 #include "components/popup_manager/popup_manager.h"
 #include "controllers/wifi_manager/wifi_manager.h"
-#include "secret.h" // For WIFI_SSID
+#include "config/secrets.h"
 #include "esp_log.h"
 #include <string>
 

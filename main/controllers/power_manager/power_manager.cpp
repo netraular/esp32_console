@@ -1,5 +1,6 @@
 #include "power_manager.h"
-#include "config.h" 
+#include "config/board_config.h"
+#include "config/app_config.h"
 #include "esp_sleep.h"
 #include "esp_log.h"
 #include "driver/gpio.h"

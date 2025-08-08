@@ -1,6 +1,7 @@
 #include "volume_tester_view.h"
 #include "views/view_manager.h"
-#include "config.h"
+#include "config/board_config.h"
+#include "config/app_config.h"
 
 static const char* TAG = "VOLUME_TESTER_VIEW";
 const char* VolumeTesterView::TEST_SOUND_PATH = "/sdcard/sounds/test.wav";

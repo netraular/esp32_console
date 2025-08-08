@@ -1,5 +1,6 @@
 #include "sd_card_manager.h"
-#include "config.h"
+#include "config/board_config.h"
+#include "config/app_config.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"

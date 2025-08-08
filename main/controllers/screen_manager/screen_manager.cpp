@@ -1,5 +1,6 @@
 #include "screen_manager.h"
-#include "config.h"
+#include "config/board_config.h"
+#include "config/app_config.h"
 #include "esp_log.h"
 #include "driver/spi_master.h"
 #include "esp_timer.h"
