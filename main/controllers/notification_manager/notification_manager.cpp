@@ -9,13 +9,14 @@
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/littlefs_manager/littlefs_manager.h"
 #include "views/core/standby_view/standby_view.h"
+#include "models/asset_config.h" // Include the asset path configuration
 #include <sys/stat.h>
 
 static const char *TAG = "NOTIF_MGR";
 static const char* DATA_DIR = "data";
 static const char* NOTIFICATIONS_FILE_PATH = "data/notifications.json";
 static const char* NOTIFICATIONS_TEMP_PATH = "data/notifications.json.tmp";
-static const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
+// The hardcoded filename string has been removed from here.
 
 std::vector<Notification> NotificationManager::s_notifications;
 uint32_t NotificationManager::s_next_id = 1;
@@ -35,26 +36,11 @@ void NotificationManager::init() {
 }
 
 void NotificationManager::dispatcher_task(lv_timer_t* timer) {
-    // If the view is not the standby screen, or a popup is active, do nothing.
-    // This prevents notifications from appearing over other applications.
     if (view_manager_get_current_view_id() != VIEW_ID_STANDBY || popup_manager_is_active()) {
         return;
     }
 
     time_t now = time(NULL);
-    // Check for a notification that is due in the current second.
-    // We check a 1-second window to prevent missing a notification if the timer fires slightly late.
-     /**
-     * @brief DESIGN NOTE: Dispatcher Logic
-     * This dispatcher is INTENTIONALLY designed to only show popups for
-     * notifications that trigger in real-time (within the last second)
-     * while the device is awake and on the Standby screen.
-     *
-     * This prevents a "popup storm" of old notifications when the user
-     * manually wakes the device. Notifications that occurred during sleep
-     * only play a sound (handled by Power Manager) and can be viewed
-     * in the history screen.
-     */
     time_t one_second_ago = now - 1;
 
     auto it = std::find_if(s_notifications.begin(), s_notifications.end(), 
@@ -66,24 +52,31 @@ void NotificationManager::dispatcher_task(lv_timer_t* timer) {
         Notification& notif_to_show = *it;
         ESP_LOGI(TAG, "Dispatching visual notification for ID: %lu to StandbyView", notif_to_show.id);
         
-        // Show the popup on the standby screen.
         StandbyView::show_notification_popup(notif_to_show);
         
-        // Also play a sound for notifications that occur while the device is awake.
         if (sd_manager_check_ready()) {
+            char sound_path[256];
+            // The path is now constructed using only constants from asset_config.h
+            snprintf(sound_path, sizeof(sound_path), "%s%s%s%s%s",
+                     SD_CARD_ROOT_PATH,        // "/sdcard"
+                     ASSETS_BASE_SUBPATH,      // "/assets/"
+                     ASSETS_SOUNDS_SUBPATH,    // "sounds/"
+                     SOUNDS_EFFECTS_SUBPATH,   // "effects/"
+                     UI_SOUND_NOTIFICATION);   // "notification.wav" (from asset_config.h)
+
             struct stat st;
-            if (stat(NOTIFICATION_SOUND_PATH, &st) == 0) {
-                audio_manager_play(NOTIFICATION_SOUND_PATH);
+            if (stat(sound_path, &st) == 0) {
+                audio_manager_play(sound_path);
             } else {
-                ESP_LOGW(TAG, "Notification sound file not found at %s", NOTIFICATION_SOUND_PATH);
+                ESP_LOGW(TAG, "Notification sound file not found at %s", sound_path);
             }
         }
 
-        // Mark the notification as read so it doesn't show again.
         mark_as_read(notif_to_show.id);
     }
 }
 
+// ... (Rest of NotificationManager.cpp remains unchanged) ...
 time_t NotificationManager::get_next_notification_timestamp() {
     time_t now = time(NULL);
     time_t next_timestamp = 0;

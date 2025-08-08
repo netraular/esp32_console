@@ -1,6 +1,7 @@
 #include "pet_manager.h"
 #include "controllers/data_manager/data_manager.h"
-#include "models/pet_asset_data.h" // Include the centralized asset configuration
+#include "models/pet_asset_data.h"
+#include "models/asset_config.h" // Include the new asset path configuration
 #include "esp_log.h"
 #include "esp_random.h"
 #include <algorithm>
@@ -26,8 +27,6 @@ constexpr float EGG_STAGE_END_PERCENT = 0.07f;
 constexpr float BABY_STAGE_END_PERCENT = 0.35f;
 constexpr float TEEN_STAGE_END_PERCENT = 0.70f;
 
-// Note: All asset-related strings (names, paths, defaults) have been moved to pet_asset_data.h
-
 PetManager& PetManager::get_instance() {
     static PetManager instance;
     return instance;
@@ -41,9 +40,6 @@ void PetManager::init() {
     ESP_LOGI(TAG, "Pet Manager initialized.");
 }
 
-// ... (update_state, finalize_cycle, start_new_cycle, add_care_points, etc. remain unchanged) ...
-// ... a excepción de las funciones que usan los datos de configuración ...
-
 std::string PetManager::get_pet_display_name(const PetState& state) const {
     if (state.stage == PetStage::EGG) {
         return "Mysterious Egg";
@@ -51,13 +47,11 @@ std::string PetManager::get_pet_display_name(const PetState& state) const {
     if (!state.custom_name.empty() && state.custom_name != "pet_name") {
         return state.custom_name;
     }
-    // Fallback to base name from asset definitions
     return this->get_pet_base_name(state.type);
 }
 
 std::string PetManager::get_pet_base_name(PetType type) const {
     if (type < PetType::COUNT) {
-        // Get the name directly from our single source of truth
         return PET_ASSET_DEFINITIONS[(int)type].base_name;
     }
     return "Unknown";
@@ -81,63 +75,53 @@ PetType PetManager::select_random_new_pet() {
     uint32_t index = esp_random() % available_pets.size();
     PetType new_type = available_pets[index];
 
-    // Use the get_pet_base_name method which reads from the asset data
     ESP_LOGI(TAG, "Selected new pet: %s", get_pet_base_name(new_type).c_str());
     return new_type;
 }
 
-
 std::string PetManager::get_current_pet_sprite_path() const {
-    char path_buffer[128];
     const char* subfolder = nullptr;
     const char* filename = nullptr;
 
     if (s_pet_state.stage == PetStage::EGG) {
-        subfolder = EGG_SPRITE_PATH;
+        subfolder = SPRITES_EGGS_SUBPATH;
         filename = DEFAULT_EGG_SPRITE;
     } else {
-        subfolder = PET_SPRITE_PATH;
+        subfolder = SPRITES_PETS_SUBPATH;
         
-        // Get the specific sprite definitions for the current pet type
         const PetAssetData& pet_assets = PET_ASSET_DEFINITIONS[(int)s_pet_state.type];
-
-        const char* specific_filename = nullptr;
-        const char* fallback_filename = nullptr;
 
         switch (s_pet_state.stage) {
             case PetStage::BABY:
-                specific_filename = pet_assets.baby_sprite_filename;
-                fallback_filename = DEFAULT_BABY_SPRITE;
+                filename = pet_assets.baby_sprite_filename ? pet_assets.baby_sprite_filename : DEFAULT_BABY_SPRITE;
                 break;
             case PetStage::TEEN:
-                specific_filename = pet_assets.teen_sprite_filename;
-                fallback_filename = DEFAULT_TEEN_SPRITE;
+                filename = pet_assets.teen_sprite_filename ? pet_assets.teen_sprite_filename : DEFAULT_TEEN_SPRITE;
                 break;
             case PetStage::ADULT:
-                specific_filename = pet_assets.adult_sprite_filename;
-                fallback_filename = DEFAULT_ADULT_SPRITE;
+                filename = pet_assets.adult_sprite_filename ? pet_assets.adult_sprite_filename : DEFAULT_ADULT_SPRITE;
                 break;
-            default:
-                break;
-        }
-
-        // Logic to choose specific file or fallback to default
-        if (specific_filename != nullptr && specific_filename[0] != '\0') {
-            filename = specific_filename;
-        } else {
-            filename = fallback_filename;
+            default: // Should not happen
+                return "";
         }
     }
 
     if (subfolder && filename) {
-        snprintf(path_buffer, sizeof(path_buffer), "%s%s%s", SPRITE_BASE_PATH, subfolder, filename);
+        char path_buffer[256];
+        snprintf(path_buffer, sizeof(path_buffer), "%s%s%s%s%s%s",
+                 LVGL_VFS_SD_CARD_PREFIX, // "S:"
+                 SD_CARD_ROOT_PATH,       // "/sdcard"
+                 ASSETS_BASE_SUBPATH,     // "/assets/"
+                 ASSETS_SPRITES_SUBPATH,  // "sprites/"
+                 subfolder,               // "pets/" or "eggs/"
+                 filename);               // "fluffle_adult.png"
         return std::string(path_buffer);
     }
 
     return ""; // Return empty path on failure
 }
 
-// El resto del archivo (update_state, finalize_cycle, start_new_cycle, add_care_points, get_current_pet_state, get_collection, get_time_to_next_stage, load_state, save_state, save_collection) permanece idéntico a la versión anterior. No es necesario repetirlo aquí.
+// ... (Rest of PetManager.cpp remains unchanged: update_state, load_state, save_state, etc.) ...
 void PetManager::update_state() {
     if (!s_is_initialized) {
         ESP_LOGE(TAG, "Manager not initialized.");
@@ -203,8 +187,6 @@ void PetManager::start_new_cycle() {
     s_pet_state.care_points = 0;
     s_pet_state.custom_name = "pet_name";
     s_pet_state.cycle_start_timestamp = now;
-
-    //s_current_egg_sprite_index = esp_random() % NUM_EGG_SPRITES;
 
     time_t target_end_date = now + (MIN_CYCLE_DURATION_DAYS * SECONDS_IN_DAY);
     struct tm timeinfo;

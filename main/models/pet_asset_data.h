@@ -2,19 +2,14 @@
 #define PET_ASSET_DATA_H
 
 #include "pet_data_model.h"
-#include <cstddef> // For nullptr_t
-
-// --- Asset Path Configuration ---
-// Central location for all sprite path definitions.
-constexpr const char* SPRITE_BASE_PATH = "S:/sdcard/sprites/";
-constexpr const char* EGG_SPRITE_PATH = "eggs/";
-constexpr const char* PET_SPRITE_PATH = "pets/";
+#include <cstddef>
 
 // --- Default/Fallback Sprite Filenames ---
-constexpr const char* DEFAULT_EGG_SPRITE = "egg.png";
-constexpr const char* DEFAULT_BABY_SPRITE = "baby.png";
-constexpr const char* DEFAULT_TEEN_SPRITE = "teen.png";
-constexpr const char* DEFAULT_ADULT_SPRITE = "adult.png";
+// These are used when a specific pet does not have a custom sprite for a given stage.
+constexpr const char* DEFAULT_EGG_SPRITE   = "egg_default.png";
+constexpr const char* DEFAULT_BABY_SPRITE  = "baby_default.png";
+constexpr const char* DEFAULT_TEEN_SPRITE  = "teen_default.png";
+constexpr const char* DEFAULT_ADULT_SPRITE = "adult_default.png";
 
 
 /**
