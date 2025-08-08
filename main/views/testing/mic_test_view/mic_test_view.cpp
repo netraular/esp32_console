@@ -1,6 +1,7 @@
 #include "mic_test_view.h"
 #include "views/view_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
+#include "models/asset_config.h" // Include the new asset configuration
 #include "esp_log.h"
 #include <time.h>
 #include <sys/stat.h>
@@ -11,7 +12,6 @@ static const char *TAG = "MIC_TEST_VIEW";
 // --- Lifecycle Methods ---
 MicTestView::MicTestView() {
     ESP_LOGI(TAG, "MicTestView constructed");
-    // Initialize non-zero/nullptr members if needed
     last_known_state = (audio_recorder_state_t)-1; // Force initial UI update
 }
 
@@ -25,13 +25,10 @@ MicTestView::~MicTestView() {
         audio_recorder_cancel();
     }
 
-    // Delete the timer associated with this view to prevent memory leaks.
     if (ui_update_timer) {
         lv_timer_del(ui_update_timer);
         ui_update_timer = nullptr;
     }
-    // LVGL widgets (status_label, etc.) are children of 'container' and will be
-    // automatically deleted by the view_manager. No need to delete them here.
 }
 
 void MicTestView::create(lv_obj_t* parent) {
@@ -43,7 +40,6 @@ void MicTestView::create(lv_obj_t* parent) {
     setup_ui(container);
     setup_button_handlers();
 
-    // Create a timer to periodically update the UI
     ui_update_timer = lv_timer_create(MicTestView::ui_update_timer_cb, 250, this);
 }
 
@@ -52,24 +48,19 @@ void MicTestView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(parent, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Title
     lv_obj_t* title_label = lv_label_create(parent);
     lv_label_set_text(title_label, "Microphone Test");
     lv_obj_set_style_text_font(title_label, &lv_font_montserrat_24, 0);
 
-    // Icon (Microphone/Stop/Save)
     icon_label = lv_label_create(parent);
     lv_obj_set_style_text_font(icon_label, &lv_font_montserrat_48, 0);
 
-    // Time Label
     time_label = lv_label_create(parent);
     lv_obj_set_style_text_font(time_label, &lv_font_montserrat_28, 0);
 
-    // Status Label
     status_label = lv_label_create(parent);
     lv_obj_set_style_text_font(status_label, &lv_font_montserrat_18, 0);
 
-    // Set initial state
     update_ui_for_state(audio_recorder_get_state());
 }
 
@@ -142,18 +133,20 @@ void MicTestView::on_ok_press() {
             return;
         }
 
-        const char* mount_point = sd_manager_get_mount_point();
-        char rec_dir[128];
-        snprintf(rec_dir, sizeof(rec_dir), "%s/recordings", mount_point);
-        
-        struct stat st;
-        if (stat(rec_dir, &st) == -1) {
-            ESP_LOGI(TAG, "Directory '%s' not found. Creating...", rec_dir);
-            if (!sd_manager_create_directory(rec_dir)) {
-                ESP_LOGE(TAG, "Failed to create directory '%s'", rec_dir);
-                update_ui_for_state(RECORDER_STATE_ERROR);
-                return;
-            }
+        // Build the full directory path using constants from the asset architecture
+        char recordings_dir_path[128];
+        snprintf(recordings_dir_path, sizeof(recordings_dir_path), "%s%s%s",
+                 SD_CARD_ROOT_PATH,             // "/sdcard"
+                 USER_DATA_BASE_SUBPATH,        // "/userdata/"
+                 USER_DATA_RECORDINGS_SUBPATH); // "recordings/"
+
+        // The path in `recordings_dir_path` ends with a '/', so remove it for `create_directory`
+        recordings_dir_path[strlen(recordings_dir_path) - 1] = '\0';
+
+        if (!sd_manager_create_directory(recordings_dir_path)) {
+            ESP_LOGE(TAG, "Failed to create recordings directory: %s", recordings_dir_path);
+            update_ui_for_state(RECORDER_STATE_ERROR);
+            return;
         }
         
         time_t now = time(NULL);
@@ -161,7 +154,9 @@ void MicTestView::on_ok_press() {
         localtime_r(&now, &timeinfo);
         char filename[64];
         strftime(filename, sizeof(filename), "rec_%Y%m%d_%H%M%S.wav", &timeinfo);
-        snprintf(current_filepath, sizeof(current_filepath), "%s/%s", rec_dir, filename);
+
+        // Build the final, full filepath for the audio recorder
+        snprintf(current_filepath, sizeof(current_filepath), "%s/%s", recordings_dir_path, filename);
 
         ESP_LOGI(TAG, "Starting recording to file: %s", current_filepath);
         if (!audio_recorder_start(current_filepath)) {
@@ -169,7 +164,6 @@ void MicTestView::on_ok_press() {
             update_ui_for_state(RECORDER_STATE_ERROR);
         }
     } else if (state == RECORDER_STATE_RECORDING) {
-        // --- Stop Recording ---
         ESP_LOGI(TAG, "Stopping recording.");
         audio_recorder_stop();
     }
@@ -190,7 +184,7 @@ void MicTestView::cancel_press_cb(void* user_data) {
 }
 
 void MicTestView::ui_update_timer_cb(lv_timer_t* timer) {
-    MicTestView* view = static_cast<MicTestView*>(lv_timer_get_user_data(timer));
+    auto* view = static_cast<MicTestView*>(lv_timer_get_user_data(timer));
     if (view) {
         view->update_ui();
     }

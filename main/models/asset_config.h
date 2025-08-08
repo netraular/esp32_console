@@ -13,7 +13,7 @@
 constexpr const char* LVGL_VFS_SD_CARD_PREFIX = "S:";      // Drive letter for LVGL to access the SD card VFS.
 constexpr const char* SD_CARD_ROOT_PATH       = "/sdcard"; // The mount point for the SD card in the VFS.
 
-// --- Base Asset Directories (relative to SD_CARD_ROOT_PATH) ---
+// --- Base Read-Only Asset Directories (relative to SD_CARD_ROOT_PATH) ---
 constexpr const char* ASSETS_BASE_SUBPATH    = "/assets/";
 constexpr const char* ASSETS_SPRITES_SUBPATH = "sprites/";
 constexpr const char* ASSETS_SOUNDS_SUBPATH  = "sounds/";
@@ -28,10 +28,14 @@ constexpr const char* SPRITES_UI_SUBPATH   = "ui/";
 constexpr const char* SOUNDS_EFFECTS_SUBPATH = "effects/";
 constexpr const char* SOUNDS_MUSIC_SUBPATH   = "music/";
 
+// --- User-Generated Content Directories (relative to SD_CARD_ROOT_PATH) ---
+constexpr const char* USER_DATA_BASE_SUBPATH       = "/userdata/";
+constexpr const char* USER_DATA_RECORDINGS_SUBPATH = "recordings/";
+
 // --- System-wide UI Asset Filenames ---
 // Filenames for common UI elements not tied to a specific complex data model (e.g., a pet).
 constexpr const char* UI_SOUND_NOTIFICATION = "notification.wav";
-constexpr const char* UI_SOUND_SUCCESS      = "bright_earn.wav"; // Corrected to match original asset.
+constexpr const char* UI_SOUND_SUCCESS      = "bright_earn.wav";
 constexpr const char* UI_SOUND_ERROR        = "error.wav";
 constexpr const char* UI_SOUND_CLICK        = "click.wav";
 

@@ -5,6 +5,7 @@
 #include "controllers/audio_recorder/audio_recorder.h"
 #include "controllers/button_manager/button_manager.h"
 #include "esp_log.h"
+#include "lvgl.h" // Include LVGL for lv_timer_t
 
 /**
  * @brief View for testing the microphone by recording .wav files to the SD card.
