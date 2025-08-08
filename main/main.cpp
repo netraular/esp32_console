@@ -12,7 +12,7 @@
 #include "config/board_config.h"
 #include "config/app_config.h"
 #include "config/secrets.h"
-#include "models/asset_config.h" // Include asset config for drive letter
+#include "models/asset_config.h" // Central source of truth for paths
 
 // Include all manager headers
 #include "controllers/screen_manager/screen_manager.h"
@@ -44,12 +44,10 @@ static void provision_filesystem_data() {
 
     ESP_LOGI(TAG, "Provisioning 'welcome.txt' to LittleFS...");
     
-    // Symbols created by the build system from the EMBED_FILES directive
     extern const uint8_t welcome_txt_start[] asm("_binary_welcome_txt_start");
     extern const uint8_t welcome_txt_end[]   asm("_binary_welcome_txt_end");
     const size_t welcome_txt_size = welcome_txt_end - welcome_txt_start;
     
-    // Create a null-terminated string from the binary data
     char* content = (char*)malloc(welcome_txt_size + 1);
     if (!content) {
         ESP_LOGE(TAG, "Failed to allocate memory for provisioning file.");
@@ -69,7 +67,7 @@ static void provision_filesystem_data() {
 extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Starting application");
 
-    // Initialize NVS (Non-Volatile Storage), required for WiFi
+    // Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -79,13 +77,9 @@ extern "C" void app_main(void) {
     
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    ESP_LOGI(TAG, "Default event loop and netif created.");
     
-    // Initialize Data Manager (depends on NVS)
     data_manager_init();
-    ESP_LOGI(TAG, "Data manager initialized.");
 
-    // Initialize display (hardware and LVGL)
     screen_t* screen = screen_init();
     if (!screen) {
         ESP_LOGE(TAG, "Failed to initialize screen, halting.");
@@ -95,20 +89,21 @@ extern "C" void app_main(void) {
     // Initialize LittleFS on the 'storage' partition
     if (littlefs_manager_init("storage")) {
         ESP_LOGI(TAG, "LittleFS manager initialized.");
-        provision_filesystem_data(); // Write files on first boot
+        
+        // Ensure base directories for the data architecture exist, using constants from asset_config.h
+        littlefs_manager_ensure_dir_exists(USER_DATA_BASE_PATH);
+        littlefs_manager_ensure_dir_exists(GAME_DATA_BASE_PATH);
+
+        provision_filesystem_data();
     } else {
         ESP_LOGE(TAG, "Failed to initialize LittleFS manager.");
     }
 
-    // Initialize the Habit Data Manager (depends on LittleFS)
+    // Initialize all other managers that depend on the filesystems.
     HabitDataManager::init();
-    ESP_LOGI(TAG, "Habit data manager initialized.");
+    NotificationManager::init();
 
-
-    // Initialize SD card hardware.
     if (sd_manager_init()) {
-        ESP_LOGI(TAG, "SD Card manager hardware initialized.");
-        // Proactively mount the SD card at startup.
         if (sd_manager_mount()) {
             ESP_LOGI(TAG, "SD Card mounted successfully during startup.");
         } else {
@@ -118,40 +113,17 @@ extern "C" void app_main(void) {
         ESP_LOGE(TAG, "Failed to initialize SD Card manager hardware.");
     }
 
-    // Use the custom VFS driver to bridge LVGL and the ESP-IDF VFS
-    // Use the first character of the string constant from the single source of truth.
     lvgl_fs_driver_init(LVGL_VFS_SD_CARD_PREFIX[0]);
 
-    // Initialize buttons
     button_manager_init();
-    ESP_LOGI(TAG, "Button manager initialized.");
-
-    // Initialize audio managers
     audio_manager_init();
-    ESP_LOGI(TAG, "Audio manager (playback) initialized.");
     audio_recorder_init();
-    ESP_LOGI(TAG, "Audio recorder initialized.");
-
-    // Initialize network managers
-    wifi_manager_init_sta();
-    ESP_LOGI(TAG, "WiFi manager initialized.");
-    wifi_streamer_init();
-    ESP_LOGI(TAG, "WiFi streamer initialized.");
     
-    // Initialize the Weather Manager (depends on WiFi)
+    wifi_manager_init_sta();
+    wifi_streamer_init();
     WeatherManager::init();
-    ESP_LOGI(TAG, "Weather manager initialized.");
-
-    // Initialize the Pet Manager (depends on time sync)
     PetManager::get_instance().init();
-
-    // Initialize the Speech-to-Text manager
     stt_manager_init();
-    ESP_LOGI(TAG, "STT manager initialized.");
-
-    // Initialize Notification Manager
-    NotificationManager::init();
-    ESP_LOGI(TAG, "Notification manager initialized.");
 
     // Initialize the view manager, which creates the main UI.
     view_manager_init();

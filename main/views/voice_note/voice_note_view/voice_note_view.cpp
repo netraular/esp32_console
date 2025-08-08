@@ -5,6 +5,7 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <cstring>
+#include <string>
 
 static const char *TAG = "VOICE_NOTE_VIEW";
 
@@ -134,17 +135,11 @@ void VoiceNoteView::on_ok_press() {
             return;
         }
 
-        char notes_dir_path[128];
-        snprintf(notes_dir_path, sizeof(notes_dir_path), "%s%s%s",
-                 SD_CARD_ROOT_PATH,
-                 USER_DATA_BASE_SUBPATH,
-                 USER_DATA_VOICE_NOTES_SUBPATH);
+        // Build path from central configuration
+        std::string notes_dir_str = std::string(SD_CARD_ROOT_PATH) + "/" + USER_DATA_BASE_PATH + VOICE_NOTES_SUBPATH;
         
-        // Remove trailing slash for the create_directory call
-        notes_dir_path[strlen(notes_dir_path) - 1] = '\0';
-
-        if (!sd_manager_create_directory(notes_dir_path)) {
-            ESP_LOGE(TAG, "Failed to create voice notes directory: %s", notes_dir_path);
+        if (!sd_manager_create_directory(notes_dir_str.c_str())) {
+            ESP_LOGE(TAG, "Failed to create voice notes directory: %s", notes_dir_str.c_str());
             update_ui_for_state(RECORDER_STATE_ERROR);
             return;
         }
@@ -155,7 +150,8 @@ void VoiceNoteView::on_ok_press() {
         char filename[64];
         strftime(filename, sizeof(filename), "note_%Y%m%d_%H%M%S.wav", &timeinfo);
         
-        snprintf(current_filepath, sizeof(current_filepath), "%s/%s", notes_dir_path, filename);
+        // Construct the full path for the audio recorder
+        snprintf(current_filepath, sizeof(current_filepath), "%s%s", notes_dir_str.c_str(), filename);
 
         ESP_LOGI(TAG, "Starting new voice note: %s", current_filepath);
         if (!audio_recorder_start(current_filepath)) {

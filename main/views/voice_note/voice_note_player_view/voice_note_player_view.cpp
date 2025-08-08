@@ -3,8 +3,8 @@
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/stt_manager/stt_manager.h"
-#include "controllers/button_manager/button_manager.h" // ADDED
-#include "components/file_explorer/file_explorer.h"     // ADDED
+#include "controllers/button_manager/button_manager.h"
+#include "components/file_explorer/file_explorer.h"
 #include "components/audio_player_component/audio_player_component.h"
 #include "components/text_viewer/text_viewer.h"
 #include "models/asset_config.h"
@@ -16,13 +16,11 @@
 
 static const char *TAG = "VOICE_NOTE_PLAYER_VIEW";
 
-// This struct is an implementation detail for safe thread communication.
 struct transcription_result_data_t {
     bool success;
     std::string result_text;
     VoiceNotePlayerView* instance;
 };
-
 
 // --- Lifecycle Methods ---
 VoiceNotePlayerView::VoiceNotePlayerView() : loading_indicator(nullptr), action_menu_container(nullptr), file_explorer_host_container(nullptr), action_menu_group(nullptr), styles_initialized(false) {
@@ -72,17 +70,10 @@ void VoiceNotePlayerView::hide_loading_indicator() {
 void VoiceNotePlayerView::show_file_explorer() {
     lv_obj_clean(container);
 
-    char notes_dir_path[128];
-    snprintf(notes_dir_path, sizeof(notes_dir_path), "%s%s%s",
-             SD_CARD_ROOT_PATH,
-             USER_DATA_BASE_SUBPATH,
-             USER_DATA_VOICE_NOTES_SUBPATH);
-    
-    // Remove trailing slash for stat()
-    notes_dir_path[strlen(notes_dir_path) - 1] = '\0';
+    std::string notes_dir_str = std::string(SD_CARD_ROOT_PATH) + "/" + USER_DATA_BASE_PATH + VOICE_NOTES_SUBPATH;
 
     struct stat st;
-    if (stat(notes_dir_path, &st) != 0) {
+    if (stat(notes_dir_str.c_str(), &st) != 0) {
         lv_obj_t* label = lv_label_create(container);
         lv_label_set_text(label, "No voice notes found.\n\nPress Cancel to go back.");
         lv_obj_center(label);
@@ -98,7 +89,7 @@ void VoiceNotePlayerView::show_file_explorer() {
     lv_obj_set_size(file_explorer_host_container, lv_pct(100), lv_pct(100));
     lv_obj_add_event_cb(file_explorer_host_container, explorer_cleanup_cb, LV_EVENT_DELETE, this);
 
-    file_explorer_create(file_explorer_host_container, notes_dir_path, 
+    file_explorer_create(file_explorer_host_container, notes_dir_str.c_str(), 
                          audio_file_selected_cb_c, file_long_pressed_cb_c, 
                          nullptr, explorer_exit_cb_c, this);
 }

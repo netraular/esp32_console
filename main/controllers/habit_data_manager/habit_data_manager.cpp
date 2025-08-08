@@ -1,5 +1,6 @@
 #include "habit_data_manager.h"
 #include "controllers/littlefs_manager/littlefs_manager.h"
+#include "models/asset_config.h" // Use the centralized asset configuration
 #include "esp_log.h"
 #include <sstream>
 #include <algorithm>
@@ -8,12 +9,13 @@
 
 static const char* TAG = "HABIT_DATA_MGR";
 
-// --- File paths within LittleFS ---
-static const char* DIR_PATH = "habits";
-static const char* HISTORY_DIR_PATH = "habits/history";
-static const std::string CATEGORIES_FILENAME = std::string(DIR_PATH) + "/categories.csv";
-static const std::string HABITS_FILENAME = std::string(DIR_PATH) + "/habits.csv";
-static const std::string ID_COUNTER_FILENAME = std::string(DIR_PATH) + "/id.txt";
+// --- File paths derived entirely from the central asset_config.h ---
+static const std::string s_habits_dir_path = std::string(USER_DATA_BASE_PATH) + HABITS_SUBPATH;
+static const std::string s_history_dir_path = s_habits_dir_path + HABITS_HISTORY_SUBPATH;
+static const std::string s_categories_filepath = s_habits_dir_path + HABITS_CATEGORIES_FILENAME;
+static const std::string s_habits_filepath = s_habits_dir_path + HABITS_DATA_FILENAME;
+static const std::string s_id_counter_filepath = s_habits_dir_path + HABITS_ID_COUNTER_FILENAME;
+
 static const char* GENERAL_CATEGORY_NAME = "General";
 
 // --- Static Member Initialization ---
@@ -23,11 +25,12 @@ uint32_t HabitDataManager::s_next_id = 1;
 
 void HabitDataManager::init() {
     ESP_LOGI(TAG, "Initializing Habit Data Manager...");
-    if (!littlefs_manager_ensure_dir_exists(DIR_PATH)) {
-        ESP_LOGE(TAG, "Failed to create habits directory! Data will not be loaded or saved.");
+    
+    if (!littlefs_manager_ensure_dir_exists(s_habits_dir_path.c_str())) {
+        ESP_LOGE(TAG, "Failed to create user habits directory! Data will not be loaded or saved.");
         return;
     }
-    if (!littlefs_manager_ensure_dir_exists(HISTORY_DIR_PATH)) {
+    if (!littlefs_manager_ensure_dir_exists(s_history_dir_path.c_str())) {
         ESP_LOGE(TAG, "Failed to create habits history directory!");
         return;
     }
@@ -41,16 +44,16 @@ void HabitDataManager::load_data() {
     // Load ID Counter
     char* id_buffer = nullptr;
     size_t id_size = 0;
-    if (littlefs_manager_read_file(ID_COUNTER_FILENAME.c_str(), &id_buffer, &id_size) && id_buffer) {
+    if (littlefs_manager_read_file(s_id_counter_filepath.c_str(), &id_buffer, &id_size) && id_buffer) {
         s_next_id = std::stoul(id_buffer);
         free(id_buffer);
-        ESP_LOGI(TAG, "Loaded next_id: %lu", s_next_id);
+        ESP_LOGD(TAG, "Loaded next_id: %lu", s_next_id);
     }
 
-    // Load Categories with is_deletable flag
+    // Load Categories
     char* cat_buffer = nullptr;
     size_t cat_size = 0;
-    if (littlefs_manager_read_file(CATEGORIES_FILENAME.c_str(), &cat_buffer, &cat_size) && cat_buffer) {
+    if (littlefs_manager_read_file(s_categories_filepath.c_str(), &cat_buffer, &cat_size) && cat_buffer) {
         std::stringstream ss(cat_buffer);
         std::string line;
         while (std::getline(ss, line)) {
@@ -71,14 +74,14 @@ void HabitDataManager::load_data() {
     if (s_categories.empty()) {
         ESP_LOGI(TAG, "No categories found. Creating default 'General' category.");
         uint32_t new_id = get_next_unique_id();
-        s_categories.push_back({new_id, GENERAL_CATEGORY_NAME, true, false}); // id, name, active, deletable=false
-        save_categories(); // Save immediately
+        s_categories.push_back({new_id, GENERAL_CATEGORY_NAME, true, false});
+        save_categories();
     }
 
     // Load Habits
     char* habit_buffer = nullptr;
     size_t habit_size = 0;
-    if (littlefs_manager_read_file(HABITS_FILENAME.c_str(), &habit_buffer, &habit_size) && habit_buffer) {
+    if (littlefs_manager_read_file(s_habits_filepath.c_str(), &habit_buffer, &habit_size) && habit_buffer) {
         std::stringstream ss(habit_buffer);
         std::string line;
         while (std::getline(ss, line)) {
@@ -103,29 +106,38 @@ void HabitDataManager::save_categories() {
     for (const auto& category : s_categories) {
         ss << category.id << "," << (int)category.is_active << "," << (int)category.is_deletable << "," << category.name << "\n";
     }
-    if (!littlefs_manager_write_file(CATEGORIES_FILENAME.c_str(), ss.str().c_str())) {
+    if (!littlefs_manager_write_file(s_categories_filepath.c_str(), ss.str().c_str())) {
         ESP_LOGE(TAG, "Failed to save categories!");
     }
 }
+
 void HabitDataManager::save_habits() {
     std::stringstream ss;
     for (const auto& habit : s_habits) {
         ss << habit.id << "," << habit.category_id << "," << (int)habit.is_active << "," << habit.color_hex << "," << habit.name << "\n";
     }
-    if (!littlefs_manager_write_file(HABITS_FILENAME.c_str(), ss.str().c_str())) {
+    if (!littlefs_manager_write_file(s_habits_filepath.c_str(), ss.str().c_str())) {
         ESP_LOGE(TAG, "Failed to save habits!");
     }
 }
+
 void HabitDataManager::save_id_counter() {
-    if (!littlefs_manager_write_file(ID_COUNTER_FILENAME.c_str(), std::to_string(s_next_id).c_str())) {
+    if (!littlefs_manager_write_file(s_id_counter_filepath.c_str(), std::to_string(s_next_id).c_str())) {
         ESP_LOGE(TAG, "Failed to save ID counter!");
     }
 }
+
 uint32_t HabitDataManager::get_next_unique_id() {
     uint32_t id = s_next_id++;
     save_id_counter();
     return id;
 }
+
+std::string HabitDataManager::get_history_filepath(uint32_t habit_id) {
+    return s_history_dir_path + std::to_string(habit_id) + ".csv";
+}
+
+// ... (Rest of the public and private API methods remain unchanged) ...
 std::vector<HabitCategory> HabitDataManager::get_active_categories() {
     std::vector<HabitCategory> active_cats;
     for (const auto& cat : s_categories) {
@@ -237,12 +249,6 @@ bool HabitDataManager::delete_habit_permanently(uint32_t habit_id) {
     ESP_LOGW(TAG, "delete_habit_permanently not implemented");
     return false; 
 }
-// --- History Helper Methods (Private) ---
-
-std::string HabitDataManager::get_history_filepath(uint32_t habit_id) {
-    return std::string(HISTORY_DIR_PATH) + "/" + std::to_string(habit_id) + ".csv";
-}
-
 bool HabitDataManager::is_same_day(time_t t1, time_t t2) {
     struct tm tm1, tm2;
     localtime_r(&t1, &tm1);
@@ -263,12 +269,10 @@ std::vector<time_t> HabitDataManager::read_history_file(uint32_t habit_id) {
         std::string line;
         while (std::getline(ss, line)) {
             if (!line.empty()) {
-                // --- MODIFIED ---: Use exception-free strtoll instead of stoll
                 const char* c_str = line.c_str();
                 char* end_ptr;
                 long long val = strtoll(c_str, &end_ptr, 10);
 
-                // Check if conversion was successful (at least one character was consumed)
                 if (c_str != end_ptr) {
                     dates.push_back(static_cast<time_t>(val));
                 } else {
@@ -289,10 +293,6 @@ bool HabitDataManager::write_history_file(uint32_t habit_id, const std::vector<t
     std::string path = get_history_filepath(habit_id);
     return littlefs_manager_write_file(path.c_str(), ss.str().c_str());
 }
-
-
-// --- History Management (Public API) ---
-
 bool HabitDataManager::mark_habit_as_done(uint32_t habit_id, time_t date) {
     auto dates = read_history_file(habit_id);
     for (const auto& existing_date : dates) {

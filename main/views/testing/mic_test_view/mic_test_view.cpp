@@ -1,11 +1,12 @@
 #include "mic_test_view.h"
 #include "views/view_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
-#include "models/asset_config.h" // Include the new asset configuration
+#include "models/asset_config.h" // Include the asset configuration
 #include "esp_log.h"
 #include <time.h>
 #include <sys/stat.h>
 #include <cstring>
+#include <string>
 
 static const char *TAG = "MIC_TEST_VIEW";
 
@@ -18,7 +19,6 @@ MicTestView::MicTestView() {
 MicTestView::~MicTestView() {
     ESP_LOGI(TAG, "MicTestView destructed, cleaning up resources...");
 
-    // Ensure the recorder is stopped cleanly to prevent a background task from running wild.
     audio_recorder_state_t state = audio_recorder_get_state();
     if (state == RECORDER_STATE_RECORDING || state == RECORDER_STATE_SAVING) {
         ESP_LOGW(TAG, "View closed while recording was active. Cancelling recording.");
@@ -126,25 +126,17 @@ void MicTestView::on_ok_press() {
     audio_recorder_state_t state = audio_recorder_get_state();
 
     if (state == RECORDER_STATE_IDLE || state == RECORDER_STATE_ERROR) {
-        // --- Start Recording ---
         if (!sd_manager_check_ready()) {
             ESP_LOGE(TAG, "SD card not ready. Aborting recording.");
             update_ui_for_state(RECORDER_STATE_ERROR);
             return;
         }
 
-        // Build the full directory path using constants from the asset architecture
-        char recordings_dir_path[128];
-        snprintf(recordings_dir_path, sizeof(recordings_dir_path), "%s%s%s",
-                 SD_CARD_ROOT_PATH,             // "/sdcard"
-                 USER_DATA_BASE_SUBPATH,        // "/userdata/"
-                 USER_DATA_RECORDINGS_SUBPATH); // "recordings/"
+        // Build path from central configuration
+        std::string recordings_dir_str = std::string(SD_CARD_ROOT_PATH) + "/" + USER_DATA_BASE_PATH + RECORDINGS_SUBPATH;
 
-        // The path in `recordings_dir_path` ends with a '/', so remove it for `create_directory`
-        recordings_dir_path[strlen(recordings_dir_path) - 1] = '\0';
-
-        if (!sd_manager_create_directory(recordings_dir_path)) {
-            ESP_LOGE(TAG, "Failed to create recordings directory: %s", recordings_dir_path);
+        if (!sd_manager_create_directory(recordings_dir_str.c_str())) {
+            ESP_LOGE(TAG, "Failed to create recordings directory: %s", recordings_dir_str.c_str());
             update_ui_for_state(RECORDER_STATE_ERROR);
             return;
         }
@@ -155,8 +147,8 @@ void MicTestView::on_ok_press() {
         char filename[64];
         strftime(filename, sizeof(filename), "rec_%Y%m%d_%H%M%S.wav", &timeinfo);
 
-        // Build the final, full filepath for the audio recorder
-        snprintf(current_filepath, sizeof(current_filepath), "%s/%s", recordings_dir_path, filename);
+        // Construct the full path for the audio recorder
+        snprintf(current_filepath, sizeof(current_filepath), "%s%s", recordings_dir_str.c_str(), filename);
 
         ESP_LOGI(TAG, "Starting recording to file: %s", current_filepath);
         if (!audio_recorder_start(current_filepath)) {
