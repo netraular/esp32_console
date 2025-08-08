@@ -20,12 +20,12 @@ static const char* PET_COLL_PREFIX_KEY = "pet_coll_";
 // --- Game Logic Constants ---
 constexpr uint32_t CARE_POINTS_TO_COLLECT = 100;
 constexpr time_t SECONDS_IN_DAY = 86400;
-constexpr int MIN_CYCLE_DURATION_DAYS = 13; 
+constexpr int MIN_CYCLE_DURATION_DAYS = 10; 
 
 // --- Evolution Stage Time Percentages ---
-constexpr float EGG_STAGE_END_PERCENT = 0.07f;
-constexpr float BABY_STAGE_END_PERCENT = 0.35f;
-constexpr float TEEN_STAGE_END_PERCENT = 0.70f;
+constexpr float EGG_STAGE_END_PERCENT = 0.0714f; //1st day
+constexpr float BABY_STAGE_END_PERCENT = 0.2857f; //4th day
+constexpr float TEEN_STAGE_END_PERCENT = 0.5714f; //8th day
 
 PetManager& PetManager::get_instance() {
     static PetManager instance;
