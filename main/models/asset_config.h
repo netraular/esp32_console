@@ -19,7 +19,7 @@ constexpr const char* SD_CARD_ROOT_PATH       = "/sdcard"; // The mount point fo
 
 // --- Base Directories ---
 constexpr const char* USER_DATA_BASE_PATH = "userdata/"; // For user-generated data and progress.
-constexpr const char* GAME_DATA_BASE_PATH = "gamedata/"; // For game content that can be updated (e.g., from web).
+constexpr const char* GAME_DATA_BASE_PATH = "gamedata/"; // For game content that is large or may need to be updated without a full firmware flash (e.g., long text lists, NPC dialogues, shop inventories).
 
 // --- User Data: Habits Sub-structure ---
 constexpr const char* HABITS_SUBPATH             = "habits/";
