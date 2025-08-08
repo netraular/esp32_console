@@ -15,6 +15,7 @@
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
 #include "controllers/screen_manager/screen_manager.h"
+#include "models/asset_config.h" // Include the new asset path configuration
 
 /**
  * @brief DESIGN NOTE: Light Sleep Notification Handling
@@ -30,10 +31,7 @@
  *
  * *** DO NOT attempt to show UI/popups from this power manager. ***
  */
-// --- END NEW COMMENT ---
-
 static const char* TAG = "POWER_MGR";
-static const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
 
 void power_manager_enter_light_sleep(void) {
 sleep_entry_point:
@@ -84,16 +82,24 @@ sleep_entry_point:
         ESP_LOGI(TAG, "Wakeup by timer. Playing notification sound and returning to sleep.");
         
         if (sd_manager_check_ready()) {
+            char sound_path[256];
+            snprintf(sound_path, sizeof(sound_path), "%s%s%s%s%s",
+                     SD_CARD_ROOT_PATH,        // "/sdcard"
+                     ASSETS_BASE_SUBPATH,      // "/assets/"
+                     ASSETS_SOUNDS_SUBPATH,    // "sounds/"
+                     SOUNDS_EFFECTS_SUBPATH,   // "effects/"
+                     UI_SOUND_NOTIFICATION);   // "notification.wav" (from asset_config.h)
+
             struct stat st;
-            if (stat(NOTIFICATION_SOUND_PATH, &st) == 0) {
-                audio_manager_play(NOTIFICATION_SOUND_PATH);
+            if (stat(sound_path, &st) == 0) {
+                audio_manager_play(sound_path);
                 // Wait for the sound to finish playing.
                 while (audio_manager_get_state() != AUDIO_STATE_STOPPED) {
                     vTaskDelay(pdMS_TO_TICKS(100));
                 }
                 ESP_LOGI(TAG, "Sound finished.");
             } else {
-                ESP_LOGW(TAG, "Notification sound file not found at %s", NOTIFICATION_SOUND_PATH);
+                ESP_LOGW(TAG, "Notification sound file not found at %s", sound_path);
             }
         } else {
             ESP_LOGW(TAG, "SD card not ready, cannot play notification sound.");

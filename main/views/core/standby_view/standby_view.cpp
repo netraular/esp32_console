@@ -7,6 +7,7 @@
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "components/status_bar_component/status_bar_component.h"
 #include "controllers/weather_manager/weather_manager.h"
+#include "models/asset_config.h" // Include the asset path configuration
 #include "esp_log.h"
 #include <time.h>
 #include <sys/stat.h>
@@ -14,7 +15,6 @@
 #include <array>
 
 static const char *TAG = "STANDBY_VIEW";
-const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
 
 // To see the borders of all UI elements for layout debugging, set this to true.
 constexpr bool DEBUG_LAYOUT = false;
@@ -66,6 +66,42 @@ void StandbyView::create(lv_obj_t* parent) {
     setup_main_button_handlers();
 }
 
+// --- Public Static Method for Notifications ---
+void StandbyView::show_notification_popup(const Notification& notif) {
+    if (!s_instance) {
+        ESP_LOGE(TAG, "Cannot show notification popup, StandbyView instance is null.");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Showing notification popup: %s", notif.title.c_str());
+
+    if (sd_manager_is_mounted()) {
+        char sound_path[256];
+        snprintf(sound_path, sizeof(sound_path), "%s%s%s%s%s",
+                 SD_CARD_ROOT_PATH,        // "/sdcard"
+                 ASSETS_BASE_SUBPATH,      // "/assets/"
+                 ASSETS_SOUNDS_SUBPATH,    // "sounds/"
+                 SOUNDS_EFFECTS_SUBPATH,   // "effects/"
+                 UI_SOUND_NOTIFICATION);   // "notification.wav" (from asset_config.h)
+
+        struct stat st;
+        if (stat(sound_path, &st) == 0) {
+            audio_manager_play(sound_path);
+        } else {
+            ESP_LOGW(TAG, "Notification sound file not found at %s", sound_path);
+        }
+    } else {
+        ESP_LOGW(TAG, "SD card not mounted, cannot play notification sound.");
+    }
+    
+    popup_manager_show_alert(
+        notif.title.c_str(),
+        notif.message.c_str(),
+        notification_popup_closed_cb,
+        s_instance
+    );
+}
+// ... (The rest of the file remains unchanged as it doesn't use the hardcoded path) ...
 // --- UI & Handler Setup ---
 void StandbyView::setup_ui(lv_obj_t* parent) {
     add_debug_border(parent);
@@ -317,34 +353,6 @@ void StandbyView::stop_volume_repeat_timer(lv_timer_t** timer_ptr) {
         lv_timer_delete(*timer_ptr);
         *timer_ptr = nullptr;
     }
-}
-
-// --- Public Static Method for Notifications ---
-void StandbyView::show_notification_popup(const Notification& notif) {
-    if (!s_instance) {
-        ESP_LOGE(TAG, "Cannot show notification popup, StandbyView instance is null.");
-        return;
-    }
-
-    ESP_LOGI(TAG, "Showing notification popup: %s", notif.title.c_str());
-
-    if (sd_manager_is_mounted()) {
-        struct stat st;
-        if (stat(NOTIFICATION_SOUND_PATH, &st) == 0) {
-            audio_manager_play(NOTIFICATION_SOUND_PATH);
-        } else {
-            ESP_LOGW(TAG, "Notification sound file not found at %s", NOTIFICATION_SOUND_PATH);
-        }
-    } else {
-        ESP_LOGW(TAG, "SD card not mounted, cannot play notification sound.");
-    }
-    
-    popup_manager_show_alert(
-        notif.title.c_str(),
-        notif.message.c_str(),
-        notification_popup_closed_cb,
-        s_instance
-    );
 }
 
 // --- Static Callbacks (Bridge to C-style APIs and instance methods) ---

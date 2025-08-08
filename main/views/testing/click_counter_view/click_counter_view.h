@@ -39,7 +39,6 @@ public:
 
 private:
     // --- Constants ---
-    static const char* SOUND_FILE_PATH;
     static const char* CLICK_COUNT_KEY;
 
     // --- UI Widgets ---
