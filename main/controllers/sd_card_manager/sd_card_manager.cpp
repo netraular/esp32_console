@@ -1,6 +1,7 @@
 #include "sd_card_manager.h"
 #include "config/board_config.h"
 #include "config/app_config.h"
+#include "models/asset_config.h" // Include the asset configuration for the mount path
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
@@ -20,7 +21,7 @@ static const char* TAG = "SD_MGR";
 static bool s_bus_initialized = false;
 static bool s_is_mounted = false;
 static sdmmc_card_t* s_card;
-static const char* MOUNT_POINT = "/sdcard";
+// The local MOUNT_POINT constant has been removed. We will use SD_CARD_ROOT_PATH directly.
 
 bool sd_manager_init(void) {
     if (s_bus_initialized) {
@@ -74,10 +75,10 @@ bool sd_manager_mount(void) {
     esp_err_t ret = ESP_FAIL;
     for (int i = 1; i <= MOUNT_ATTEMPT_COUNT; ++i) {
         ESP_LOGI(TAG, "Attempting to mount SD card (attempt %d/%d)...", i, MOUNT_ATTEMPT_COUNT);
-        ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &s_card);
+        ret = esp_vfs_fat_sdspi_mount(SD_CARD_ROOT_PATH, &host, &slot_config, &mount_config, &s_card);
 
         if (ret == ESP_OK) {
-            ESP_LOGI(TAG, "SD Card mounted successfully at %s", MOUNT_POINT);
+            ESP_LOGI(TAG, "SD Card mounted successfully at %s", SD_CARD_ROOT_PATH);
             sdmmc_card_print_info(stdout, s_card);
             s_is_mounted = true;
             return true;
@@ -86,7 +87,7 @@ bool sd_manager_mount(void) {
         ESP_LOGW(TAG, "Mount attempt %d failed (%s).", i, esp_err_to_name(ret));
         
         // Unmount before retrying to ensure a clean state
-        esp_vfs_fat_sdcard_unmount(MOUNT_POINT, s_card);
+        esp_vfs_fat_sdcard_unmount(SD_CARD_ROOT_PATH, s_card);
         s_card = NULL;
 
         if (i < MOUNT_ATTEMPT_COUNT) {
@@ -101,7 +102,7 @@ bool sd_manager_mount(void) {
 
 void sd_manager_unmount(void) {
     if (s_is_mounted) {
-        esp_vfs_fat_sdcard_unmount(MOUNT_POINT, s_card);
+        esp_vfs_fat_sdcard_unmount(SD_CARD_ROOT_PATH, s_card);
         s_is_mounted = false;
         s_card = NULL;
         ESP_LOGI(TAG, "SD Card unmounted.");
@@ -130,7 +131,7 @@ bool sd_manager_check_ready(void) {
 
     // A simple check to see if the root directory can be opened.
     // This can detect if the card has been physically removed.
-    DIR* dir = opendir(MOUNT_POINT);
+    DIR* dir = opendir(SD_CARD_ROOT_PATH);
     if (dir) {
         closedir(dir);
         return true;
@@ -143,9 +144,10 @@ bool sd_manager_check_ready(void) {
 }
 
 const char* sd_manager_get_mount_point(void) {
-    return MOUNT_POINT;
+    return SD_CARD_ROOT_PATH;
 }
 
+// ... (El resto de las funciones que usan `path` no cambian, ya que reciben la ruta completa) ...
 bool sd_manager_list_files(const char* path, file_iterator_cb_t cb, void* user_data) {
     if (!s_is_mounted || !cb) {
         return false;

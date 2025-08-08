@@ -12,6 +12,7 @@
 #include "config/board_config.h"
 #include "config/app_config.h"
 #include "config/secrets.h"
+#include "models/asset_config.h" // Include asset config for drive letter
 
 // Include all manager headers
 #include "controllers/screen_manager/screen_manager.h"
@@ -118,7 +119,8 @@ extern "C" void app_main(void) {
     }
 
     // Use the custom VFS driver to bridge LVGL and the ESP-IDF VFS
-    lvgl_fs_driver_init('S');
+    // Use the first character of the string constant from the single source of truth.
+    lvgl_fs_driver_init(LVGL_VFS_SD_CARD_PREFIX[0]);
 
     // Initialize buttons
     button_manager_init();
