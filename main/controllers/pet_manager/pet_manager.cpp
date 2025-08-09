@@ -70,38 +70,61 @@ std::string PetManager::get_pet_display_name(const PetState& state) const {
 }
 
 PetId PetManager::select_random_hatchable_pet() {
-    std::vector<PetId> available_pets;
+    struct WeightedPet {
+        PetId id;
+        uint8_t weight;
+    };
+    std::vector<WeightedPet> available_pets;
+    uint32_t total_weight = 0;
+
+    // 1. Create a list of available pets and calculate the total weight
     for (const auto& entry : s_collection) {
         if (!entry.collected) {
             if (const auto* data = get_pet_data(entry.base_id)) {
-                if (data->can_hatch) {
-                    available_pets.push_back(entry.base_id);
+                if (data->can_hatch && data->rarity_weight > 0) {
+                    available_pets.push_back({entry.base_id, data->rarity_weight});
+                    total_weight += data->rarity_weight;
                 }
             }
         }
     }
 
+    // 2. If no pets are available, reset the collection and try again
     if (available_pets.empty()) {
         ESP_LOGI(TAG, "All pets collected! Resetting collection for replay.");
         for (auto& entry : s_collection) entry.collected = false;
         save_collection();
+        
+        // Recalculate available pets and total weight after reset
         for (const auto& pair : PET_DATA_REGISTRY) {
-            if (pair.second.can_hatch) {
-                available_pets.push_back(pair.first);
+            if (pair.second.can_hatch && pair.second.rarity_weight > 0) {
+                available_pets.push_back({pair.first, pair.second.rarity_weight});
+                total_weight += pair.second.rarity_weight;
             }
         }
     }
     
-    if (available_pets.empty()) {
-        ESP_LOGE(TAG, "No hatchable pets found in PET_DATA_REGISTRY!");
+    // 3. Handle edge case where no hatchable pets exist at all
+    if (available_pets.empty() || total_weight == 0) {
+        ESP_LOGE(TAG, "No hatchable pets with rarity_weight > 0 found in PET_DATA_REGISTRY!");
         return PetId::NONE;
     }
-    
-    uint32_t index = esp_random() % available_pets.size();
-    PetId new_id = available_pets[index];
 
-    ESP_LOGI(TAG, "Selected new pet: %s", get_pet_name(new_id).c_str());
-    return new_id;
+    // 4. Perform weighted random selection
+    ESP_LOGI(TAG, "Performing weighted pet selection with total weight: %lu", total_weight);
+    uint32_t random_pick = (esp_random() % total_weight); // Get a value from 0 to total_weight-1
+
+    for (const auto& pet : available_pets) {
+        if (random_pick < pet.weight) {
+            ESP_LOGI(TAG, "Selected new pet: %s (Weight: %d)", get_pet_name(pet.id).c_str(), pet.weight);
+            return pet.id;
+        }
+        random_pick -= pet.weight;
+    }
+    
+    // Fallback: should not be reached if logic is correct, but good practice
+    ESP_LOGE(TAG, "Weighted selection failed! Falling back to last available pet.");
+    return available_pets.back().id;
 }
 
 std::string PetManager::get_sprite_path_for_id(PetId id) const {
