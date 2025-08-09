@@ -52,7 +52,7 @@ constexpr const char* ASSETS_SOUNDS_SUBPATH  = "sounds/";
 constexpr const char* ASSETS_FONTS_SUBPATH   = "fonts/";
 
 // --- Sprite Sub-directories ---
-constexpr const char* SPRITES_PETS_SUBPATH = "pets/";
+constexpr const char* SPRITES_PETS_SUBPATH = "pets/"; // Base folder for all pet sprites. Structure: pets/<ID>/default.png
 constexpr const char* SPRITES_EGGS_SUBPATH = "eggs/";
 constexpr const char* SPRITES_UI_SUBPATH   = "ui/";
 
@@ -66,5 +66,8 @@ constexpr const char* UI_SOUND_SUCCESS      = "bright_earn.wav";
 constexpr const char* UI_SOUND_ERROR        = "error.wav";
 constexpr const char* UI_SOUND_CLICK        = "click.wav";
 constexpr const char* UI_SOUND_TEST         = "test.wav";
+
+// --- Default/Fallback Sprite Filenames ---
+constexpr const char* DEFAULT_EGG_SPRITE   = "egg_default.png";
 
 #endif // ASSET_CONFIG_H

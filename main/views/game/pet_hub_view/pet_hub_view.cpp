@@ -47,12 +47,12 @@ void PetHubView::log_collection_status() {
     auto collection = pet_manager.get_collection();
 
     for (const auto& entry : collection) {
-        std::string pet_name = pet_manager.get_pet_base_name(entry.type);
+        std::string pet_name = pet_manager.get_pet_name(entry.base_id);
         const char* discovered_str = entry.discovered ? "YES" : "NO";
         const char* collected_str = entry.collected ? "YES" : "NO";
 
-        ESP_LOGI(TAG, "Pet: %-10s | Discovered: %-3s | Collected: %-3s",
-                 pet_name.c_str(), discovered_str, collected_str);
+        ESP_LOGI(TAG, "Entry: #%03d %-15s | Discovered: %-3s | Collected: %-3s",
+                 (int)entry.base_id, pet_name.c_str(), discovered_str, collected_str);
     }
     ESP_LOGI(TAG, "-----------------------------");
 }
