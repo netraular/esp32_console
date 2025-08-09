@@ -43,6 +43,13 @@ public:
     void add_care_points(uint32_t points);
 
     /**
+     * @brief Forcibly ends the current pet cycle and starts a new one.
+     * This is a "hard reset" for the current pet, it will not be marked
+     * as collected or discovered unless it already was. A new pet egg will be generated.
+     */
+    void force_new_cycle();
+
+    /**
      * @brief Gets the current state of the active pet.
      * @return A copy of the current PetState struct.
      */

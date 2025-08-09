@@ -1,11 +1,16 @@
 #include "pet_manager.h"
 #include "controllers/data_manager/data_manager.h"
 #include "models/pet_asset_data.h"
-#include "models/asset_config.h" // Include the new asset path configuration
+#include "models/asset_config.h" 
 #include "esp_log.h"
 #include "esp_random.h"
 #include <algorithm>
 #include <cstdio>
+
+// --- DEBUG ---
+// Set to 1 to enable a 7-minute pet lifecycle for rapid testing.
+// Set to 0 or comment out for the standard, long lifecycle.
+#define PET_LIFECYCLE_DEBUG_7_MINUTES 1
 
 static const char* TAG = "PET_MGR";
 
@@ -121,7 +126,6 @@ std::string PetManager::get_current_pet_sprite_path() const {
     return ""; // Return empty path on failure
 }
 
-// ... (Rest of PetManager.cpp remains unchanged: update_state, load_state, save_state, etc.) ...
 void PetManager::update_state() {
     if (!s_is_initialized) {
         ESP_LOGE(TAG, "Manager not initialized.");
@@ -188,19 +192,30 @@ void PetManager::start_new_cycle() {
     s_pet_state.custom_name = "pet_name";
     s_pet_state.cycle_start_timestamp = now;
 
+#if PET_LIFECYCLE_DEBUG_7_MINUTES == 1
+    // --- DEBUG: 7-minute lifecycle ---
+    constexpr time_t FIVE_MINUTES_IN_SECONDS = 7 * 60;
+    s_pet_state.cycle_end_timestamp = now + FIVE_MINUTES_IN_SECONDS;
+    ESP_LOGW(TAG, "DEBUG LIFECYCLE ENABLED: Pet cycle will last 5 minutes.");
+
+#else
+    // --- PRODUCTION: Standard long lifecycle ---
     time_t target_end_date = now + (MIN_CYCLE_DURATION_DAYS * SECONDS_IN_DAY);
-    struct tm timeinfo;
-    localtime_r(&target_end_date, &timeinfo);
+    struct tm timeinfo_prod; // Use a different name to avoid shadowing
+    localtime_r(&target_end_date, &timeinfo_prod);
     
-    int days_to_next_sunday = (7 - timeinfo.tm_wday) % 7;
+    int days_to_next_sunday = (7 - timeinfo_prod.tm_wday) % 7;
     s_pet_state.cycle_end_timestamp = target_end_date + (days_to_next_sunday * SECONDS_IN_DAY);
     
-    localtime_r(&s_pet_state.cycle_end_timestamp, &timeinfo);
-    timeinfo.tm_hour = 23;
-    timeinfo.tm_min = 59;
-    timeinfo.tm_sec = 59;
-    s_pet_state.cycle_end_timestamp = mktime(&timeinfo);
+    localtime_r(&s_pet_state.cycle_end_timestamp, &timeinfo_prod);
+    timeinfo_prod.tm_hour = 23;
+    timeinfo_prod.tm_min = 59;
+    timeinfo_prod.tm_sec = 59;
+    s_pet_state.cycle_end_timestamp = mktime(&timeinfo_prod);
+#endif
 
+    struct tm timeinfo;
+    localtime_r(&s_pet_state.cycle_end_timestamp, &timeinfo);
     char end_buf[30];
     strftime(end_buf, sizeof(end_buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
     ESP_LOGI(TAG, "New cycle ends on: %s", end_buf);
@@ -212,6 +227,13 @@ void PetManager::add_care_points(uint32_t points) {
     s_pet_state.care_points += points;
     ESP_LOGI(TAG, "Added %lu care points. Total: %lu", points, s_pet_state.care_points);
     save_state();
+}
+
+void PetManager::force_new_cycle() {
+    ESP_LOGI(TAG, "Forcing new pet cycle by user request.");
+    // Simply start a new cycle. This overwrites the old pet's state.
+    // finalize_cycle() is NOT called, so the pet is not marked as collected.
+    start_new_cycle();
 }
 
 PetState PetManager::get_current_pet_state() const {

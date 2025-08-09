@@ -2,6 +2,7 @@
 #include "controllers/pet_manager/pet_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
+#include "components/popup_manager/popup_manager.h"
 #include "views/view_manager.h"
 #include "esp_log.h"
 #include <time.h>
@@ -98,6 +99,7 @@ void PetView::setup_ui(lv_obj_t* parent) {
 
 void PetView::setup_button_handlers() {
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, add_points_cb, true, this);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_LONG_PRESS_START, force_new_pet_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, back_button_cb, true, this);
 }
 
@@ -155,6 +157,29 @@ void PetView::add_care_points() {
     update_view(); // Update UI immediately after adding points
 }
 
+void PetView::on_force_new_pet() {
+    popup_manager_show_confirmation(
+        "New Pet?",
+        "This will abandon your current pet.\nAre you sure?",
+        "Confirm",
+        "Cancel",
+        force_new_pet_popup_cb,
+        this
+    );
+}
+
+void PetView::handle_force_new_pet_result(popup_result_t result) {
+    if (result == POPUP_RESULT_PRIMARY) {
+        ESP_LOGI(TAG, "User confirmed, getting a new pet.");
+        PetManager::get_instance().force_new_cycle();
+        update_view(); // Refresh UI with the new pet's data
+    } else {
+        ESP_LOGD(TAG, "User cancelled new pet request.");
+    }
+    // IMPORTANT: Re-register handlers after popup closes
+    setup_button_handlers(); 
+}
+
 void PetView::go_back_to_menu() {
     // Pause the timer when leaving the view to save resources
     if(update_timer) lv_timer_pause(update_timer);
@@ -172,6 +197,14 @@ void PetView::update_view_cb(lv_timer_t* timer) {
 
 void PetView::add_points_cb(void* user_data) {
     static_cast<PetView*>(user_data)->add_care_points();
+}
+
+void PetView::force_new_pet_cb(void* user_data) {
+    static_cast<PetView*>(user_data)->on_force_new_pet();
+}
+
+void PetView::force_new_pet_popup_cb(popup_result_t result, void* user_data) {
+    static_cast<PetView*>(user_data)->handle_force_new_pet_result(result);
 }
 
 void PetView::back_button_cb(void* user_data) {
