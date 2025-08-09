@@ -4,7 +4,7 @@
 #include "views/view.h"
 #include "models/pet_data_model.h"
 #include <vector>
-#include "lvgl.h" // Include lvgl.h for lv_obj_t
+#include "lvgl.h"
 
 /**
  * @brief Displays the player's collection of discovered and collected pets.
@@ -21,21 +21,13 @@ public:
 
 private:
     // --- UI State ---
-    int selected_index = 0;
-    std::vector<lv_obj_t*> pet_widgets; // To hold pointers to the widget containers
+    int selected_index;
+    std::vector<lv_obj_t*> pet_widgets;
 
     // --- UI Setup ---
     void setup_ui(lv_obj_t* parent);
     void setup_button_handlers();
     
-    /**
-     * @brief Creates a single pet widget for the collection grid.
-     * @param parent The parent grid object.
-     * @param entry The collection data for this specific pet.
-     * @param col The column index for the grid cell.
-     * @param row The row index for the grid cell.
-     * @return A pointer to the created widget's main container.
-     */
     lv_obj_t* create_pet_widget(lv_obj_t* parent, const PetCollectionEntry& entry, uint8_t col, uint8_t row);
 
     // --- UI Logic ---

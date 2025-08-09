@@ -1,5 +1,6 @@
 #include "image_test_view.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
+#include "models/asset_config.h" // For LVGL_VFS_SD_CARD_PREFIX
 #include <cstring> // For strrchr, strcasecmp
 #include <cstdio>  // For snprintf
 #include "esp_heap_caps.h" // For memory monitoring functions
@@ -105,7 +106,8 @@ void ImageTestView::display_image_from_path(const char* path) {
     
     // 4. Create the new image widget and set its source. This allocates new memory (likely in PSRAM).
     char lvgl_path[260];
-    snprintf(lvgl_path, sizeof(lvgl_path), "S:%s", path);
+    // Construct the LVGL-compatible path using the constant from asset_config.h
+    snprintf(lvgl_path, sizeof(lvgl_path), "%s%s", LVGL_VFS_SD_CARD_PREFIX, path);
     ESP_LOGI(TAG, "Attempting to load image from LVGL path: %s", lvgl_path);
     image_widget = lv_image_create(container);
     lv_image_set_src(image_widget, lvgl_path);
@@ -113,37 +115,36 @@ void ImageTestView::display_image_from_path(const char* path) {
     // 5. Force LVGL to process the new image allocation.
     lv_timer_handler();
 
-    int32_t width = lv_image_get_src_width(image_widget);
-    int32_t height = lv_image_get_src_height(image_widget);
-
-    if (width > 0 && height > 0) {
-        ESP_LOGI(TAG, "Image loaded successfully! Dimensions: %" PRIi32 "x%" PRIi32, width, height);
-        lv_obj_align(image_widget, LV_ALIGN_CENTER, 0, 0);
-
-        image_info_label = lv_label_create(container);
-        lv_label_set_long_mode(image_info_label, LV_LABEL_LONG_WRAP);
-        lv_obj_set_width(image_info_label, lv_pct(90));
-        lv_obj_set_style_text_align(image_info_label, LV_TEXT_ALIGN_CENTER, 0);
-        
-        // --- MODIFICACIÓN: Añadir estilo para el fondo de la etiqueta de información ---
-        lv_obj_set_style_bg_color(image_info_label, lv_color_black(), 0);
-        lv_obj_set_style_bg_opa(image_info_label, LV_OPA_70, 0); // 70% de opacidad
-        lv_obj_set_style_text_color(image_info_label, lv_color_white(), 0);
-        lv_obj_set_style_pad_all(image_info_label, 5, 0);
-        lv_obj_set_style_radius(image_info_label, 5, 0);
-        // --- FIN DE LA MODIFICACIÓN ---
-
-        lv_obj_align(image_info_label, LV_ALIGN_BOTTOM_MID, 0, -5);
-        lv_label_set_text_fmt(image_info_label, "%s\n%" PRIi32 " x %" PRIi32, path, width, height);
-        // 6. Log the "after" state. Memory usage should now be higher.
-        log_memory_status("After image load");
-
-    } else {
+    lv_image_header_t header;
+    if (lv_image_decoder_get_info(lv_image_get_src(image_widget), &header) != LV_RESULT_OK) {
         ESP_LOGE(TAG, "Failed to decode or load image. Dimensions are 0x0.");
         create_initial_view();
         lv_label_set_text(info_label, "Error: Failed to load PNG.\nIs the file valid?\nPress OK to try again.");
         return;
     }
+
+    // FIX: Use %d specifier and cast to (int) to match the type expected by the format string.
+    ESP_LOGI(TAG, "Image loaded successfully! Dimensions: %d x %d", (int)header.w, (int)header.h);
+    lv_obj_align(image_widget, LV_ALIGN_CENTER, 0, 0);
+
+    image_info_label = lv_label_create(container);
+    lv_label_set_long_mode(image_info_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(image_info_label, lv_pct(90));
+    lv_obj_set_style_text_align(image_info_label, LV_TEXT_ALIGN_CENTER, 0);
+    
+    // Add a background style to the info label for better readability over the image
+    lv_obj_set_style_bg_color(image_info_label, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(image_info_label, LV_OPA_70, 0); // 70% opacity
+    lv_obj_set_style_text_color(image_info_label, lv_color_white(), 0);
+    lv_obj_set_style_pad_all(image_info_label, 5, 0);
+    lv_obj_set_style_radius(image_info_label, 5, 0);
+
+    lv_obj_align(image_info_label, LV_ALIGN_BOTTOM_MID, 0, -5);
+    // FIX: Use %d specifier and cast to (int) to match the type expected by the format string.
+    lv_label_set_text_fmt(image_info_label, "%s\n%d x %d", path, (int)header.w, (int)header.h);
+    
+    // 6. Log the "after" state. Memory usage should now be higher.
+    log_memory_status("After image load");
 
     button_manager_unregister_view_handlers();
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, initial_cancel_press_cb, true, this);

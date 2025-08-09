@@ -1,5 +1,5 @@
 #include "stt_manager.h"
-#include "secret.h"
+#include "config/secrets.h"
 #include "esp_log.h"
 #include "esp_http_client.h"
 #include "cJSON.h"

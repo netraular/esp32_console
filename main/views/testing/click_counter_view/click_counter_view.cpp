@@ -1,10 +1,11 @@
 #include "click_counter_view.h"
 #include "views/view_manager.h"
+#include "models/asset_config.h" 
+#include "controllers/sd_card_manager/sd_card_manager.h" // Include SD card manager for checking status
 
 static const char *TAG = "CLICK_COUNTER_VIEW";
 
 // --- Constants Initialization ---
-const char* ClickCounterView::SOUND_FILE_PATH = "/sdcard/sounds/bright_earn.wav";
 const char* ClickCounterView::CLICK_COUNT_KEY = "click_count";
 
 // --- Lifecycle Methods ---
@@ -27,8 +28,6 @@ ClickCounterView::~ClickCounterView() {
     }
     // Stop any sound that might be playing when leaving the view.
     audio_manager_stop();
-    // No need to delete LVGL objects manually. The ViewManager will clean the parent,
-    // which deletes all children widgets. Pointers will become invalid.
 }
 
 void ClickCounterView::create(lv_obj_t* parent) {
@@ -42,6 +41,40 @@ void ClickCounterView::create(lv_obj_t* parent) {
     setup_button_handlers();
 }
 
+// --- Instance Methods ---
+void ClickCounterView::on_ok_press() {
+    click_count++;
+    update_counter_label();
+
+    // Save the new value to NVS.
+    if (!data_manager_set_u32(CLICK_COUNT_KEY, click_count)) {
+        ESP_LOGE(TAG, "Failed to save click count to NVS!");
+    }
+
+    // Every 10 clicks, play a sound and show an animation.
+    if (click_count > 0 && click_count % 10 == 0) {
+        ESP_LOGI(TAG, "Count reached %lu, playing sound and showing animation.", click_count);
+        
+        // Defensive check: only try to play sound if the SD card is available.
+        if (sd_manager_is_mounted()) {
+            char sound_path[256];
+            snprintf(sound_path, sizeof(sound_path), "%s%s%s%s%s",
+                     SD_CARD_ROOT_PATH,        // "/sdcard"
+                     ASSETS_BASE_SUBPATH,      // "/assets/"
+                     ASSETS_SOUNDS_SUBPATH,    // "sounds/"
+                     SOUNDS_EFFECTS_SUBPATH,   // "effects/"
+                     UI_SOUND_SUCCESS);        // Refers to "bright_earn.wav"
+
+            audio_manager_play(sound_path);
+        } else {
+            ESP_LOGW(TAG, "SD card not mounted, skipping sound playback.");
+        }
+        
+        start_fade_out_animation();
+    }
+}
+
+// ... (El resto del archivo no cambia) ...
 // --- UI Setup ---
 void ClickCounterView::setup_ui(lv_obj_t* parent) {
     // Create a title label
@@ -73,24 +106,6 @@ void ClickCounterView::update_counter_label() {
 void ClickCounterView::setup_button_handlers() {
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ClickCounterView::ok_press_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, ClickCounterView::cancel_press_cb, true, this);
-}
-
-// --- Instance Methods ---
-void ClickCounterView::on_ok_press() {
-    click_count++;
-    update_counter_label();
-
-    // Save the new value to NVS.
-    if (!data_manager_set_u32(CLICK_COUNT_KEY, click_count)) {
-        ESP_LOGE(TAG, "Failed to save click count to NVS!");
-    }
-
-    // Every 10 clicks, play a sound and show an animation.
-    if (click_count > 0 && click_count % 10 == 0) {
-        ESP_LOGI(TAG, "Count reached %lu, playing sound and showing animation.", click_count);
-        audio_manager_play(SOUND_FILE_PATH);
-        start_fade_out_animation();
-    }
 }
 
 void ClickCounterView::on_cancel_press() {

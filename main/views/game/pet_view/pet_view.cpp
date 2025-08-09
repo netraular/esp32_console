@@ -2,6 +2,7 @@
 #include "controllers/pet_manager/pet_manager.h"
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
+#include "components/popup_manager/popup_manager.h"
 #include "views/view_manager.h"
 #include "esp_log.h"
 #include <time.h>
@@ -11,43 +12,42 @@
 
 static const char* TAG = "PET_VIEW";
 
-/**
- * @brief Formats a duration in seconds into a human-readable string.
- * Example: 90061 seconds -> "1d 1h 1m"
- * @param buf The output buffer for the string.
- * @param len The size of the output buffer.
- * @param seconds The total number of seconds to format.
- */
-static void format_time_remaining(char* buf, size_t len, time_t seconds) {
+static void format_time_remaining(char* buf, size_t len, time_t seconds, bool is_final_stage) {
     if (seconds <= 0) {
-        snprintf(buf, len, "Final Stage");
+        snprintf(buf, len, is_final_stage ? "Cycle ended" : "Evolving!");
         return;
     }
-
     int days = seconds / 86400;
     seconds %= 86400;
     int hours = seconds / 3600;
     seconds %= 3600;
     int minutes = seconds / 60;
+    seconds %= 60;
 
-    if (days > 0) {
-        snprintf(buf, len, "Next stage in: %dd %dh %dm", days, hours, minutes);
-    } else if (hours > 0) {
-        snprintf(buf, len, "Next stage in: %dh %dm", hours, minutes);
-    } else {
-        snprintf(buf, len, "Next stage in: %dm", minutes);
-    }
+    const char* prefix = is_final_stage ? "Cycle ends in:" : "Next stage in:";
+
+    if (days > 0) snprintf(buf, len, "%s %dd %dh", prefix, days, hours);
+    else if (hours > 0) snprintf(buf, len, "%s %dh %dm", prefix, hours, minutes);
+    else if (minutes > 0) snprintf(buf, len, "%s %dm %lds", prefix, minutes, (long)seconds);
+    else snprintf(buf, len, "%s %lds", prefix, (long)seconds);
 }
 
+static void format_hatch_time(char* buf, size_t len, time_t seconds) {
+    if (seconds <= 0) {
+        snprintf(buf, len, "Hatching!");
+        return;
+    }
+    int minutes = seconds / 60;
+    seconds %= 60;
+    snprintf(buf, len, "Hatches in: %dm %lds", minutes, (long)seconds);
+}
 
 PetView::PetView() : update_timer(nullptr) {
     ESP_LOGI(TAG, "PetView constructed");
 }
 
 PetView::~PetView() {
-    if (update_timer) {
-        lv_timer_delete(update_timer);
-    }
+    if (update_timer) lv_timer_delete(update_timer);
     ESP_LOGI(TAG, "PetView destructed");
 }
 
@@ -62,8 +62,8 @@ void PetView::create(lv_obj_t* parent) {
     setup_ui(container);
     setup_button_handlers();
 
-    update_view(); // Initial update
-    update_timer = lv_timer_create(update_view_cb, 5000, this); // Update every 5 seconds
+    update_view();
+    update_timer = lv_timer_create(update_view_cb, 1000, this);
 }
 
 void PetView::setup_ui(lv_obj_t* parent) {
@@ -72,11 +72,14 @@ void PetView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
     lv_obj_set_style_margin_bottom(title, 10, 0);
 
-    // Pet Image
     pet_display_obj = lv_image_create(parent);
-    lv_obj_set_size(pet_display_obj, 64, 64); // Use a 64x64 area for the sprite
+    lv_obj_set_size(pet_display_obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_image_set_antialias(pet_display_obj, false);
+    // Corrected to LV_ZOOM_NONE for LVGL v9
+    lv_img_set_zoom(pet_display_obj, LV_ZOOM_NONE * 2); // Scale sprite x2
+    lv_obj_align(pet_display_obj, LV_ALIGN_CENTER, 0, 0);
 
-    // Pet Info Labels
+
     pet_name_label = lv_label_create(parent);
     lv_obj_set_style_text_align(pet_name_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_margin_top(pet_name_label, 10, 0);
@@ -98,13 +101,13 @@ void PetView::setup_ui(lv_obj_t* parent) {
 
 void PetView::setup_button_handlers() {
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, add_points_cb, true, this);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_LONG_PRESS_START, force_new_pet_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, back_button_cb, true, this);
 }
 
 void PetView::update_view() {
-    // First, check if SD card is available, otherwise show an error message.
     if (!sd_manager_check_ready()) {
-        lv_img_set_src(pet_display_obj, LV_SYMBOL_SD_CARD " " LV_SYMBOL_WARNING);
+        lv_image_set_src(pet_display_obj, LV_SYMBOL_SD_CARD " " LV_SYMBOL_WARNING);
         lv_label_set_text(pet_name_label, "SD Card Error");
         lv_label_set_text(pet_points_label, "Cannot load pet data");
         lv_label_set_text(pet_time_label, "");
@@ -116,62 +119,78 @@ void PetView::update_view() {
     pet_manager.update_state();
     PetState state = pet_manager.get_current_pet_state();
     
-    // --- Update Sprite ---
     std::string sprite_path = pet_manager.get_current_pet_sprite_path();
     if (!sprite_path.empty()) {
-        lv_img_set_src(pet_display_obj, sprite_path.c_str());
-        // Egg sprite is 16x16, pet sprite is 32x32. Zoom to make them 64x64 on screen.
-        if (state.stage == PetStage::EGG) {
-            lv_img_set_zoom(pet_display_obj, LV_ZOOM_NONE * 4); // 16px * 4 = 64px
-        } else {
-            lv_img_set_zoom(pet_display_obj, LV_ZOOM_NONE * 2); // 32px * 2 = 64px
-        }
+        lv_image_set_src(pet_display_obj, sprite_path.c_str());
     } else {
-        lv_img_set_src(pet_display_obj, LV_SYMBOL_WARNING); // Fallback icon
-        lv_img_set_zoom(pet_display_obj, LV_ZOOM_NONE);
+        lv_image_set_src(pet_display_obj, LV_SYMBOL_WARNING);
     }
     
-    // --- Update Labels ---
     lv_label_set_text(pet_name_label, pet_manager.get_pet_display_name(state).c_str());
     lv_label_set_text_fmt(pet_points_label, "Care Points: %lu", state.care_points);
 
-    // --- Update Time to Next Stage ---
-    time_t time_left = pet_manager.get_time_to_next_stage(state);
     char time_buf[64];
-    format_time_remaining(time_buf, sizeof(time_buf), time_left);
-    lv_label_set_text(pet_time_label, time_buf);
-
-    // Display cycle start date
-    char date_buf[20];
-    struct tm timeinfo;
-    localtime_r(&state.cycle_start_timestamp, &timeinfo);
-    strftime(date_buf, sizeof(date_buf), "%Y-%m-%d", &timeinfo);
-    lv_label_set_text_fmt(pet_cycle_label, "Cycle Started: %s", date_buf);
+    if (pet_manager.is_in_egg_stage()) {
+        time_t time_left = pet_manager.get_time_to_hatch();
+        format_hatch_time(time_buf, sizeof(time_buf), time_left);
+        lv_label_set_text(pet_time_label, time_buf);
+        lv_label_set_text(pet_cycle_label, "A mysterious egg...");
+    } else {
+        const auto* pet_data = pet_manager.get_pet_data(state.current_pet_id);
+        bool is_final = (pet_data && pet_data->evolves_to == PetId::NONE);
+        
+        time_t time_left = pet_manager.get_time_to_next_stage(state);
+        format_time_remaining(time_buf, sizeof(time_buf), time_left, is_final);
+        lv_label_set_text(pet_time_label, time_buf);
+        
+        char date_buf[20];
+        struct tm timeinfo;
+        localtime_r(&state.cycle_start_timestamp, &timeinfo);
+        strftime(date_buf, sizeof(date_buf), "%Y-%m-%d", &timeinfo);
+        lv_label_set_text_fmt(pet_cycle_label, "Hatched: %s", date_buf);
+    }
 }
 
 void PetView::add_care_points() {
     ESP_LOGI(TAG, "OK button pressed. Adding 10 care points.");
     PetManager::get_instance().add_care_points(10);
-    update_view(); // Update UI immediately after adding points
+    update_view();
+}
+
+void PetView::on_force_new_pet() {
+    popup_manager_show_confirmation(
+        "New Egg?", "This will abandon your current pet.\nAre you sure?", "Confirm", "Cancel",
+        force_new_pet_popup_cb, this
+    );
+}
+
+void PetView::handle_force_new_pet_result(popup_result_t result) {
+    if (result == POPUP_RESULT_PRIMARY) {
+        PetManager::get_instance().force_new_cycle();
+        update_view();
+    }
+    setup_button_handlers(); 
 }
 
 void PetView::go_back_to_menu() {
-    // Pause the timer when leaving the view to save resources
     if(update_timer) lv_timer_pause(update_timer);
     view_manager_load_view(VIEW_ID_MENU);
 }
 
-// --- Static Callbacks ---
-
 void PetView::update_view_cb(lv_timer_t* timer) {
-    auto* instance = static_cast<PetView*>(lv_timer_get_user_data(timer));
-    if (instance) {
-        instance->update_view();
-    }
+    static_cast<PetView*>(lv_timer_get_user_data(timer))->update_view();
 }
 
 void PetView::add_points_cb(void* user_data) {
     static_cast<PetView*>(user_data)->add_care_points();
+}
+
+void PetView::force_new_pet_cb(void* user_data) {
+    static_cast<PetView*>(user_data)->on_force_new_pet();
+}
+
+void PetView::force_new_pet_popup_cb(popup_result_t result, void* user_data) {
+    static_cast<PetView*>(user_data)->handle_force_new_pet_result(result);
 }
 
 void PetView::back_button_cb(void* user_data) {

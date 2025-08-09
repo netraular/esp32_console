@@ -1,5 +1,6 @@
 #include "audio_manager.h"
-#include "config.h"
+#include "config/board_config.h"
+#include "config/app_config.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

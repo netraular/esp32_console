@@ -8,7 +8,7 @@ static const char *TAG = "MENU_VIEW";
 // --- Static Member Initialization ---
 // The list of views available from the menu.
 const char *MenuView::view_options[] = {
-    "Pet Status", "Pet Collection", "Test Microphone", "Test Speaker", "Test SD Card",
+    "Pet Status", "Pet Collection", "Pet Hub", "Test Microphone", "Test Speaker", "Test SD Card",
     "Test Image", "Test LittleFS", "Test Button Events", "WiFi Audio Stream",
     "Pomodoro Clock", "Click Counter", "Voice Notes", "Test Popups",
     "Volume Tester", "Habit Tracker", "Add Notification", "Notification History"
@@ -16,7 +16,7 @@ const char *MenuView::view_options[] = {
 
 // The corresponding view IDs for each option. The order must match view_options.
 const view_id_t MenuView::view_ids[] = {
-    VIEW_ID_PET_VIEW, VIEW_ID_PET_COLLECTION, VIEW_ID_MIC_TEST, VIEW_ID_SPEAKER_TEST, VIEW_ID_SD_TEST,
+    VIEW_ID_PET_VIEW, VIEW_ID_PET_COLLECTION, VIEW_ID_PET_HUB, VIEW_ID_MIC_TEST, VIEW_ID_SPEAKER_TEST, VIEW_ID_SD_TEST,
     VIEW_ID_IMAGE_TEST, VIEW_ID_LITTLEFS_TEST, VIEW_ID_MULTI_CLICK_TEST, VIEW_ID_WIFI_STREAM_TEST,
     VIEW_ID_POMODORO, VIEW_ID_CLICK_COUNTER_TEST, VIEW_ID_VOICE_NOTE, VIEW_ID_POPUP_TEST,
     VIEW_ID_VOLUME_TESTER, VIEW_ID_HABIT_MANAGER, VIEW_ID_ADD_NOTIFICATION, VIEW_ID_NOTIFICATION_HISTORY
@@ -25,7 +25,6 @@ const view_id_t MenuView::view_ids[] = {
 // Calculate the number of options at compile time.
 const int MenuView::num_options = sizeof(MenuView::view_options) / sizeof(MenuView::view_options[0]);
 
-// ... (rest of menu_view.cpp is unchanged)
 MenuView::MenuView() {
     ESP_LOGI(TAG, "MenuView constructed");
 }

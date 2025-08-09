@@ -1,5 +1,6 @@
 #include "status_bar_component.h"
-#include "config.h"
+#include "config/board_config.h"
+#include "config/app_config.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
 #include "esp_log.h"

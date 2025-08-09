@@ -1,15 +1,15 @@
-#ifndef CONFIG_H_
-#define CONFIG_H_
+#ifndef SECRETS_H_
+#define SECRETS_H_
 
 /******************************************************************************
- * Example Configuration File for the ESP32 Audio Streamer
+ * Secrets Configuration File Template
  *
  * --- INSTRUCTIONS ---
- * 1. Duplicate this file.
- * 2. Rename the copy to "config.h".
- * 3. Fill in your actual WiFi and server details in "config.h".
+ * 1. Duplicate this file in the same directory.
+ * 2. Rename the copy to "secrets.h".
+ * 3. Fill in your actual credentials in the "secrets.h" file.
  *
- * The "config.h" file is ignored by Git, so your credentials will remain private.
+ * The "secrets.h" file is ignored by Git, so your credentials will remain private.
  ******************************************************************************/
 
 // --- WiFi Configuration ---
@@ -31,4 +31,4 @@
 // Replace with your Groq API Key for Speech-to-Text
 #define GROQ_API_KEY   "Your_Groq_API_Key"
 
-#endif // CONFIG_H_
+#endif // SECRETS_H_

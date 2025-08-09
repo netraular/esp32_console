@@ -21,6 +21,7 @@
     /* Game/Gamification Views */ \
     V(PET_VIEW) \
     V(PET_COLLECTION) \
+    V(PET_HUB) \
     /* Test Views */ \
     V(MIC_TEST) \
     V(SPEAKER_TEST) \

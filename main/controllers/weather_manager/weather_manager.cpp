@@ -1,4 +1,5 @@
 #include "weather_manager.h"
+#include "config/app_config.h" // Include application configuration
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -10,11 +11,6 @@
 #include <string>
 
 static const char* TAG = "WEATHER_MGR";
-
-// --- API Configuration ---
-// FIX: Request 2 days of data to ensure look-ahead (+12h) is always valid.
-#define OPEN_METEO_URL "https://api.open-meteo.com/v1/forecast?latitude=41.39&longitude=2.16&hourly=weather_code&forecast_days=2&timezone=Europe%2FBerlin"
-#define WEATHER_FETCH_INTERVAL_MS (30 * 60 * 1000) // 30 minutes
 
 // --- Static Members ---
 static std::vector<ForecastData> s_cached_forecast;
@@ -29,8 +25,6 @@ struct WeatherRequestContext {
     std::string response_buffer;
 };
 
-// The event handler correctly appends data to the context's string buffer.
-// This is called internally by esp_http_client_perform.
 esp_err_t _http_event_handler(esp_http_client_event_t *evt) {
     auto* context = static_cast<WeatherRequestContext*>(evt->user_data);
     if (!context) {
@@ -54,7 +48,6 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt) {
 }
 
 void WeatherManager::weather_fetch_task(void* pvParameters) {
-    // This is an infinite loop; continue will restart the process from the top.
     for (;;) {
         ESP_LOGI(TAG, "Waiting for WiFi and Time Sync...");
         xEventGroupWaitBits(wifi_manager_get_event_group(), WIFI_CONNECTED_BIT | TIME_SYNC_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
@@ -64,7 +57,7 @@ void WeatherManager::weather_fetch_task(void* pvParameters) {
         esp_http_client_handle_t client = nullptr;
 
         esp_http_client_config_t config = {};
-        config.url = OPEN_METEO_URL;
+        config.url = WEATHER_API_URL; // Use the constant from app_config.h
         config.event_handler = _http_event_handler;
         config.user_data = &context;
         config.timeout_ms = 15000;
@@ -75,10 +68,9 @@ void WeatherManager::weather_fetch_task(void* pvParameters) {
         if (!client) {
             ESP_LOGE(TAG, "Failed to initialize HTTP client. Retrying in %d minutes.", WEATHER_FETCH_INTERVAL_MS / 60000);
             vTaskDelay(pdMS_TO_TICKS(WEATHER_FETCH_INTERVAL_MS));
-            continue; // Skip to the next iteration of the loop
+            continue;
         }
 
-        // esp_http_client_perform() handles the entire request cycle
         esp_err_t err = esp_http_client_perform(client);
 
         if (err == ESP_OK) {
@@ -113,7 +105,7 @@ void WeatherManager::weather_fetch_task(void* pvParameters) {
                             }
 
                             if (current_hour_idx != -1) {
-                                int hours_to_get[] = {1, 8, 12}; // Forecast for +1, +8, +12 hours
+                                int hours_to_get[] = {1, 8, 12};
                                 for (int h : hours_to_get) {
                                     int forecast_idx = current_hour_idx + h;
                                     if (forecast_idx < cJSON_GetArraySize(wcode_array) && forecast_idx < cJSON_GetArraySize(time_array)) {
@@ -163,13 +155,12 @@ void WeatherManager::weather_fetch_task(void* pvParameters) {
             ESP_LOGE(TAG, "HTTP GET request failed: %s", esp_err_to_name(err));
         }
 
-        // Cleanup and sleep are now at the end of the loop, always executed.
         esp_http_client_cleanup(client);
         
         ESP_LOGI(TAG, "Weather task sleeping for %d minutes.", WEATHER_FETCH_INTERVAL_MS / 60000);
         vTaskDelay(pdMS_TO_TICKS(WEATHER_FETCH_INTERVAL_MS));
     }
-    vTaskDelete(NULL); // Should not be reached
+    vTaskDelete(NULL);
 }
 
 void WeatherManager::init() {
@@ -192,29 +183,18 @@ std::vector<ForecastData> WeatherManager::get_forecast() {
 
 const char* WeatherManager::wmo_code_to_lvgl_symbol(int wmo_code) {
     switch (wmo_code) {
-        case 0: return LV_SYMBOL_SETTINGS; // Clear sky (sun-like cogwheel)
+        case 0: return LV_SYMBOL_SETTINGS; // Using sun-like cogwheel for Clear sky
         case 1:
         case 2:
-        case 3: return LV_SYMBOL_LIST;     // Clouds (stylized)
+        case 3: return LV_SYMBOL_LIST;     // Stylized clouds
         case 45:
-        case 48: return LV_SYMBOL_MINUS;    // Fog (horizontal lines)
-        case 51: // Drizzle
-        case 53:
-        case 55:
-        case 61: // Rain
-        case 63:
-        case 65:
-        case 80: // Showers
-        case 81:
-        case 82: return LV_SYMBOL_DOWNLOAD; // Rain (downward arrow/drop)
-        case 71: // Snow
-        case 73:
-        case 75:
-        case 85: // Snow showers
-        case 86: return LV_SYMBOL_REFRESH;  // Snow (swirly flake)
-        case 95: // Thunderstorm
-        case 96:
-        case 99: return LV_SYMBOL_CHARGE;   // Thunderstorm (lightning bolt)
+        case 48: return LV_SYMBOL_MINUS;    // Horizontal lines for Fog
+        case 51: case 53: case 55:
+        case 61: case 63: case 65:
+        case 80: case 81: case 82: return LV_SYMBOL_DOWNLOAD; // Downward arrow/drop for Rain
+        case 71: case 73: case 75:
+        case 85: case 86: return LV_SYMBOL_REFRESH;  // Swirly flake for Snow
+        case 95: case 96: case 99: return LV_SYMBOL_CHARGE;   // Lightning bolt for Thunderstorm
         default: return LV_SYMBOL_WARNING;  // Unknown
     }
 }

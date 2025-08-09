@@ -1,15 +1,15 @@
 #include "volume_tester_view.h"
 #include "views/view_manager.h"
-#include "config.h"
+#include "config/board_config.h"
+#include "config/app_config.h"
+#include "models/asset_config.h" // Include the asset path configuration
 
 static const char* TAG = "VOLUME_TESTER_VIEW";
-const char* VolumeTesterView::TEST_SOUND_PATH = "/sdcard/sounds/test.wav";
 
 // --- Lifecycle Methods ---
 
 VolumeTesterView::VolumeTesterView() {
     ESP_LOGI(TAG, "VolumeTesterView constructed");
-    // Initialize state
     current_state = ViewState::CHECKING_SD;
     is_playing = false;
     audio_check_timer = nullptr;
@@ -35,16 +35,13 @@ void VolumeTesterView::create(lv_obj_t* parent) {
     lv_obj_set_size(container, lv_pct(100), lv_pct(100));
     lv_obj_center(container);
 
-    // Initial setup: check for SD card and display the appropriate UI
     setup_ui();
 }
 
 // --- UI & Handler Setup ---
 
 void VolumeTesterView::setup_ui() {
-    // Clean container to ensure no previous UI elements exist
     lv_obj_clean(container);
-    // Unregister all previous button handlers to start fresh
     button_manager_unregister_view_handlers();
 
     if (sd_manager_check_ready()) {
@@ -57,7 +54,6 @@ void VolumeTesterView::setup_ui() {
 }
 
 void VolumeTesterView::show_ready_ui() {
-    // Use a flex layout for easy alignment.
     lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(container, 10, 0);
@@ -84,7 +80,6 @@ void VolumeTesterView::show_ready_ui() {
     lv_obj_set_style_text_align(info_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_line_space(info_label, 4, 0);
 
-    // Register handlers for the "Ready" state
     button_manager_register_handler(BUTTON_LEFT,   BUTTON_EVENT_TAP, VolumeTesterView::volume_down_cb, true, this);
     button_manager_register_handler(BUTTON_RIGHT,  BUTTON_EVENT_TAP, VolumeTesterView::volume_up_cb,   true, this);
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, VolumeTesterView::ok_press_cb,    true, this);
@@ -108,12 +103,22 @@ void VolumeTesterView::show_error_ui() {
     lv_label_set_text(text_label, "SD Card Not Found\n\nInsert card and press OK to retry.");
     lv_obj_set_style_text_align(text_label, LV_TEXT_ALIGN_CENTER, 0);
 
-    // Register handlers for the "Error" state
     button_manager_register_handler(BUTTON_OK,     BUTTON_EVENT_TAP, VolumeTesterView::ok_press_cb,   true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, VolumeTesterView::exit_press_cb, true, this);
 }
 
 // --- UI Logic & Instance Methods ---
+
+std::string VolumeTesterView::get_test_sound_path() {
+    char path_buffer[256];
+    snprintf(path_buffer, sizeof(path_buffer), "%s%s%s%s%s",
+             SD_CARD_ROOT_PATH,        // "/sdcard"
+             ASSETS_BASE_SUBPATH,      // "/assets/"
+             ASSETS_SOUNDS_SUBPATH,    // "sounds/"
+             SOUNDS_EFFECTS_SUBPATH,   // "effects/"
+             UI_SOUND_TEST);           // "test.wav"
+    return std::string(path_buffer);
+}
 
 void VolumeTesterView::update_volume_label() {
     if (volume_label) {
@@ -124,7 +129,6 @@ void VolumeTesterView::update_volume_label() {
 
 void VolumeTesterView::on_play_toggle() {
     if (is_playing) {
-        // --- Stop Playback ---
         ESP_LOGI(TAG, "OK pressed: Stopping playback.");
         audio_manager_stop();
         if (audio_check_timer) {
@@ -135,9 +139,8 @@ void VolumeTesterView::on_play_toggle() {
         lv_obj_set_style_text_color(status_label, lv_color_white(), 0);
         is_playing = false;
     } else {
-        // --- Start Playback ---
         ESP_LOGI(TAG, "OK pressed: Starting playback.");
-        if (audio_manager_play(TEST_SOUND_PATH)) {
+        if (audio_manager_play(get_test_sound_path().c_str())) {
             audio_check_timer = lv_timer_create(audio_check_timer_cb, 500, this);
             lv_label_set_text(status_label, "Playing...");
             lv_obj_set_style_text_color(status_label, lv_palette_main(LV_PALETTE_GREEN), 0);
@@ -151,7 +154,6 @@ void VolumeTesterView::on_play_toggle() {
 
 void VolumeTesterView::on_retry_check() {
     ESP_LOGI(TAG, "Retrying SD card check...");
-    // This will clean the screen and re-run the check logic.
     setup_ui();
 }
 
@@ -184,7 +186,7 @@ void VolumeTesterView::audio_check_timer_cb(lv_timer_t* timer) {
     audio_player_state_t state = audio_manager_get_state();
     if (state == AUDIO_STATE_STOPPED || state == AUDIO_STATE_ERROR) {
         ESP_LOGI(TAG, "Audio stopped, re-playing for loop effect.");
-        if (!audio_manager_play(TEST_SOUND_PATH)) {
+        if (!audio_manager_play(instance->get_test_sound_path().c_str())) {
             if (instance->status_label) {
                 lv_label_set_text(instance->status_label, "Error re-playing!");
             }
@@ -194,7 +196,6 @@ void VolumeTesterView::audio_check_timer_cb(lv_timer_t* timer) {
 
 void VolumeTesterView::ok_press_cb(void* user_data) {
     auto* instance = static_cast<VolumeTesterView*>(user_data);
-    // The action of the OK button depends on the current view state
     if (instance->current_state == ViewState::READY) {
         instance->on_play_toggle();
     } else if (instance->current_state == ViewState::SD_ERROR) {

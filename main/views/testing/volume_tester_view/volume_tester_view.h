@@ -4,9 +4,10 @@
 #include "views/view.h"
 #include "controllers/button_manager/button_manager.h"
 #include "controllers/audio_manager/audio_manager.h"
-#include "controllers/sd_card_manager/sd_card_manager.h" // <<< ADDED
+#include "controllers/sd_card_manager/sd_card_manager.h"
 #include "esp_log.h"
 #include "lvgl.h"
+#include <string> // For std::string
 
 /**
  * @brief View for testing speaker volume levels.
@@ -32,7 +33,6 @@ private:
     ViewState current_state;
 
     // --- Constants ---
-    static const char* TEST_SOUND_PATH;
     static const uint8_t SAFE_DEFAULT_VOLUME = 15;
 
     // --- UI Widgets ---
@@ -48,6 +48,7 @@ private:
     void show_ready_ui();
     void show_error_ui();
     void update_volume_label();
+    std::string get_test_sound_path(); // Helper to build the path dynamically
 
     // --- Instance Methods for Actions ---
     void on_play_toggle();

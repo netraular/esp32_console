@@ -7,6 +7,7 @@
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "components/status_bar_component/status_bar_component.h"
 #include "controllers/weather_manager/weather_manager.h"
+#include "models/asset_config.h"
 #include "esp_log.h"
 #include <time.h>
 #include <sys/stat.h>
@@ -14,7 +15,6 @@
 #include <array>
 
 static const char *TAG = "STANDBY_VIEW";
-const char* NOTIFICATION_SOUND_PATH = "/sdcard/sounds/notification.wav";
 
 // To see the borders of all UI elements for layout debugging, set this to true.
 constexpr bool DEBUG_LAYOUT = false;
@@ -66,6 +66,26 @@ void StandbyView::create(lv_obj_t* parent) {
     setup_main_button_handlers();
 }
 
+// --- Public Static Method for Notifications ---
+void StandbyView::show_notification_popup(const Notification& notif) {
+    if (!s_instance) {
+        ESP_LOGE(TAG, "Cannot show notification popup, StandbyView instance is null.");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Showing notification popup: %s", notif.title.c_str());
+
+    // The notification sound is played by the NotificationManager *before* calling this
+    // function. This avoids duplicate sound playback and centralizes the logic.
+    
+    popup_manager_show_alert(
+        notif.title.c_str(),
+        notif.message.c_str(),
+        notification_popup_closed_cb,
+        s_instance
+    );
+}
+
 // --- UI & Handler Setup ---
 void StandbyView::setup_ui(lv_obj_t* parent) {
     add_debug_border(parent);
@@ -81,12 +101,12 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     // Create the status bar on the screen to act as an overlay
     status_bar_create(lv_screen_active());
 
-    // --- Bloque 1: Superior (Imagen) ---
-    // Altura total de 105px (5px pad top + 96px content + 4px pad bottom)
+    // --- Top Block: Image ---
+    // Total height 105px (5px pad top + 96px content + 4px pad bottom)
     lv_obj_t* top_container = lv_obj_create(parent);
     lv_obj_remove_style_all(top_container);
     lv_obj_set_size(top_container, LV_PCT(100), 105);
-    lv_obj_align(top_container, LV_ALIGN_TOP_MID, 0, 0); // Anclar arriba
+    lv_obj_align(top_container, LV_ALIGN_TOP_MID, 0, 0); // Anchor top
     lv_obj_set_style_pad_top(top_container, 5, 0);
     lv_obj_set_style_pad_bottom(top_container, 4, 0);
     add_debug_border(top_container);
@@ -103,15 +123,15 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_center(img_label);
     add_debug_border(image_placeholder);
 
-    // --- Bloque 2: Central (Reloj y Fecha) ---
-    // Altura fija de 70px
+    // --- Middle Block: Clock and Date ---
+    // Fixed height of 70px
     lv_obj_t* middle_container = lv_obj_create(parent);
     lv_obj_remove_style_all(middle_container);
     lv_obj_set_size(middle_container, LV_PCT(100), 70);
-    lv_obj_align_to(middle_container, top_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 0); // Posicionar debajo del bloque superior
+    lv_obj_align_to(middle_container, top_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 0); // Position below top block
     add_debug_border(middle_container);
 
-    // Reloj - centrado en el medio del bloque central
+    // Clock - centered in the middle of the central block
     center_time_label = lv_label_create(middle_container);
     lv_obj_set_style_text_font(center_time_label, &lv_font_unscii_16, 0);
     lv_obj_set_style_text_color(center_time_label, lv_color_white(), 0);
@@ -123,32 +143,32 @@ void StandbyView::setup_ui(lv_obj_t* parent) {
     lv_obj_align(center_time_label, LV_ALIGN_CENTER, 0, -10);
     add_debug_border(center_time_label);
 
-    // Fecha - centrada horizontalmente y 20px por debajo del centro vertical
+    // Date - centered horizontally and 20px below the vertical center
     center_date_label = lv_label_create(middle_container);
     lv_obj_set_style_text_font(center_date_label, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_color(center_date_label, lv_color_white(), 0);
-    lv_obj_align(center_date_label, LV_ALIGN_CENTER, 0, 25); // Centrar y mover 20px hacia abajo
+    lv_obj_align(center_date_label, LV_ALIGN_CENTER, 0, 25); // Center and move 20px down
     add_debug_border(center_date_label);
     
-    // --- Bloque 3: Inferior (Clima) ---
-    // Altura fija de 65px
+    // --- Bottom Block: Weather ---
+    // Fixed height of 65px
     lv_obj_t* bottom_container = lv_obj_create(parent);
     lv_obj_remove_style_all(bottom_container);
     lv_obj_set_size(bottom_container, LV_PCT(100), 65);
-    lv_obj_align(bottom_container, LV_ALIGN_BOTTOM_MID, 0, 0); // Anclar abajo
-    lv_obj_set_style_pad_bottom(bottom_container, 2, 0); // 2px de padding inferior
+    lv_obj_align(bottom_container, LV_ALIGN_BOTTOM_MID, 0, 0); // Anchor bottom
+    lv_obj_set_style_pad_bottom(bottom_container, 2, 0); // 2px bottom padding
     add_debug_border(bottom_container);
     
-    // Contenedor para los widgets del clima (usará Flexbox para alinearlos en fila)
+    // Container for the weather widgets (using Flexbox to align them in a row)
     lv_obj_t* forecast_container = lv_obj_create(bottom_container);
     lv_obj_remove_style_all(forecast_container);
-    lv_obj_set_width(forecast_container, LV_SIZE_CONTENT); // Ancho se adapta al contenido
-    lv_obj_set_height(forecast_container, LV_PCT(100));     // Alto ocupa el espacio disponible
+    lv_obj_set_width(forecast_container, LV_SIZE_CONTENT); // Width adapts to content
+    lv_obj_set_height(forecast_container, LV_PCT(100));     // Height fills available space
     lv_obj_set_layout(forecast_container, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(forecast_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(forecast_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END);
     lv_obj_set_style_pad_column(forecast_container, 15, 0);
-    // Centrar este contenedor en la parte inferior del bloque
+    // Center this container at the bottom of the block
     lv_obj_align(forecast_container, LV_ALIGN_BOTTOM_MID, 0, 0);
     add_debug_border(forecast_container);
 
@@ -214,8 +234,8 @@ void StandbyView::update_clock() {
         localtime_r(&now, &timeinfo);
         lv_label_set_text_fmt(center_time_label, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
         lv_label_set_text_fmt(center_date_label, "%s, %s %02d", 
-            (const char*[]){"DOM", "LUN", "MAR", "MIE", "JUE", "VIE", "SAB"}[timeinfo.tm_wday],
-            (const char*[]){"ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DEC"}[timeinfo.tm_mon],
+            (const char*[]){"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}[timeinfo.tm_wday],
+            (const char*[]){"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}[timeinfo.tm_mon],
             timeinfo.tm_mday
         );
         // Update weather information along with the clock
@@ -246,7 +266,7 @@ void StandbyView::update_weather() {
         return; // Do nothing, keep the placeholders visible
     }
 
-    if (forecast_data.size() != forecast_widgets.size()) {
+    if (forecast_data.size() < forecast_widgets.size()) {
         ESP_LOGW(TAG, "Mismatch between forecast data (%zu) and UI widgets (%zu)", forecast_data.size(), forecast_widgets.size());
     }
 
@@ -317,34 +337,6 @@ void StandbyView::stop_volume_repeat_timer(lv_timer_t** timer_ptr) {
         lv_timer_delete(*timer_ptr);
         *timer_ptr = nullptr;
     }
-}
-
-// --- Public Static Method for Notifications ---
-void StandbyView::show_notification_popup(const Notification& notif) {
-    if (!s_instance) {
-        ESP_LOGE(TAG, "Cannot show notification popup, StandbyView instance is null.");
-        return;
-    }
-
-    ESP_LOGI(TAG, "Showing notification popup: %s", notif.title.c_str());
-
-    if (sd_manager_is_mounted()) {
-        struct stat st;
-        if (stat(NOTIFICATION_SOUND_PATH, &st) == 0) {
-            audio_manager_play(NOTIFICATION_SOUND_PATH);
-        } else {
-            ESP_LOGW(TAG, "Notification sound file not found at %s", NOTIFICATION_SOUND_PATH);
-        }
-    } else {
-        ESP_LOGW(TAG, "SD card not mounted, cannot play notification sound.");
-    }
-    
-    popup_manager_show_alert(
-        notif.title.c_str(),
-        notif.message.c_str(),
-        notification_popup_closed_cb,
-        s_instance
-    );
 }
 
 // --- Static Callbacks (Bridge to C-style APIs and instance methods) ---

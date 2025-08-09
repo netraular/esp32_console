@@ -3,25 +3,24 @@
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/wifi_manager/wifi_manager.h"
 #include "controllers/stt_manager/stt_manager.h"
+#include "controllers/button_manager/button_manager.h"
+#include "components/file_explorer/file_explorer.h"
 #include "components/audio_player_component/audio_player_component.h"
 #include "components/text_viewer/text_viewer.h"
+#include "models/asset_config.h"
 #include "esp_log.h"
 #include <string>
 #include <sys/stat.h>
 #include <memory> 
-#include <string.h> // Include for strdup
+#include <string.h>
 
 static const char *TAG = "VOICE_NOTE_PLAYER_VIEW";
-static const char *NOTES_DIR = "/sdcard/notes";
 
-// Struct for passing data from background task to LVGL UI thread.
-// Using std::string makes it memory-safe.
 struct transcription_result_data_t {
     bool success;
     std::string result_text;
-    VoiceNotePlayerView* instance; // Pass context back to the UI thread
+    VoiceNotePlayerView* instance;
 };
-
 
 // --- Lifecycle Methods ---
 VoiceNotePlayerView::VoiceNotePlayerView() : loading_indicator(nullptr), action_menu_container(nullptr), file_explorer_host_container(nullptr), action_menu_group(nullptr), styles_initialized(false) {
@@ -71,8 +70,10 @@ void VoiceNotePlayerView::hide_loading_indicator() {
 void VoiceNotePlayerView::show_file_explorer() {
     lv_obj_clean(container);
 
+    std::string notes_dir_str = std::string(SD_CARD_ROOT_PATH) + "/" + USER_DATA_BASE_PATH + VOICE_NOTES_SUBPATH;
+
     struct stat st;
-    if (stat(NOTES_DIR, &st) != 0) {
+    if (stat(notes_dir_str.c_str(), &st) != 0) {
         lv_obj_t* label = lv_label_create(container);
         lv_label_set_text(label, "No voice notes found.\n\nPress Cancel to go back.");
         lv_obj_center(label);
@@ -88,7 +89,7 @@ void VoiceNotePlayerView::show_file_explorer() {
     lv_obj_set_size(file_explorer_host_container, lv_pct(100), lv_pct(100));
     lv_obj_add_event_cb(file_explorer_host_container, explorer_cleanup_cb, LV_EVENT_DELETE, this);
 
-    file_explorer_create(file_explorer_host_container, NOTES_DIR, 
+    file_explorer_create(file_explorer_host_container, notes_dir_str.c_str(), 
                          audio_file_selected_cb_c, file_long_pressed_cb_c, 
                          nullptr, explorer_exit_cb_c, this);
 }
@@ -125,6 +126,7 @@ void VoiceNotePlayerView::create_action_menu(const char* path) {
         lv_group_focus_obj(lv_obj_get_child(list, 0));
     }
     
+    button_manager_unregister_view_handlers();
     button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, action_menu_ok_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, action_menu_cancel_cb, true, this);
     button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, action_menu_left_cb, true, this);
@@ -133,6 +135,8 @@ void VoiceNotePlayerView::create_action_menu(const char* path) {
 
 void VoiceNotePlayerView::destroy_action_menu(bool refresh_explorer) {
     if (!action_menu_container) return;
+    
+    button_manager_unregister_view_handlers();
 
     if (action_menu_group) {
         lv_group_del(action_menu_group);
@@ -202,17 +206,12 @@ void VoiceNotePlayerView::on_action_menu_ok() {
         destroy_action_menu(false);
         show_loading_indicator("Transcribing...");
         
-        // Create a lambda function for the callback.
-        // It captures `this` to access the current view instance.
         auto stt_lambda_cb = [this](bool success, const std::string& result) {
-            // This code runs in the context of the stt_manager task.
-            // We need to pass the result to the UI thread safely.
             auto result_data = std::make_unique<transcription_result_data_t>();
             result_data->success = success;
             result_data->result_text = result;
             result_data->instance = this;
 
-            // lv_async_call is thread-safe and will execute the function on the LVGL thread.
             lv_async_call(on_transcription_complete_ui_thread, result_data.release());
         };
 
@@ -236,7 +235,6 @@ void VoiceNotePlayerView::on_action_menu_nav(bool is_next) {
     else lv_group_focus_prev(action_menu_group);
 }
 
-
 // --- Static Callbacks (Bridges) ---
 
 void VoiceNotePlayerView::action_menu_ok_cb(void* user_data) { static_cast<VoiceNotePlayerView*>(user_data)->on_action_menu_ok(); }
@@ -250,7 +248,6 @@ void VoiceNotePlayerView::explorer_exit_cb_c(void* user_data) { if (user_data) s
 void VoiceNotePlayerView::player_exit_cb_c(void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_player_exit(); }
 void VoiceNotePlayerView::viewer_exit_cb_c(void* user_data) { if (user_data) static_cast<VoiceNotePlayerView*>(user_data)->on_viewer_exit(); }
 
-
 void VoiceNotePlayerView::explorer_cleanup_cb(lv_event_t * e) {
     ESP_LOGD(TAG, "Explorer host container deleted. Calling file_explorer_destroy().");
     file_explorer_destroy();
@@ -262,7 +259,6 @@ void VoiceNotePlayerView::explorer_cleanup_cb(lv_event_t * e) {
 }
 
 void VoiceNotePlayerView::on_transcription_complete_ui_thread(void *user_data) {
-    // Take ownership of the data with a unique_ptr to ensure it's deleted.
     std::unique_ptr<transcription_result_data_t> result_data(static_cast<transcription_result_data_t*>(user_data));
     
     VoiceNotePlayerView* instance = result_data->instance;
@@ -274,8 +270,6 @@ void VoiceNotePlayerView::on_transcription_complete_ui_thread(void *user_data) {
 
     instance->hide_loading_indicator();
     
-    // The text_viewer now owns the memory of the C-string.
-    // We must convert the std::string to a dynamically allocated char*.
     char* content_for_viewer = strdup(result_data->result_text.c_str());
     if (!content_for_viewer) {
          ESP_LOGE(TAG, "Failed to allocate memory for text viewer content.");
@@ -289,7 +283,7 @@ void VoiceNotePlayerView::on_transcription_complete_ui_thread(void *user_data) {
         text_viewer_create(instance->container, "Transcription", content_for_viewer, viewer_exit_cb_c, instance);
     } else {
         ESP_LOGE(TAG, "UI THREAD: Transcription failed: %s", content_for_viewer);
-        free(content_for_viewer); // Free the memory if not used by the viewer
+        free(content_for_viewer);
         instance->show_file_explorer();
     }
 }

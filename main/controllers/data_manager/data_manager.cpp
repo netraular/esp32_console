@@ -60,7 +60,12 @@ bool data_manager_get_u32(const char* key, uint32_t* value) {
     nvs_handle_t my_handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &my_handle);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
+        if (err == ESP_ERR_NVS_NOT_FOUND) {
+            // This is an expected condition on first boot. The namespace doesn't exist yet.
+            ESP_LOGD(TAG, "NVS namespace '%s' not found. This is normal on first boot.", NVS_NAMESPACE);
+        } else {
+            ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
+        }
         return false;
     }
 
@@ -72,7 +77,7 @@ bool data_manager_get_u32(const char* key, uint32_t* value) {
             ESP_LOGD(TAG, "Successfully got u32 key '%s' = %lu", key, *value);
             return true;
         case ESP_ERR_NVS_NOT_FOUND:
-            ESP_LOGI(TAG, "The key '%s' is not initialized yet in NVS.", key);
+            ESP_LOGD(TAG, "The key '%s' is not initialized yet in NVS.", key);
             return false;
         default:
             ESP_LOGE(TAG, "Error (%s) reading key '%s' from NVS!", esp_err_to_name(err), key);
@@ -118,7 +123,11 @@ bool data_manager_get_str(const char* key, char* buffer, size_t* buffer_size) {
     nvs_handle_t my_handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &my_handle);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
+        if (err == ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGD(TAG, "NVS namespace '%s' not found. This is normal on first boot.", NVS_NAMESPACE);
+        } else {
+            ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
+        }
         return false;
     }
 
@@ -128,7 +137,9 @@ bool data_manager_get_str(const char* key, char* buffer, size_t* buffer_size) {
     if (err == ESP_OK) {
         return true;
     }
-    if (err != ESP_ERR_NVS_NOT_FOUND) {
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGD(TAG, "The key '%s' is not initialized yet in NVS.", key);
+    } else {
         ESP_LOGE(TAG, "Error (%s) reading key '%s' from NVS!", esp_err_to_name(err), key);
     }
     return false;

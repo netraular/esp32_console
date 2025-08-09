@@ -2,6 +2,7 @@
 #define PET_VIEW_H
 
 #include "views/view.h"
+#include "components/popup_manager/popup_manager.h" // For popup_result_t
 
 /**
  * @brief A view to display the current pet's status and evolution.
@@ -33,11 +34,15 @@ private:
 
     // --- Actions ---
     void add_care_points();
+    void on_force_new_pet();
+    void handle_force_new_pet_result(popup_result_t result);
     void go_back_to_menu();
 
     // --- Static Callbacks ---
     static void update_view_cb(lv_timer_t* timer);
     static void add_points_cb(void* user_data);
+    static void force_new_pet_cb(void* user_data);
+    static void force_new_pet_popup_cb(popup_result_t result, void* user_data);
     static void back_button_cb(void* user_data);
 };
 

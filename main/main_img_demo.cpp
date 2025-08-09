@@ -18,7 +18,8 @@
 #include <errno.h> 
 
 // Headers para el controlador de pantalla
-#include "config.h"
+#include "config/board_config.h"
+#include "config/app_config.h"
 #include "driver/spi_master.h"
 #include "esp_timer.h"
 #include "esp_lcd_panel_io.h"

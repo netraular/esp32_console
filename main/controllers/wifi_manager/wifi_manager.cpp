@@ -1,5 +1,5 @@
 #include "wifi_manager.h"
-#include "secret.h"
+#include "config/secrets.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
