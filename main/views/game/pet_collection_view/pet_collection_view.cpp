@@ -87,7 +87,8 @@ void PetCollectionView::populate_container() {
             lv_obj_remove_style_all(tile);
             lv_obj_set_size(tile, LV_PCT(95), LV_SIZE_CONTENT);
             lv_obj_set_style_pad_all(tile, 5, 0);
-            lv_obj_set_style_bg_color(tile, lv_color_white(), 0); // Ensure background for border
+            // Set a default white background. It will be overridden if the pet is collected.
+            lv_obj_set_style_bg_color(tile, lv_color_white(), 0);
             lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
             lv_obj_set_style_radius(tile, 5, 0);
             lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_ROW);
@@ -114,15 +115,20 @@ void PetCollectionView::populate_container() {
                 lv_label_set_text_fmt(name_label, "#%04d\n%s", (int)data->id, data->name.c_str());
 
                 if (entry.collected) {
+                    // Pet line is fully collected: set green background and show checkmark
+                    lv_obj_set_style_bg_color(tile, lv_palette_lighten(LV_PALETTE_GREEN, 4), 0);
                     lv_obj_set_style_image_recolor_opa(img, LV_OPA_TRANSP, 0);
+                    
                     lv_obj_t* check_icon = lv_label_create(tile);
                     lv_label_set_text(check_icon, LV_SYMBOL_OK);
                     lv_obj_set_style_text_color(check_icon, lv_palette_main(LV_PALETTE_GREEN), 0);
                 } else {
+                    // Discovered but not collected: grayscale sprite, white background
                     lv_obj_set_style_image_recolor(img, lv_color_black(), 0);
                     lv_obj_set_style_image_recolor_opa(img, LV_OPA_60, 0);
                 }
             } else {
+                // Undiscovered: show placeholder
                 lv_obj_t* question_label = lv_label_create(icon_area);
                 lv_label_set_text(question_label, "?");
                 lv_obj_set_style_text_font(question_label, &lv_font_montserrat_24, 0);
@@ -151,8 +157,8 @@ void PetCollectionView::update_selection() {
     }
     lv_obj_add_style(tile_items[selected_index], &style_focus, LV_STATE_DEFAULT);
 
-    // Scroll the currently selected item into view with animation
-    lv_obj_scroll_to_view(tile_items[selected_index], LV_ANIM_ON);
+    // Scroll the currently selected item into view instantly (no animation)
+    lv_obj_scroll_to_view(tile_items[selected_index], LV_ANIM_OFF);
 }
 
 void PetCollectionView::on_nav_up() {
