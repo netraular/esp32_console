@@ -12,9 +12,9 @@
 
 static const char* TAG = "PET_VIEW";
 
-static void format_time_remaining(char* buf, size_t len, time_t seconds) {
+static void format_time_remaining(char* buf, size_t len, time_t seconds, bool is_final_stage) {
     if (seconds <= 0) {
-        snprintf(buf, len, "Final Stage");
+        snprintf(buf, len, is_final_stage ? "Cycle ended" : "Evolving!");
         return;
     }
     int days = seconds / 86400;
@@ -24,10 +24,12 @@ static void format_time_remaining(char* buf, size_t len, time_t seconds) {
     int minutes = seconds / 60;
     seconds %= 60;
 
-    if (days > 0) snprintf(buf, len, "Next stage in: %dd %dh %dm", days, hours, minutes);
-    else if (hours > 0) snprintf(buf, len, "Next stage in: %dh %dm", hours, minutes);
-    else if (minutes > 0) snprintf(buf, len, "Next stage in: %dm %lds", minutes, (long)seconds);
-    else snprintf(buf, len, "Next stage in: %lds", (long)seconds);
+    const char* prefix = is_final_stage ? "Cycle ends in:" : "Next stage in:";
+
+    if (days > 0) snprintf(buf, len, "%s %dd %dh", prefix, days, hours);
+    else if (hours > 0) snprintf(buf, len, "%s %dh %dm", prefix, hours, minutes);
+    else if (minutes > 0) snprintf(buf, len, "%s %dm %lds", prefix, minutes, (long)seconds);
+    else snprintf(buf, len, "%s %lds", prefix, (long)seconds);
 }
 
 static void format_hatch_time(char* buf, size_t len, time_t seconds) {
@@ -61,7 +63,6 @@ void PetView::create(lv_obj_t* parent) {
     setup_button_handlers();
 
     update_view();
-    // Update more frequently to show seconds countdown
     update_timer = lv_timer_create(update_view_cb, 1000, this);
 }
 
@@ -74,6 +75,8 @@ void PetView::setup_ui(lv_obj_t* parent) {
     pet_display_obj = lv_image_create(parent);
     lv_obj_set_size(pet_display_obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_image_set_antialias(pet_display_obj, false);
+    // Corrected to LV_ZOOM_NONE for LVGL v9
+    lv_img_set_zoom(pet_display_obj, LV_ZOOM_NONE * 2); // Scale sprite x2
     lv_obj_align(pet_display_obj, LV_ALIGN_CENTER, 0, 0);
 
 
@@ -124,19 +127,20 @@ void PetView::update_view() {
     }
     
     lv_label_set_text(pet_name_label, pet_manager.get_pet_display_name(state).c_str());
+    lv_label_set_text_fmt(pet_points_label, "Care Points: %lu", state.care_points);
 
-    // Update labels based on whether it's an egg or a pet
     char time_buf[64];
     if (pet_manager.is_in_egg_stage()) {
-        lv_label_set_text(pet_points_label, ""); // No points for an egg
         time_t time_left = pet_manager.get_time_to_hatch();
         format_hatch_time(time_buf, sizeof(time_buf), time_left);
         lv_label_set_text(pet_time_label, time_buf);
-        lv_label_set_text(pet_cycle_label, "");
+        lv_label_set_text(pet_cycle_label, "A mysterious egg...");
     } else {
-        lv_label_set_text_fmt(pet_points_label, "Care Points: %lu", state.care_points);
+        const auto* pet_data = pet_manager.get_pet_data(state.current_pet_id);
+        bool is_final = (pet_data && pet_data->evolves_to == PetId::NONE);
+        
         time_t time_left = pet_manager.get_time_to_next_stage(state);
-        format_time_remaining(time_buf, sizeof(time_buf), time_left);
+        format_time_remaining(time_buf, sizeof(time_buf), time_left, is_final);
         lv_label_set_text(pet_time_label, time_buf);
         
         char date_buf[20];

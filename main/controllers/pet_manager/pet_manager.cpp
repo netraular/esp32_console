@@ -105,8 +105,7 @@ PetId PetManager::select_random_hatchable_pet() {
 }
 
 std::string PetManager::get_sprite_path_for_id(PetId id) const {
-    char id_str[6]; // Buffer for up to 5 digits (65535) + null terminator.
-    // Corrected format string to pad with zeros up to 4 digits.
+    char id_str[6];
     snprintf(id_str, sizeof(id_str), "%04d", (int)id);
 
     char path_buffer[256];
@@ -141,15 +140,13 @@ void PetManager::update_state() {
     time_t now = time(NULL);
     if (now < SECONDS_IN_DAY) return;
 
-    // --- State Machine ---
     if (is_in_egg_stage()) {
         if (now >= s_pet_state.cycle_end_timestamp) {
             hatch_egg();
         }
-        return; // No further processing if we are in the egg stage
+        return;
     }
 
-    // --- Pet Lifecycle (post-hatch) ---
     if (now >= s_pet_state.cycle_end_timestamp) {
         ESP_LOGI(TAG, "Current pet cycle has ended.");
         finalize_cycle();
@@ -158,7 +155,7 @@ void PetManager::update_state() {
 
     const auto* current_data = get_pet_data(s_pet_state.current_pet_id);
     if (!current_data || current_data->evolves_to == PetId::NONE) {
-        return; // Already at final stage
+        return;
     }
 
     time_t total_duration = s_pet_state.cycle_end_timestamp - s_pet_state.cycle_start_timestamp;
@@ -196,11 +193,10 @@ void PetManager::start_new_cycle() {
     time_t now = time(NULL);
 
     s_pet_state.base_pet_id = select_random_hatchable_pet();
-    s_pet_state.current_pet_id = PetId::NONE; // ALWAYS start as an egg
+    s_pet_state.current_pet_id = PetId::NONE;
     s_pet_state.care_points = 0;
     s_pet_state.custom_name.clear();
     
-    // The cycle timestamps now refer to the EGG phase initially
     s_pet_state.cycle_start_timestamp = now;
     s_pet_state.cycle_end_timestamp = now + EGG_HATCH_DURATION_SECONDS;
     
@@ -214,7 +210,6 @@ void PetManager::hatch_egg() {
     time_t now = time(NULL);
 
     s_pet_state.current_pet_id = s_pet_state.base_pet_id;
-    // Now, set the timestamps for the pet's main lifecycle
     s_pet_state.cycle_start_timestamp = now;
 
 #if PET_LIFECYCLE_DEBUG_7_MINUTES == 1
@@ -259,10 +254,6 @@ void PetManager::finalize_cycle() {
 }
 
 void PetManager::add_care_points(uint32_t points) {
-    if (is_in_egg_stage()) {
-        ESP_LOGW(TAG, "Cannot add care points to an egg.");
-        return;
-    }
     s_pet_state.care_points += points;
     ESP_LOGI(TAG, "Added %lu care points. Total: %lu", points, s_pet_state.care_points);
     save_state();
@@ -293,9 +284,14 @@ time_t PetManager::get_time_to_hatch() const {
 }
 
 time_t PetManager::get_time_to_next_stage(const PetState& state) const {
-    if (state.current_pet_id == PetId::NONE) return 0; // Use get_time_to_hatch for eggs
+    if (state.current_pet_id == PetId::NONE) return 0;
     const auto* data = get_pet_data(state.current_pet_id);
-    if (!data || data->evolves_to == PetId::NONE) return 0;
+    if (!data || data->evolves_to == PetId::NONE) {
+        // For final stage, return time until cycle ends
+        time_t now = time(NULL);
+        if (now >= state.cycle_end_timestamp) return 0;
+        return state.cycle_end_timestamp - now;
+    }
 
     time_t now = time(NULL);
     if (now < SECONDS_IN_DAY) return 0; 
