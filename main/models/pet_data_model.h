@@ -64,6 +64,7 @@ struct PetState {
     std::string custom_name;    // The name given by the user (or default).
     time_t cycle_start_timestamp; // The exact moment the cycle (egg) was created.
     time_t cycle_end_timestamp;   // The calculated timestamp for the end of the cycle.
+    bool is_awaiting_new_cycle = false; // True if the cycle ended and we are waiting for user input.
 };
 
 /**

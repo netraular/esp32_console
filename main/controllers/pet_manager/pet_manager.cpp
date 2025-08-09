@@ -21,6 +21,7 @@ static const char* PET_NAME_KEY = "pet_name";
 static const char* PET_START_TS_KEY = "pet_start_ts";
 static const char* PET_END_TS_KEY = "pet_end_ts";
 static const char* PET_COLL_PREFIX_KEY = "pet_coll_";
+static const char* PET_AWAITING_KEY = "pet_await"; // New key to save the waiting state
 
 // --- Game Logic Constants ---
 constexpr time_t SECONDS_IN_DAY = 86400;
@@ -60,6 +61,9 @@ std::string PetManager::get_pet_name(PetId id) const {
 }
 
 std::string PetManager::get_pet_display_name(const PetState& state) const {
+    if (state.is_awaiting_new_cycle) {
+        return "Cycle Ended";
+    }
     if (state.current_pet_id == PetId::NONE) {
         return "Mysterious Egg";
     }
@@ -77,42 +81,22 @@ PetId PetManager::select_random_hatchable_pet() {
     std::vector<WeightedPet> available_pets;
     uint32_t total_weight = 0;
 
-    // 1. Create a list of available pets and calculate the total weight
-    for (const auto& entry : s_collection) {
-        if (!entry.collected) {
-            if (const auto* data = get_pet_data(entry.base_id)) {
-                if (data->can_hatch && data->rarity_weight > 0) {
-                    available_pets.push_back({entry.base_id, data->rarity_weight});
-                    total_weight += data->rarity_weight;
-                }
-            }
-        }
-    }
-
-    // 2. If no pets are available, reset the collection and try again
-    if (available_pets.empty()) {
-        ESP_LOGI(TAG, "All pets collected! Resetting collection for replay.");
-        for (auto& entry : s_collection) entry.collected = false;
-        save_collection();
-        
-        // Recalculate available pets and total weight after reset
-        for (const auto& pair : PET_DATA_REGISTRY) {
-            if (pair.second.can_hatch && pair.second.rarity_weight > 0) {
-                available_pets.push_back({pair.first, pair.second.rarity_weight});
-                total_weight += pair.second.rarity_weight;
-            }
+    // Create the pool of all possible pets, regardless of collection status.
+    for (const auto& pair : PET_DATA_REGISTRY) {
+        if (pair.second.can_hatch && pair.second.rarity_weight > 0) {
+            available_pets.push_back({pair.first, pair.second.rarity_weight});
+            total_weight += pair.second.rarity_weight;
         }
     }
     
-    // 3. Handle edge case where no hatchable pets exist at all
     if (available_pets.empty() || total_weight == 0) {
         ESP_LOGE(TAG, "No hatchable pets with rarity_weight > 0 found in PET_DATA_REGISTRY!");
         return PetId::NONE;
     }
 
-    // 4. Perform weighted random selection
+    // Perform weighted random selection
     ESP_LOGI(TAG, "Performing weighted pet selection with total weight: %lu", total_weight);
-    uint32_t random_pick = (esp_random() % total_weight); // Get a value from 0 to total_weight-1
+    uint32_t random_pick = (esp_random() % total_weight); 
 
     for (const auto& pet : available_pets) {
         if (random_pick < pet.weight) {
@@ -122,7 +106,6 @@ PetId PetManager::select_random_hatchable_pet() {
         random_pick -= pet.weight;
     }
     
-    // Fallback: should not be reached if logic is correct, but good practice
     ESP_LOGE(TAG, "Weighted selection failed! Falling back to last available pet.");
     return available_pets.back().id;
 }
@@ -143,6 +126,10 @@ std::string PetManager::get_sprite_path_for_id(PetId id) const {
 }
 
 std::string PetManager::get_current_pet_sprite_path() const {
+    // If awaiting new cycle, there's no pet to show. The view should handle this.
+    if (is_awaiting_new_cycle()) {
+        return "";
+    }
     if (s_pet_state.current_pet_id == PetId::NONE) {
         char path_buffer[256];
         snprintf(path_buffer, sizeof(path_buffer), "%s%s%s%s%s%s",
@@ -158,10 +145,10 @@ std::string PetManager::get_current_pet_sprite_path() const {
 }
 
 void PetManager::update_state() {
-    if (!s_is_initialized) return;
+    if (!s_is_initialized || is_awaiting_new_cycle()) return;
     
     time_t now = time(NULL);
-    if (now < SECONDS_IN_DAY) return; // Wait for valid time
+    if (now < SECONDS_IN_DAY) return;
 
     if (is_in_egg_stage()) {
         if (now >= s_pet_state.cycle_end_timestamp) {
@@ -172,13 +159,13 @@ void PetManager::update_state() {
 
     if (now >= s_pet_state.cycle_end_timestamp) {
         ESP_LOGI(TAG, "Current pet cycle has ended.");
-        finalize_cycle(); // Check final stage care points
+        finalize_cycle();
         return;
     }
 
     const auto* current_data = get_pet_data(s_pet_state.current_pet_id);
     if (!current_data || current_data->evolves_to == PetId::NONE) {
-        return; // No more evolutions, wait for finalize_cycle
+        return;
     }
 
     time_t total_duration = s_pet_state.cycle_end_timestamp - s_pet_state.cycle_start_timestamp;
@@ -200,9 +187,8 @@ void PetManager::update_state() {
         if (s_pet_state.stage_care_points >= current_data->care_points_needed) {
             ESP_LOGI(TAG, "Success! Evolving into %s!", get_pet_name(next_evolution_id).c_str());
             s_pet_state.current_pet_id = next_evolution_id;
-            s_pet_state.stage_care_points = 0; // Reset points for the new stage
+            s_pet_state.stage_care_points = 0;
 
-            // Mark line as discovered
             for (auto& entry : s_collection) {
                 if (entry.base_id == s_pet_state.base_pet_id && !entry.discovered) {
                     entry.discovered = true;
@@ -223,6 +209,7 @@ void PetManager::start_new_cycle() {
     ESP_LOGI(TAG, "Starting a new egg cycle.");
     time_t now = time(NULL);
 
+    s_pet_state.is_awaiting_new_cycle = false;
     s_pet_state.base_pet_id = select_random_hatchable_pet();
     s_pet_state.current_pet_id = PetId::NONE;
     s_pet_state.stage_care_points = 0;
@@ -233,6 +220,26 @@ void PetManager::start_new_cycle() {
     
     ESP_LOGI(TAG, "New egg will hatch at timestamp %ld", (long)s_pet_state.cycle_end_timestamp);
 
+    save_state();
+}
+
+void PetManager::request_new_egg() {
+    if (is_awaiting_new_cycle()) {
+        ESP_LOGI(TAG, "User requested a new egg. Starting new cycle.");
+        start_new_cycle();
+    } else {
+        ESP_LOGW(TAG, "Request for new egg ignored; not in awaiting state.");
+    }
+}
+
+void PetManager::set_awaiting_new_cycle_state() {
+    ESP_LOGI(TAG, "Cycle ended. Awaiting user confirmation for new egg.");
+    s_pet_state.is_awaiting_new_cycle = true;
+    s_pet_state.current_pet_id = PetId::NONE;
+    s_pet_state.base_pet_id = PetId::NONE;
+    s_pet_state.stage_care_points = 0;
+    s_pet_state.cycle_start_timestamp = 0;
+    s_pet_state.cycle_end_timestamp = 0;
     save_state();
 }
 
@@ -269,16 +276,15 @@ void PetManager::hatch_egg() {
 
 void PetManager::fail_cycle() {
     ESP_LOGW(TAG, "Pet cycle failed. The pet was not properly cared for.");
-    // Even on failure, if we saw the pet, it should be marked as discovered.
     for (auto& entry : s_collection) {
         if (entry.base_id == s_pet_state.base_pet_id) {
-            entry.discovered = true; // Mark as seen
+            entry.discovered = true;
             ESP_LOGI(TAG, "Marked %s line as discovered despite cycle failure.", get_pet_name(entry.base_id).c_str());
             save_collection();
             break;
         }
     }
-    start_new_cycle();
+    set_awaiting_new_cycle_state();
 }
 
 void PetManager::finalize_cycle() {
@@ -297,28 +303,22 @@ void PetManager::finalize_cycle() {
         save_collection();
     } else {
         ESP_LOGW(TAG, "Failed to collect pet at final stage. It will be remembered only as 'discovered'.");
-        // No need to call fail_cycle, as start_new_cycle will be called next.
         for (auto& entry : s_collection) {
             if (entry.base_id == s_pet_state.base_pet_id) {
-                entry.discovered = true; // Ensure it's marked as discovered
+                entry.discovered = true;
                 save_collection();
                 break;
             }
         }
     }
-    start_new_cycle();
+    set_awaiting_new_cycle_state();
 }
 
 void PetManager::add_care_points(uint32_t points) {
-    if (is_in_egg_stage()) return; // Cannot care for an egg
+    if (is_in_egg_stage() || is_awaiting_new_cycle()) return;
     s_pet_state.stage_care_points += points;
     ESP_LOGI(TAG, "Added %lu care points. Stage Total: %lu", points, s_pet_state.stage_care_points);
     save_state();
-}
-
-void PetManager::force_new_cycle() {
-    ESP_LOGI(TAG, "Forcing new pet cycle by user request.");
-    start_new_cycle();
 }
 
 PetState PetManager::get_current_pet_state() const {
@@ -326,13 +326,13 @@ PetState PetManager::get_current_pet_state() const {
 }
 
 uint32_t PetManager::get_current_stage_care_goal() const {
-    if (is_in_egg_stage()) {
+    if (is_in_egg_stage() || is_awaiting_new_cycle()) {
         return 0;
     }
     if (const auto* data = get_pet_data(s_pet_state.current_pet_id)) {
         return data->care_points_needed;
     }
-    return 100; // Default fallback
+    return 100;
 }
 
 std::vector<PetCollectionEntry> PetManager::get_collection() const {
@@ -340,7 +340,11 @@ std::vector<PetCollectionEntry> PetManager::get_collection() const {
 }
 
 bool PetManager::is_in_egg_stage() const {
-    return s_pet_state.current_pet_id == PetId::NONE;
+    return !s_pet_state.is_awaiting_new_cycle && s_pet_state.current_pet_id == PetId::NONE;
+}
+
+bool PetManager::is_awaiting_new_cycle() const {
+    return s_pet_state.is_awaiting_new_cycle;
 }
 
 time_t PetManager::get_time_to_hatch() const {
@@ -351,10 +355,9 @@ time_t PetManager::get_time_to_hatch() const {
 }
 
 time_t PetManager::get_time_to_next_stage(const PetState& state) const {
-    if (state.current_pet_id == PetId::NONE) return 0;
+    if (state.current_pet_id == PetId::NONE || state.is_awaiting_new_cycle) return 0;
     const auto* data = get_pet_data(state.current_pet_id);
     if (!data || data->evolves_to == PetId::NONE) {
-        // For final stage, return time until cycle ends
         time_t now = time(NULL);
         if (now >= state.cycle_end_timestamp) return 0;
         return state.cycle_end_timestamp - now;
@@ -382,6 +385,7 @@ void PetManager::load_state() {
     uint32_t u32_val;
     
     s_pet_state = {};
+    if (data_manager_get_u32(PET_AWAITING_KEY, &u32_val)) s_pet_state.is_awaiting_new_cycle = (u32_val == 1);
     if (data_manager_get_u32(PET_BASE_ID_KEY, &u32_val)) s_pet_state.base_pet_id = (PetId)u32_val;
     if (data_manager_get_u32(PET_CURRENT_ID_KEY, &u32_val)) s_pet_state.current_pet_id = (PetId)u32_val;
     if (data_manager_get_u32(PET_STAGE_POINTS_KEY, &s_pet_state.stage_care_points)) {}
@@ -412,13 +416,14 @@ void PetManager::load_state() {
         return a.base_id < b.base_id;
     });
 
-    if (s_pet_state.cycle_start_timestamp == 0 && time(NULL) > SECONDS_IN_DAY) {
+    if (s_pet_state.cycle_start_timestamp == 0 && !s_pet_state.is_awaiting_new_cycle && time(NULL) > SECONDS_IN_DAY) {
         ESP_LOGI(TAG, "No cycle data found. Starting first cycle.");
         start_new_cycle();
     }
 }
 
 void PetManager::save_state() const {
+    data_manager_set_u32(PET_AWAITING_KEY, s_pet_state.is_awaiting_new_cycle ? 1 : 0);
     data_manager_set_u32(PET_BASE_ID_KEY, (uint32_t)s_pet_state.base_pet_id);
     data_manager_set_u32(PET_CURRENT_ID_KEY, (uint32_t)s_pet_state.current_pet_id);
     data_manager_set_u32(PET_STAGE_POINTS_KEY, s_pet_state.stage_care_points);

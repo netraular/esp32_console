@@ -98,12 +98,24 @@ void PetView::setup_ui(lv_obj_t* parent) {
 }
 
 void PetView::setup_button_handlers() {
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, add_points_cb, true, this);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_LONG_PRESS_START, force_new_pet_cb, true, this);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, ok_button_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, back_button_cb, true, this);
 }
 
 void PetView::update_view() {
+    auto& pet_manager = PetManager::get_instance();
+    pet_manager.update_state();
+    PetState state = pet_manager.get_current_pet_state();
+
+    if (pet_manager.is_awaiting_new_cycle()) {
+        lv_image_set_src(pet_display_obj, LV_SYMBOL_HOME);
+        lv_label_set_text(pet_name_label, "Cycle Over");
+        lv_label_set_text(pet_points_label, "Press OK to get a new egg!");
+        lv_label_set_text(pet_time_label, "");
+        lv_label_set_text(pet_cycle_label, "");
+        return;
+    }
+    
     if (!sd_manager_check_ready()) {
         lv_image_set_src(pet_display_obj, LV_SYMBOL_SD_CARD " " LV_SYMBOL_WARNING);
         lv_label_set_text(pet_name_label, "SD Card Error");
@@ -113,10 +125,6 @@ void PetView::update_view() {
         return;
     }
 
-    auto& pet_manager = PetManager::get_instance();
-    pet_manager.update_state();
-    PetState state = pet_manager.get_current_pet_state();
-    
     std::string sprite_path = pet_manager.get_current_pet_sprite_path();
     if (!sprite_path.empty()) {
         lv_image_set_src(pet_display_obj, sprite_path.c_str());
@@ -152,25 +160,15 @@ void PetView::update_view() {
     }
 }
 
-void PetView::add_care_points() {
-    ESP_LOGI(TAG, "OK button pressed. Adding 10 care points.");
-    PetManager::get_instance().add_care_points(10);
-    update_view(); // Immediately update UI to show new points
-}
-
-void PetView::on_force_new_pet() {
-    popup_manager_show_confirmation(
-        "New Egg?", "This will abandon your current pet.\nAre you sure?", "Confirm", "Cancel",
-        force_new_pet_popup_cb, this
-    );
-}
-
-void PetView::handle_force_new_pet_result(popup_result_t result) {
-    if (result == POPUP_RESULT_PRIMARY) {
-        PetManager::get_instance().force_new_cycle();
-        update_view();
+void PetView::on_ok_pressed() {
+    auto& pet_manager = PetManager::get_instance();
+    if (pet_manager.is_awaiting_new_cycle()) {
+        pet_manager.request_new_egg();
+    } else {
+        ESP_LOGI(TAG, "OK button pressed. Adding 10 care points.");
+        pet_manager.add_care_points(10);
     }
-    setup_button_handlers(); 
+    update_view();
 }
 
 void PetView::go_back_to_menu() {
@@ -182,16 +180,8 @@ void PetView::update_view_cb(lv_timer_t* timer) {
     static_cast<PetView*>(lv_timer_get_user_data(timer))->update_view();
 }
 
-void PetView::add_points_cb(void* user_data) {
-    static_cast<PetView*>(user_data)->add_care_points();
-}
-
-void PetView::force_new_pet_cb(void* user_data) {
-    static_cast<PetView*>(user_data)->on_force_new_pet();
-}
-
-void PetView::force_new_pet_popup_cb(popup_result_t result, void* user_data) {
-    static_cast<PetView*>(user_data)->handle_force_new_pet_result(result);
+void PetView::ok_button_cb(void* user_data) {
+    static_cast<PetView*>(user_data)->on_ok_pressed();
 }
 
 void PetView::back_button_cb(void* user_data) {

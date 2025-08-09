@@ -8,7 +8,8 @@
  * @brief A view to display the current pet's status and evolution.
  *
  * This view interacts with the PetManager to show the pet's current stage,
- * name, and care points. It includes debug controls to simulate progress.
+ * name, and care points. It also handles the 'end of cycle' state, allowing
+ * the user to request a new egg.
  */
 class PetView : public View {
 public:
@@ -33,16 +34,12 @@ private:
     void update_view();
 
     // --- Actions ---
-    void add_care_points();
-    void on_force_new_pet();
-    void handle_force_new_pet_result(popup_result_t result);
+    void on_ok_pressed();
     void go_back_to_menu();
 
     // --- Static Callbacks ---
     static void update_view_cb(lv_timer_t* timer);
-    static void add_points_cb(void* user_data);
-    static void force_new_pet_cb(void* user_data);
-    static void force_new_pet_popup_cb(popup_result_t result, void* user_data);
+    static void ok_button_cb(void* user_data);
     static void back_button_cb(void* user_data);
 };
 

@@ -23,7 +23,12 @@ public:
     void init();
     void update_state();
     void add_care_points(uint32_t points);
-    void force_new_cycle();
+    
+    /**
+     * @brief Requests a new egg after a cycle has finished.
+     * This moves the state from AWAITING_NEW_CYCLE to a new egg stage.
+     */
+    void request_new_egg();
 
     PetState get_current_pet_state() const;
     uint32_t get_current_stage_care_goal() const;
@@ -39,6 +44,11 @@ public:
     PetId get_final_evolution(PetId base_id) const;
 
     bool is_in_egg_stage() const;
+    /**
+     * @brief Checks if the manager is waiting for the user to request a new egg.
+     * @return true if a cycle has ended and the system is idle.
+     */
+    bool is_awaiting_new_cycle() const;
     time_t get_time_to_hatch() const;
 
 
@@ -61,6 +71,7 @@ private:
     void finalize_cycle();
     void fail_cycle();
     PetId select_random_hatchable_pet();
+    void set_awaiting_new_cycle_state();
 };
 
 #endif // PET_MANAGER_H
