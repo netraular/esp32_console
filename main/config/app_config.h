@@ -14,7 +14,7 @@
 // --- AUDIO CONFIGURATION ---
 // Sets a safety limit on the physical volume (0-100) to protect the speaker.
 // The UI will still show 0-100%, but it will be mapped to this physical range.
-#define MAX_VOLUME_PERCENTAGE 25 // For a small speaker, 25 is a good value
+#define MAX_VOLUME_PERCENTAGE 50 // For a small speaker, 25 is a good value
 
 // --- RECORDING CONFIGURATION ---
 #define REC_SAMPLE_RATE 16000
