@@ -75,10 +75,8 @@ void PetView::setup_ui(lv_obj_t* parent) {
     pet_display_obj = lv_image_create(parent);
     lv_obj_set_size(pet_display_obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_image_set_antialias(pet_display_obj, false);
-    // Corrected to LV_ZOOM_NONE for LVGL v9
-    lv_img_set_zoom(pet_display_obj, LV_ZOOM_NONE * 2); // Scale sprite x2
+    lv_img_set_zoom(pet_display_obj, 512); // Set 2x zoom for v9
     lv_obj_align(pet_display_obj, LV_ALIGN_CENTER, 0, 0);
-
 
     pet_name_label = lv_label_create(parent);
     lv_obj_set_style_text_align(pet_name_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -127,15 +125,18 @@ void PetView::update_view() {
     }
     
     lv_label_set_text(pet_name_label, pet_manager.get_pet_display_name(state).c_str());
-    lv_label_set_text_fmt(pet_points_label, "Care Points: %lu", state.care_points);
 
     char time_buf[64];
     if (pet_manager.is_in_egg_stage()) {
+        lv_label_set_text(pet_points_label, "Waiting for egg to hatch...");
         time_t time_left = pet_manager.get_time_to_hatch();
         format_hatch_time(time_buf, sizeof(time_buf), time_left);
         lv_label_set_text(pet_time_label, time_buf);
         lv_label_set_text(pet_cycle_label, "A mysterious egg...");
     } else {
+        uint32_t care_goal = pet_manager.get_current_stage_care_goal();
+        lv_label_set_text_fmt(pet_points_label, "Care Points: %lu / %lu", state.stage_care_points, care_goal);
+
         const auto* pet_data = pet_manager.get_pet_data(state.current_pet_id);
         bool is_final = (pet_data && pet_data->evolves_to == PetId::NONE);
         
@@ -154,7 +155,7 @@ void PetView::update_view() {
 void PetView::add_care_points() {
     ESP_LOGI(TAG, "OK button pressed. Adding 10 care points.");
     PetManager::get_instance().add_care_points(10);
-    update_view();
+    update_view(); // Immediately update UI to show new points
 }
 
 void PetView::on_force_new_pet() {

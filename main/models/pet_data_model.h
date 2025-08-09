@@ -60,7 +60,7 @@ enum class PetId : uint16_t {
 struct PetState {
     PetId base_pet_id;          // The ID of the first-stage pet in this cycle (e.g., PET_0001).
     PetId current_pet_id;       // The ID of the pet's current form (e.g., PET_0002).
-    uint32_t care_points;
+    uint32_t stage_care_points; // Care points accumulated for the current evolution stage.
     std::string custom_name;    // The name given by the user (or default).
     time_t cycle_start_timestamp; // The exact moment the cycle (egg) was created.
     time_t cycle_end_timestamp;   // The calculated timestamp for the end of the cycle.

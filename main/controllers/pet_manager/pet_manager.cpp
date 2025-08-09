@@ -8,6 +8,7 @@
 #include <vector>
 
 // Set to 1 to enable a 7-minute pet lifecycle for rapid testing.
+//Leave it as 1 since we are still in developing fase.
 #define PET_LIFECYCLE_DEBUG_7_MINUTES 1
 
 static const char* TAG = "PET_MGR";
@@ -15,14 +16,13 @@ static const char* TAG = "PET_MGR";
 // --- NVS Keys for Pet State Persistence ---
 static const char* PET_BASE_ID_KEY = "pet_base_id";
 static const char* PET_CURRENT_ID_KEY = "pet_curr_id";
-static const char* PET_POINTS_KEY = "pet_points";
+static const char* PET_STAGE_POINTS_KEY = "pet_st_pts"; // Changed key for clarity
 static const char* PET_NAME_KEY = "pet_name";
 static const char* PET_START_TS_KEY = "pet_start_ts";
 static const char* PET_END_TS_KEY = "pet_end_ts";
 static const char* PET_COLL_PREFIX_KEY = "pet_coll_";
 
 // --- Game Logic Constants ---
-constexpr uint32_t CARE_POINTS_TO_COLLECT = 100;
 constexpr time_t SECONDS_IN_DAY = 86400;
 constexpr int MIN_CYCLE_DURATION_DAYS = 10;
 constexpr time_t EGG_HATCH_DURATION_SECONDS = 3 * 60; // 3 minutes for an egg to hatch
@@ -138,7 +138,7 @@ void PetManager::update_state() {
     if (!s_is_initialized) return;
     
     time_t now = time(NULL);
-    if (now < SECONDS_IN_DAY) return;
+    if (now < SECONDS_IN_DAY) return; // Wait for valid time
 
     if (is_in_egg_stage()) {
         if (now >= s_pet_state.cycle_end_timestamp) {
@@ -149,13 +149,13 @@ void PetManager::update_state() {
 
     if (now >= s_pet_state.cycle_end_timestamp) {
         ESP_LOGI(TAG, "Current pet cycle has ended.");
-        finalize_cycle();
+        finalize_cycle(); // Check final stage care points
         return;
     }
 
     const auto* current_data = get_pet_data(s_pet_state.current_pet_id);
     if (!current_data || current_data->evolves_to == PetId::NONE) {
-        return;
+        return; // No more evolutions, wait for finalize_cycle
     }
 
     time_t total_duration = s_pet_state.cycle_end_timestamp - s_pet_state.cycle_start_timestamp;
@@ -171,20 +171,28 @@ void PetManager::update_state() {
     } else if (base_data && s_pet_state.current_pet_id == base_data->evolves_to && progress >= STAGE_3_EVOLUTION_PERCENT) {
         next_evolution_id = current_data->evolves_to;
     }
-
+    
     if (next_evolution_id != PetId::NONE) {
-        ESP_LOGI(TAG, "%s is evolving into %s!", get_pet_name(s_pet_state.current_pet_id).c_str(), get_pet_name(next_evolution_id).c_str());
-        s_pet_state.current_pet_id = next_evolution_id;
-        
-        for (auto& entry : s_collection) {
-            if (entry.base_id == s_pet_state.base_pet_id && !entry.discovered) {
-                entry.discovered = true;
-                ESP_LOGI(TAG, "Marked %s line as discovered.", get_pet_name(entry.base_id).c_str());
-                save_collection();
-                break;
+        ESP_LOGI(TAG, "Checking evolution for %s...", get_pet_name(s_pet_state.current_pet_id).c_str());
+        if (s_pet_state.stage_care_points >= current_data->care_points_needed) {
+            ESP_LOGI(TAG, "Success! Evolving into %s!", get_pet_name(next_evolution_id).c_str());
+            s_pet_state.current_pet_id = next_evolution_id;
+            s_pet_state.stage_care_points = 0; // Reset points for the new stage
+
+            // Mark line as discovered
+            for (auto& entry : s_collection) {
+                if (entry.base_id == s_pet_state.base_pet_id && !entry.discovered) {
+                    entry.discovered = true;
+                    ESP_LOGI(TAG, "Marked %s line as discovered.", get_pet_name(entry.base_id).c_str());
+                    save_collection();
+                    break;
+                }
             }
+            save_state();
+        } else {
+            ESP_LOGW(TAG, "Failed to evolve. Needed %lu points, had %lu.", current_data->care_points_needed, s_pet_state.stage_care_points);
+            fail_cycle();
         }
-        save_state();
     }
 }
 
@@ -194,7 +202,7 @@ void PetManager::start_new_cycle() {
 
     s_pet_state.base_pet_id = select_random_hatchable_pet();
     s_pet_state.current_pet_id = PetId::NONE;
-    s_pet_state.care_points = 0;
+    s_pet_state.stage_care_points = 0;
     s_pet_state.custom_name.clear();
     
     s_pet_state.cycle_start_timestamp = now;
@@ -211,6 +219,7 @@ void PetManager::hatch_egg() {
 
     s_pet_state.current_pet_id = s_pet_state.base_pet_id;
     s_pet_state.cycle_start_timestamp = now;
+    s_pet_state.stage_care_points = 0;
 
 #if PET_LIFECYCLE_DEBUG_7_MINUTES == 1
     s_pet_state.cycle_end_timestamp = now + (7 * 60);
@@ -235,27 +244,52 @@ void PetManager::hatch_egg() {
     save_state();
 }
 
+void PetManager::fail_cycle() {
+    ESP_LOGW(TAG, "Pet cycle failed. The pet was not properly cared for.");
+    // Even on failure, if we saw the pet, it should be marked as discovered.
+    for (auto& entry : s_collection) {
+        if (entry.base_id == s_pet_state.base_pet_id) {
+            entry.discovered = true; // Mark as seen
+            ESP_LOGI(TAG, "Marked %s line as discovered despite cycle failure.", get_pet_name(entry.base_id).c_str());
+            save_collection();
+            break;
+        }
+    }
+    start_new_cycle();
+}
+
 void PetManager::finalize_cycle() {
-    ESP_LOGI(TAG, "Finalizing cycle for %s. Care points: %lu", get_pet_name(s_pet_state.base_pet_id).c_str(), s_pet_state.care_points);
+    ESP_LOGI(TAG, "Finalizing cycle for %s. Stage Care Points: %lu", get_pet_name(s_pet_state.base_pet_id).c_str(), s_pet_state.stage_care_points);
     const auto* final_data = get_pet_data(s_pet_state.current_pet_id);
-    if (final_data && final_data->evolves_to == PetId::NONE && s_pet_state.care_points >= CARE_POINTS_TO_COLLECT) {
+    
+    if (final_data && final_data->evolves_to == PetId::NONE && s_pet_state.stage_care_points >= final_data->care_points_needed) {
         ESP_LOGI(TAG, "Success! Pet line collected!");
         for (auto& entry : s_collection) {
             if (entry.base_id == s_pet_state.base_pet_id) {
                 entry.collected = true;
+                entry.discovered = true;
                 break;
             }
         }
         save_collection();
     } else {
-        ESP_LOGW(TAG, "Failed to collect pet. It will be remembered only as 'discovered'.");
+        ESP_LOGW(TAG, "Failed to collect pet at final stage. It will be remembered only as 'discovered'.");
+        // No need to call fail_cycle, as start_new_cycle will be called next.
+        for (auto& entry : s_collection) {
+            if (entry.base_id == s_pet_state.base_pet_id) {
+                entry.discovered = true; // Ensure it's marked as discovered
+                save_collection();
+                break;
+            }
+        }
     }
     start_new_cycle();
 }
 
 void PetManager::add_care_points(uint32_t points) {
-    s_pet_state.care_points += points;
-    ESP_LOGI(TAG, "Added %lu care points. Total: %lu", points, s_pet_state.care_points);
+    if (is_in_egg_stage()) return; // Cannot care for an egg
+    s_pet_state.stage_care_points += points;
+    ESP_LOGI(TAG, "Added %lu care points. Stage Total: %lu", points, s_pet_state.stage_care_points);
     save_state();
 }
 
@@ -266,6 +300,16 @@ void PetManager::force_new_cycle() {
 
 PetState PetManager::get_current_pet_state() const {
     return s_pet_state;
+}
+
+uint32_t PetManager::get_current_stage_care_goal() const {
+    if (is_in_egg_stage()) {
+        return 0;
+    }
+    if (const auto* data = get_pet_data(s_pet_state.current_pet_id)) {
+        return data->care_points_needed;
+    }
+    return 100; // Default fallback
 }
 
 std::vector<PetCollectionEntry> PetManager::get_collection() const {
@@ -317,7 +361,7 @@ void PetManager::load_state() {
     s_pet_state = {};
     if (data_manager_get_u32(PET_BASE_ID_KEY, &u32_val)) s_pet_state.base_pet_id = (PetId)u32_val;
     if (data_manager_get_u32(PET_CURRENT_ID_KEY, &u32_val)) s_pet_state.current_pet_id = (PetId)u32_val;
-    if (data_manager_get_u32(PET_POINTS_KEY, &s_pet_state.care_points)) {}
+    if (data_manager_get_u32(PET_STAGE_POINTS_KEY, &s_pet_state.stage_care_points)) {}
     if (data_manager_get_u32(PET_START_TS_KEY, &u32_val)) s_pet_state.cycle_start_timestamp = (time_t)u32_val;
     if (data_manager_get_u32(PET_END_TS_KEY, &u32_val)) s_pet_state.cycle_end_timestamp = (time_t)u32_val;
 
@@ -354,7 +398,7 @@ void PetManager::load_state() {
 void PetManager::save_state() const {
     data_manager_set_u32(PET_BASE_ID_KEY, (uint32_t)s_pet_state.base_pet_id);
     data_manager_set_u32(PET_CURRENT_ID_KEY, (uint32_t)s_pet_state.current_pet_id);
-    data_manager_set_u32(PET_POINTS_KEY, s_pet_state.care_points);
+    data_manager_set_u32(PET_STAGE_POINTS_KEY, s_pet_state.stage_care_points);
     data_manager_set_u32(PET_START_TS_KEY, (uint32_t)s_pet_state.cycle_start_timestamp);
     data_manager_set_u32(PET_END_TS_KEY, (uint32_t)s_pet_state.cycle_end_timestamp);
     data_manager_set_str(PET_NAME_KEY, s_pet_state.custom_name.c_str());

@@ -26,6 +26,7 @@ public:
     void force_new_cycle();
 
     PetState get_current_pet_state() const;
+    uint32_t get_current_stage_care_goal() const;
     std::string get_pet_display_name(const PetState& state) const;
     std::string get_pet_name(PetId id) const;
     const PetData* get_pet_data(PetId id) const;
@@ -58,6 +59,7 @@ private:
     void start_new_cycle();
     void hatch_egg();
     void finalize_cycle();
+    void fail_cycle();
     PetId select_random_hatchable_pet();
 };
 

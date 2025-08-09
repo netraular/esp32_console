@@ -2,16 +2,14 @@
 #define PET_COLLECTION_VIEW_H
 
 #include "views/view.h"
-#include "models/pet_data_model.h"
 #include <vector>
-#include "lvgl.h"
 
 /**
- * @brief Displays the player's collection of discovered and collected pets.
+ * @brief A view that displays a visual encyclopedia of all available pets.
  *
- * This view shows a grid of all available pet types, indicating their
- * status: unknown, discovered (seen but not obtained), or collected.
- * It supports navigation via left/right buttons.
+ * This view uses a custom scrollable container with manually managed "tiles"
+ * for each pet to optimize performance. The selected item is highlighted with
+ * a border, and the list scrolls automatically upon navigation.
  */
 class PetCollectionView : public View {
 public:
@@ -20,28 +18,29 @@ public:
     void create(lv_obj_t* parent) override;
 
 private:
-    // --- UI State ---
-    int selected_index;
-    std::vector<lv_obj_t*> pet_widgets;
+    // --- UI Widgets ---
+    lv_obj_t* scrollable_container = nullptr;
+    lv_style_t style_focus;
 
-    // --- UI Setup ---
+    // --- State ---
+    std::vector<lv_obj_t*> tile_items; // To hold pointers to custom tile objects for navigation
+    int selected_index = -1;           // -1 means no selection
+
+    // --- UI Setup & Logic ---
     void setup_ui(lv_obj_t* parent);
+    void populate_container();
     void setup_button_handlers();
-    
-    lv_obj_t* create_pet_widget(lv_obj_t* parent, const PetCollectionEntry& entry, uint8_t col, uint8_t row);
-
-    // --- UI Logic ---
-    void update_selection_style();
+    void update_selection();
 
     // --- Actions ---
+    void on_nav_up();
+    void on_nav_down();
     void go_back_to_menu();
-    void on_left_press();
-    void on_right_press();
 
-    // --- Static Callbacks ---
+    // --- Static Callbacks for Button Manager ---
+    static void nav_up_cb(void* user_data);
+    static void nav_down_cb(void* user_data);
     static void back_button_cb(void* user_data);
-    static void left_press_cb(void* user_data);
-    static void right_press_cb(void* user_data);
 };
 
 #endif // PET_COLLECTION_VIEW_H
