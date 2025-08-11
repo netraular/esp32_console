@@ -10,8 +10,9 @@
  * @brief A view that displays a small, tile-based "world" for collected pets.
  *
  * This view uses the SpriteCacheManager to load and display sprites for tiles
- * and pets. It is responsible for requesting sprites upon creation and releasing
- * them upon destruction to ensure proper memory management.
+ * and pets dynamically ("just-in-time"). It is responsible for requesting sprites
+ * when a pet is added and releasing them upon removal or view destruction to
+ * ensure optimal memory usage.
  */
 class PetHubView : public View {
 public:
@@ -33,13 +34,15 @@ private:
         int col;
         PetId id;
         int animation_frame;
+        // Stores the full paths to this specific pet's animation sprites
+        std::vector<std::string> sprite_paths;
     };
     std::vector<HubPet> s_pets;
     bool grid_occupied[GRID_SIZE][GRID_SIZE] = {{false}};
     
     // --- Resource Management ---
-    // A list of all sprite paths this view has loaded, to be released on destruction.
-    std::vector<std::string> loaded_sprite_paths;
+    // A list of all sprite paths for the background tiles.
+    std::vector<std::string> loaded_tile_sprite_paths;
 
     // --- UI Widgets and Timers ---
     lv_obj_t* hub_container = nullptr;
@@ -47,8 +50,8 @@ private:
     lv_timer_t* animation_timer = nullptr;
 
     // --- Sprite Management ---
-    bool load_and_cache_all_sprites();
-    const lv_image_dsc_t* get_pet_sprite(PetId pet_id, const char* sprite_name);
+    bool load_tile_sprites();
+    const lv_image_dsc_t* get_sprite_from_cache(const std::string& path);
     const lv_image_dsc_t* get_random_tile_sprite();
     std::string build_pet_sprite_path(PetId pet_id, const char* sprite_name);
 
@@ -65,10 +68,14 @@ private:
     void animate_pet_sprites();
     
     // --- Actions ---
+    void add_new_pet();
+    void remove_last_pet();
     void go_back_to_menu();
 
     // --- Static Callbacks ---
     static void back_button_cb(void* user_data);
+    static void add_button_cb(void* user_data);
+    static void remove_button_cb(void* user_data);
     static void movement_timer_cb(lv_timer_t* timer);
     static void animation_timer_cb(lv_timer_t* timer);
 };
