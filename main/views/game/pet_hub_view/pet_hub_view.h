@@ -19,10 +19,11 @@ public:
     void create(lv_obj_t* parent) override;
 
 private:
-    // --- Grid Constants ---
+    // --- Grid and Gameplay Constants ---
     static constexpr int GRID_SIZE = 5;
     static constexpr int TILE_SIZE = 48;
     static constexpr int HUB_AREA_SIZE = GRID_SIZE * TILE_SIZE; // 240
+    static constexpr int MAX_PETS_IN_HUB = 3;
 
     // --- State Management ---
     struct HubPet {

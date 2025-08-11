@@ -107,13 +107,14 @@ void PetHubView::place_initial_pets() {
     std::mt19937 g(rd());
     std::shuffle(available_pets.begin(), available_pets.end(), g);
 
-    int num_to_place = std::min((size_t)2, available_pets.size());
+    // Use the configurable constant to determine how many pets to place
+    int num_to_place = std::min((size_t)MAX_PETS_IN_HUB, available_pets.size());
     for (int i = 0; i < num_to_place; ++i) {
         int row, col;
         if (get_random_unoccupied_position(row, col)) {
             HubPet new_pet;
             new_pet.id = available_pets[i];
-            new_pet.animation_frame = 0; // Start at the default frame
+            new_pet.animation_frame = 0;
             
             char sprite_path[256];
             snprintf(sprite_path, sizeof(sprite_path), "%s%s%s%s%s%04d/%s",
@@ -137,6 +138,7 @@ void PetHubView::set_pet_position(HubPet& pet, int row, int col, bool animate) {
     lv_coord_t target_x_center = col * TILE_SIZE + (TILE_SIZE / 2);
     lv_coord_t target_y_bottom = row * TILE_SIZE + TILE_SIZE;
     
+    // We assume the sprite is TILE_SIZE x TILE_SIZE (48x48)
     constexpr lv_coord_t sprite_size = TILE_SIZE;
     lv_coord_t final_x = target_x_center - (sprite_size / 2);
     lv_coord_t final_y = target_y_bottom - sprite_size;
@@ -195,7 +197,7 @@ void PetHubView::animate_pet_sprites() {
     if (s_pets.empty()) return;
 
     for (auto& pet : s_pets) {
-        pet.animation_frame = (pet.animation_frame + 1) % 2; // Toggle between 0 and 1
+        pet.animation_frame = (pet.animation_frame + 1) % 2;
         
         const char* frame_name = (pet.animation_frame == 0) ? PET_SPRITE_DEFAULT : PET_SPRITE_IDLE_01;
 
