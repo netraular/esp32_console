@@ -181,14 +181,37 @@ void PetHubView::add_new_pet() {
     auto& pet_manager = PetManager::get_instance();
     auto& cache_manager = SpriteCacheManager::get_instance();
     auto collection = pet_manager.get_collection();
-
     std::vector<PetId> available_pet_ids;
-    for (const auto& entry : collection) {
-        if (entry.collected) {
-            PetId final_id = pet_manager.get_final_evolution(entry.base_id);
-            auto it = std::find_if(s_pets.begin(), s_pets.end(), [final_id](const HubPet& p) { return p.id == final_id; });
-            if (it == s_pets.end()) {
-                available_pet_ids.push_back(final_id);
+
+    if (SHOW_ADULTS_ONLY) {
+        ESP_LOGI(TAG, "Selecting a pet in 'Adults Only' mode.");
+        for (const auto& entry : collection) {
+            if (entry.collected) {
+                PetId final_id = pet_manager.get_final_evolution(entry.base_id);
+                // Check if this specific pet ID is already in the hub
+                auto it = std::find_if(s_pets.begin(), s_pets.end(), [final_id](const HubPet& p) { return p.id == final_id; });
+                if (it == s_pets.end()) {
+                    available_pet_ids.push_back(final_id);
+                }
+            }
+        }
+    } else {
+        ESP_LOGI(TAG, "Selecting a pet in 'Any Stage' mode.");
+        for (const auto& entry : collection) {
+            // A 'discovered' line means the user has at least seen the first stage
+            if (entry.discovered) {
+                PetId current_id = entry.base_id;
+                // Walk the evolution chain for this discovered pet line
+                while (current_id != PetId::NONE) {
+                    // Check if this specific pet ID is already in the hub
+                    auto it = std::find_if(s_pets.begin(), s_pets.end(), [current_id](const HubPet& p) { return p.id == current_id; });
+                    if (it == s_pets.end()) {
+                        available_pet_ids.push_back(current_id);
+                    }
+                    // Move to the next pet in the chain
+                    const PetData* data = pet_manager.get_pet_data(current_id);
+                    current_id = (data) ? data->evolves_to : PetId::NONE;
+                }
             }
         }
     }
@@ -206,7 +229,7 @@ void PetHubView::add_new_pet() {
         return;
     }
 
-    ESP_LOGI(TAG, "Adding pet ID %d to hub at (%d, %d)", (int)pet_to_add_id, row, col);
+    ESP_LOGI(TAG, "Adding pet '%s' (ID %d) to hub at (%d, %d)", pet_manager.get_pet_name(pet_to_add_id).c_str(), (int)pet_to_add_id, row, col);
 
     const char* sprite_names[] = {PET_SPRITE_DEFAULT, PET_SPRITE_IDLE_01, PET_SPRITE_IDLE_02};
     HubPet new_pet;
@@ -237,7 +260,6 @@ void PetHubView::add_new_pet() {
         return;
     }
 
-    // Create the LVGL image object for the pet
     new_pet.img_obj = lv_image_create(hub_container);
     if (!new_pet.img_obj) {
         ESP_LOGE(TAG, "Failed to create image object for pet");
@@ -246,18 +268,13 @@ void PetHubView::add_new_pet() {
         return;
     }
     
-    // Set the initial sprite (first animation frame)
     lv_image_set_src(new_pet.img_obj, new_pet.animation_frames[0]);
     lv_image_set_antialias(new_pet.img_obj, false);
     
-    // The image object's size will now automatically match the source sprite.
-    // We do not set an explicit size, to allow sprites to be larger than a tile.
-
-    // Position the pet on the grid
     set_pet_position(new_pet, row, col, false);
     
     s_pets.push_back(new_pet);
-    ESP_LOGI(TAG, "Successfully added pet %d at grid[%d][%d]. Total pets: %zu", (int)new_pet.id, row, col, s_pets.size());
+    ESP_LOGI(TAG, "Successfully added pet. Total pets in hub: %zu", s_pets.size());
 }
 
 void PetHubView::remove_last_pet() {
@@ -304,7 +321,6 @@ void PetHubView::set_pet_position(HubPet& pet, int row, int col, bool animate) {
     pet.row = row;
     pet.col = col;
 
-    // Get the actual dimensions of the sprite currently being displayed
     const lv_image_dsc_t* current_sprite = (const lv_image_dsc_t*)lv_image_get_src(pet.img_obj);
     if (!current_sprite) {
         ESP_LOGE(TAG, "Cannot set pet position, sprite source is null!");
@@ -313,12 +329,9 @@ void PetHubView::set_pet_position(HubPet& pet, int row, int col, bool animate) {
     lv_coord_t sprite_width = current_sprite->header.w;
     lv_coord_t sprite_height = current_sprite->header.h;
 
-    // Calculate the anchor points based on the target grid cell
     lv_coord_t target_x_center = col * TILE_SIZE + (TILE_SIZE / 2);
     lv_coord_t target_y_bottom = (row + 1) * TILE_SIZE;
     
-    // Calculate the final top-left coordinate to align the sprite.
-    // It should be horizontally centered and its bottom edge should align with the cell's bottom.
     lv_coord_t final_x = target_x_center - (sprite_width / 2);
     lv_coord_t final_y = target_y_bottom - sprite_height;
 

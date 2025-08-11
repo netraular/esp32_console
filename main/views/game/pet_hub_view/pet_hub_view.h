@@ -13,10 +13,16 @@ public:
     void create(lv_obj_t* parent) override;
 
 private:
+    // --- Configuration ---
+    // Set to 'true' to only show the final evolution of collected pets.
+    // Set to 'false' to show any discovered stage of any pet.
+    static constexpr bool SHOW_ADULTS_ONLY = false;
+
+    // --- Constants ---
     static constexpr int GRID_SIZE = 5;
     static constexpr int TILE_SIZE = 48;
     static constexpr int HUB_AREA_SIZE = GRID_SIZE * TILE_SIZE; // 240
-    static constexpr int MAX_PETS_IN_HUB = 6;
+    static constexpr int MAX_PETS_IN_HUB = 24;
     
     struct HubPet {
         lv_obj_t* img_obj;
@@ -26,7 +32,7 @@ private:
         int animation_frame;
         // Store the full paths for releasing them later
         std::vector<std::string> sprite_paths;
-        // CORRECTED: Store pointers to the cached image descriptors
+        // Store pointers to the cached image descriptors
         std::vector<const lv_image_dsc_t*> animation_frames;
     };
     std::vector<HubPet> s_pets;
@@ -35,7 +41,7 @@ private:
     // --- Resource Management ---
     // Store paths for releasing, and descriptor pointers for using
     std::vector<std::string> loaded_tile_sprite_paths;
-    // CORRECTED: Store pointers to the cached image descriptors
+    // Store pointers to the cached image descriptors
     std::vector<const lv_image_dsc_t*> tile_sprites;
 
     lv_obj_t* hub_container = nullptr;
