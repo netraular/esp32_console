@@ -76,7 +76,8 @@ constexpr const char* HUB_TILE_GROUND_01 = "tile_01.png";
 constexpr const char* HUB_TILE_GROUND_02 = "tile_02.png";
 
 // --- Pet Sprite Frames ---
-constexpr const char* PET_SPRITE_DEFAULT = "sprite_1.png";
-constexpr const char* PET_SPRITE_IDLE_01 = "sprite_2.png";
+constexpr const char* PET_SPRITE_DEFAULT   = "sprite_1.png";
+constexpr const char* PET_SPRITE_IDLE_01   = "sprite_2.png";
+constexpr const char* PET_SPRITE_IDLE_02   = "sprite_3.png";
 
 #endif // ASSET_CONFIG_H

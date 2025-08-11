@@ -27,6 +27,9 @@ PetHubView::~PetHubView() {
     if (animation_timer) {
         lv_timer_delete(animation_timer);
     }
+    if (counter_timer) {
+        lv_timer_delete(counter_timer);
+    }
     ESP_LOGI(TAG, "PetHubView destructed");
 }
 
@@ -53,6 +56,9 @@ void PetHubView::create(lv_obj_t* parent) {
 
     movement_timer = lv_timer_create(movement_timer_cb, 3000, this);
     animation_timer = lv_timer_create(animation_timer_cb, 500, this);
+    
+    // Set timer period to ~30Hz (1000ms / 30 = 33.33ms)
+    counter_timer = lv_timer_create(counter_timer_cb, 33, this);
 }
 
 void PetHubView::setup_ui(lv_obj_t* parent) {
@@ -60,6 +66,15 @@ void PetHubView::setup_ui(lv_obj_t* parent) {
     lv_obj_remove_style_all(hub_container);
     lv_obj_set_size(hub_container, HUB_AREA_SIZE, HUB_AREA_SIZE);
     lv_obj_center(hub_container);
+
+    // Create the counter label on the main view container
+    counter_label = lv_label_create(parent);
+    lv_obj_set_style_text_color(counter_label, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(counter_label, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(counter_label, LV_OPA_50, 0);
+    lv_obj_set_style_pad_all(counter_label, 2, 0);
+    lv_obj_align(counter_label, LV_ALIGN_TOP_RIGHT, -5, 5);
+    lv_label_set_text(counter_label, "Cnt: 0");
 }
 
 void PetHubView::setup_grid(lv_obj_t* parent) {
@@ -197,9 +212,18 @@ void PetHubView::animate_pet_sprites() {
     if (s_pets.empty()) return;
 
     for (auto& pet : s_pets) {
-        pet.animation_frame = (pet.animation_frame + 1) % 2;
+        // Increment frame counter for a 4-step animation
+        pet.animation_frame = (pet.animation_frame + 1) % 4;
         
-        const char* frame_name = (pet.animation_frame == 0) ? PET_SPRITE_DEFAULT : PET_SPRITE_IDLE_01;
+        const char* frame_name;
+        // Select sprite based on the new 4-step sequence
+        switch (pet.animation_frame) {
+            case 0:  frame_name = PET_SPRITE_DEFAULT;   break; // Frame 1
+            case 1:  frame_name = PET_SPRITE_IDLE_01;   break; // Frame 2
+            case 2:  frame_name = PET_SPRITE_DEFAULT;   break; // Frame 1
+            case 3:  frame_name = PET_SPRITE_IDLE_02;   break; // Frame 3
+            default: frame_name = PET_SPRITE_DEFAULT;   break;
+        }
 
         char sprite_path[256];
         snprintf(sprite_path, sizeof(sprite_path), "%s%s%s%s%s%04d/%s",
@@ -207,6 +231,13 @@ void PetHubView::animate_pet_sprites() {
             ASSETS_SPRITES_SUBPATH, SPRITES_PETS_SUBPATH, (int)pet.id, frame_name);
 
         lv_image_set_src(pet.img_obj, sprite_path);
+    }
+}
+
+void PetHubView::update_counter_label() {
+    s_counter++;
+    if(counter_label) {
+        lv_label_set_text_fmt(counter_label, "Cnt: %lu", s_counter);
     }
 }
 
@@ -245,4 +276,9 @@ void PetHubView::movement_timer_cb(lv_timer_t* timer) {
 void PetHubView::animation_timer_cb(lv_timer_t* timer) {
     auto* view = static_cast<PetHubView*>(lv_timer_get_user_data(timer));
     view->animate_pet_sprites();
+}
+
+void PetHubView::counter_timer_cb(lv_timer_t* timer) {
+    auto* view = static_cast<PetHubView*>(lv_timer_get_user_data(timer));
+    view->update_counter_label();
 }

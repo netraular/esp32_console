@@ -35,11 +35,14 @@ private:
     };
     std::vector<HubPet> s_pets;
     bool grid_occupied[GRID_SIZE][GRID_SIZE] = {{false}};
+    uint32_t s_counter = 0;
 
     // --- UI Widgets and Timers ---
     lv_obj_t* hub_container = nullptr;
+    lv_obj_t* counter_label = nullptr;
     lv_timer_t* movement_timer = nullptr;
     lv_timer_t* animation_timer = nullptr;
+    lv_timer_t* counter_timer = nullptr;
 
     // --- UI Setup ---
     void setup_ui(lv_obj_t* parent);
@@ -52,6 +55,7 @@ private:
     void set_pet_position(HubPet& pet, int row, int col, bool animate);
     void move_random_pet();
     void animate_pet_sprites();
+    void update_counter_label();
 
     // --- Actions ---
     void go_back_to_menu();
@@ -60,6 +64,7 @@ private:
     static void back_button_cb(void* user_data);
     static void movement_timer_cb(lv_timer_t* timer);
     static void animation_timer_cb(lv_timer_t* timer);
+    static void counter_timer_cb(lv_timer_t* timer);
 };
 
 #endif // PET_HUB_VIEW_H
