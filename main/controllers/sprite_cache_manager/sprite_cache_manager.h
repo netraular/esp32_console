@@ -1,0 +1,80 @@
+#ifndef SPRITE_CACHE_MANAGER_H
+#define SPRITE_CACHE_MANAGER_H
+
+#include "lvgl.h"
+#include <string>
+#include <vector>
+#include <unordered_map>
+#include <mutex>
+
+/**
+ * @brief Manages loading, caching, and releasing sprite image data from the SD card.
+ *
+ * This singleton class implements a reference-counted cache to efficiently manage
+ * memory for sprites. A view requests a sprite via its path, and the manager
+ * loads it if not already in memory, or returns a cached pointer. The view is
+ * responsible for releasing the sprite when it is no longer needed.
+ * The manager only frees the memory when no views are using the sprite anymore.
+ */
+class SpriteCacheManager {
+public:
+    // Delete copy and move constructors and assignments
+    SpriteCacheManager(const SpriteCacheManager&) = delete;
+    SpriteCacheManager& operator=(const SpriteCacheManager&) = delete;
+
+    /**
+     * @brief Gets the singleton instance of the manager.
+     */
+    static SpriteCacheManager& get_instance();
+
+    /**
+     * @brief Gets a sprite descriptor for a given path, loading it if necessary.
+     *
+     * This function implements reference counting. Each successful call increments
+     * the reference count for the sprite.
+     *
+     * @param full_path The absolute path to the sprite file on the SD card (e.g., "/sdcard/assets/sprites/pet/0001/idle.bin").
+     * @return A const pointer to the lv_image_dsc_t, or nullptr if loading fails.
+     */
+    const lv_image_dsc_t* get_sprite(const std::string& full_path);
+
+    /**
+     * @brief Releases a sprite, decrementing its reference count.
+     *
+     * If the reference count drops to zero, the sprite's memory is deallocated
+     * and it is removed from the cache.
+     *
+     * @param full_path The absolute path to the sprite file that was previously loaded.
+     */
+    void release_sprite(const std::string& full_path);
+
+    /**
+     * @brief Releases a list of sprites.
+     *
+     * A convenience function to release multiple sprites at once, for example,
+     * when a view is destroyed.
+     *
+     * @param paths A vector of full paths to the sprites to release.
+     */
+    void release_sprite_group(const std::vector<std::string>& paths);
+
+
+private:
+    SpriteCacheManager() = default; // Private constructor
+    ~SpriteCacheManager();
+
+    // The actual data stored in the cache
+    struct CachedSprite {
+        lv_image_dsc_t* dsc = nullptr;
+        int ref_count = 0;
+    };
+
+    // Internal implementation to load from SD card
+    lv_image_dsc_t* load_from_sd(const std::string& path);
+    void free_sprite_data(CachedSprite& sprite);
+
+    std::unordered_map<std::string, CachedSprite> s_cache;
+    std::mutex s_cache_mutex; // To protect cache access if ever used from multiple tasks
+};
+
+#endif // SPRITE_CACHE_MANAGER_H
