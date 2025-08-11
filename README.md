@@ -28,3 +28,5 @@ LV_IMAGE_HEADER_CACHE_DEF_CNT = 1 (número de imagenes en cache)
 SPI RAM config -> SPI RAM access method -> Make RAM allocatable using malloc() as well
 LVGL->Memory Settings->Malloc functions source->Standard C functions malloc/realloc/free
 
+Component config->LVGL configuration->HAL Settings->Default Dots Per Inch (in px/inch)->156
+Component config->LVGL configuration->HAL Settings->Default refresh period (ms)->50

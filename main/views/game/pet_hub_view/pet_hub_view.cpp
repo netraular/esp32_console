@@ -55,10 +55,10 @@ void PetHubView::create(lv_obj_t* parent) {
     setup_button_handlers();
 
     movement_timer = lv_timer_create(movement_timer_cb, 3000, this);
-    animation_timer = lv_timer_create(animation_timer_cb, 500, this);
+    animation_timer = lv_timer_create(animation_timer_cb, 300, this);
     
     // Set timer period to ~30Hz (1000ms / 30 = 33.33ms)
-    counter_timer = lv_timer_create(counter_timer_cb, 33, this);
+    counter_timer = lv_timer_create(counter_timer_cb, 50, this);
 }
 
 void PetHubView::setup_ui(lv_obj_t* parent) {
