@@ -42,7 +42,7 @@ void PetHubView::create(lv_obj_t* parent) {
 
     if (sd_manager_check_ready()) {
         setup_grid(hub_container);
-        place_initial_pets(); // This function now places repeated pets
+        place_initial_pets();
     } else {
         lv_obj_t* err_label = lv_label_create(hub_container);
         lv_label_set_text(err_label, LV_SYMBOL_SD_CARD " SD Card not found.\nCannot load hub.");
@@ -87,16 +87,38 @@ void PetHubView::setup_grid(lv_obj_t* parent) {
 }
 
 void PetHubView::place_initial_pets() {
-    // Hardcode the pet ID to be displayed repeatedly
-    const PetId pet_to_repeat = PetId::PET_0001; // Example: Bulbasaur
-    const int num_repetitions = 10;
+    auto& pet_manager = PetManager::get_instance();
+    auto collection = pet_manager.get_collection();
+    std::vector<PetId> available_pets;
 
-    int pets_placed = 0;
-    for (int i = 0; i < num_repetitions; ++i) {
+    for (const auto& entry : collection) {
+        if (entry.collected) {
+            available_pets.push_back(pet_manager.get_final_evolution(entry.base_id));
+        }
+    }
+
+    if (available_pets.empty()) {
+        lv_obj_t* no_pets_label = lv_label_create(hub_container);
+        lv_label_set_text(no_pets_label, "Collect a pet\nto see it here!");
+        lv_obj_set_style_text_align(no_pets_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_color(no_pets_label, lv_color_white(), 0);
+        lv_obj_set_style_bg_color(no_pets_label, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(no_pets_label, LV_OPA_70, 0);
+        lv_obj_center(no_pets_label);
+        return;
+    }
+
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(available_pets.begin(), available_pets.end(), g);
+
+    // Use the configurable constant to determine how many pets to place
+    int num_to_place = std::min((size_t)MAX_PETS_IN_HUB, available_pets.size());
+    for (int i = 0; i < num_to_place; ++i) {
         int row, col;
         if (get_random_unoccupied_position(row, col)) {
             HubPet new_pet;
-            new_pet.id = pet_to_repeat;
+            new_pet.id = available_pets[i];
             new_pet.animation_frame = 0;
             
             char sprite_path[256];
@@ -110,21 +132,7 @@ void PetHubView::place_initial_pets() {
             
             set_pet_position(new_pet, row, col, false);
             s_pets.push_back(new_pet);
-            pets_placed++;
-        } else {
-            ESP_LOGW(TAG, "Could not find an unoccupied position for pet %d. Max pets reached or grid full.", i + 1);
-            break; // Stop trying to place if no more space
         }
-    }
-
-    if (pets_placed == 0) {
-        lv_obj_t* no_pets_label = lv_label_create(hub_container);
-        lv_label_set_text(no_pets_label, "No pets could be placed.\nCheck SD card & sprite files.");
-        lv_obj_set_style_text_align(no_pets_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_color(no_pets_label, lv_color_white(), 0);
-        lv_obj_set_style_bg_color(no_pets_label, lv_color_black(), 0);
-        lv_obj_set_style_bg_opa(no_pets_label, LV_OPA_70, 0);
-        lv_obj_center(no_pets_label);
     }
 }
 

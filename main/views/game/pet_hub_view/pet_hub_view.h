@@ -23,7 +23,7 @@ private:
     static constexpr int GRID_SIZE = 5;
     static constexpr int TILE_SIZE = 48;
     static constexpr int HUB_AREA_SIZE = GRID_SIZE * TILE_SIZE; // 240
-    static constexpr int MAX_PETS_IN_HUB = 10; // Allow up to 10 pets in the hub
+    static constexpr int MAX_PETS_IN_HUB = 6;
 
     // --- State Management ---
     struct HubPet {
