@@ -1,9 +1,13 @@
 #include "sprite_cache_manager.h"
-#include "controllers/sd_card_manager/sd_card_manager.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include <cstdio>
 
-static const char* TAG = "SPRITE_CACHE";
+// Use printf for immediate, unfiltered output during debugging
+#define LOG_LOAD(path, size, addr) printf("[CACHE_LOAD] Path: %s, Size: %zu bytes, PSRAM Addr: %p\n", path, size, addr)
+#define LOG_FREE(path, addr) printf("[CACHE_FREE] Path: %s, PSRAM Addr: %p\n", path, addr)
+#define LOG_REF_INC(path, count) printf("[REF_INC] Path: %s, New RefCount: %d\n", path, count)
+#define LOG_REF_DEC(path, count) printf("[REF_DEC] Path: %s, New RefCount: %d\n", path, count)
 
 SpriteCacheManager& SpriteCacheManager::get_instance() {
     static SpriteCacheManager instance;
@@ -12,10 +16,10 @@ SpriteCacheManager& SpriteCacheManager::get_instance() {
 
 SpriteCacheManager::~SpriteCacheManager() {
     std::lock_guard<std::mutex> lock(s_cache_mutex);
-    ESP_LOGI(TAG, "Destroying SpriteCacheManager. Releasing all %zu cached sprites.", s_cache.size());
+    printf("Destroying SpriteCacheManager. Releasing all %zu cached sprites.\n", s_cache.size());
     for (auto& pair : s_cache) {
-        ESP_LOGW(TAG, "Sprite '%s' had ref_count %d at destruction. Force releasing.", pair.first.c_str(), pair.second.ref_count);
-        free_sprite_data(pair.second);
+        printf("WARN: Sprite '%s' had ref_count %d at destruction. Force releasing.\n", pair.first.c_str(), pair.second.ref_count);
+        free_sprite_data(pair.first, pair.second);
     }
     s_cache.clear();
 }
@@ -25,14 +29,11 @@ const lv_image_dsc_t* SpriteCacheManager::get_sprite(const std::string& full_pat
 
     auto it = s_cache.find(full_path);
     if (it != s_cache.end()) {
-        // Sprite is already in cache, increment ref_count and return it
         it->second.ref_count++;
-        ESP_LOGD(TAG, "Cache hit for '%s', ref_count now %d", full_path.c_str(), it->second.ref_count);
+        LOG_REF_INC(full_path.c_str(), it->second.ref_count);
         return it->second.dsc;
     }
 
-    // Sprite is not in cache, try to load it
-    ESP_LOGD(TAG, "Cache miss for '%s'. Loading from SD card.", full_path.c_str());
     lv_image_dsc_t* new_dsc = load_from_sd(full_path);
 
     if (new_dsc) {
@@ -40,7 +41,7 @@ const lv_image_dsc_t* SpriteCacheManager::get_sprite(const std::string& full_pat
         new_entry.dsc = new_dsc;
         new_entry.ref_count = 1;
         s_cache[full_path] = new_entry;
-        ESP_LOGI(TAG, "Loaded and cached '%s', ref_count is 1.", full_path.c_str());
+        LOG_REF_INC(full_path.c_str(), 1);
         return new_dsc;
     }
 
@@ -52,16 +53,18 @@ void SpriteCacheManager::release_sprite(const std::string& full_path) {
 
     auto it = s_cache.find(full_path);
     if (it == s_cache.end()) {
-        ESP_LOGW(TAG, "Attempted to release a non-cached sprite: %s", full_path.c_str());
+        printf("WARN: Attempted to release a non-cached sprite: %s\n", full_path.c_str());
         return;
     }
 
     it->second.ref_count--;
-    ESP_LOGD(TAG, "Released sprite '%s', ref_count now %d", full_path.c_str(), it->second.ref_count);
+    LOG_REF_DEC(full_path.c_str(), it->second.ref_count);
 
     if (it->second.ref_count <= 0) {
-        ESP_LOGI(TAG, "Ref count for '%s' is zero. Deallocating memory.", full_path.c_str());
-        free_sprite_data(it->second);
+        if (it->second.ref_count < 0) {
+            printf("ERROR: Ref count for '%s' dropped below zero! This indicates a double-release bug.\n", full_path.c_str());
+        }
+        free_sprite_data(it->first, it->second);
         s_cache.erase(it);
     }
 }
@@ -73,39 +76,72 @@ void SpriteCacheManager::release_sprite_group(const std::vector<std::string>& pa
 }
 
 lv_image_dsc_t* SpriteCacheManager::load_from_sd(const std::string& path) {
-    char* file_buffer = nullptr;
-    size_t file_size = 0;
-
-    if (!sd_manager_read_file(path.c_str(), &file_buffer, &file_size)) {
-        ESP_LOGE(TAG, "Failed to read sprite file: %s", path.c_str());
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        printf("ERROR: Failed to open file: %s\n", path.c_str());
         return nullptr;
     }
 
-    // Note: The file_buffer (image data) MUST be in a memory region that LVGL can access.
-    // SPIRAM is great for this.
-    lv_image_dsc_t* img_dsc = (lv_image_dsc_t*)heap_caps_malloc(sizeof(lv_image_dsc_t), MALLOC_CAP_DEFAULT);
+    fseek(f, 0, SEEK_END);
+    size_t file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (file_size == 0) {
+        printf("ERROR: File is empty: %s\n", path.c_str());
+        fclose(f);
+        return nullptr;
+    }
+
+    // Allocate memory in PSRAM to hold the raw PNG file data.
+    uint8_t* png_data_buffer = (uint8_t*)heap_caps_malloc(file_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!png_data_buffer) {
+        printf("ERROR: Failed to allocate %zu bytes in PSRAM for sprite '%s'\n", file_size, path.c_str());
+        fclose(f);
+        return nullptr;
+    }
+    
+    size_t bytes_read = fread(png_data_buffer, 1, file_size, f);
+    fclose(f);
+
+    if (bytes_read != file_size) {
+        printf("ERROR: Failed to read full file content for '%s'. Expected %zu, got %zu.\n", path.c_str(), file_size, bytes_read);
+        free(png_data_buffer);
+        return nullptr;
+    }
+
+    // Allocate memory for the descriptor itself (this can be in internal RAM).
+    lv_image_dsc_t* img_dsc = (lv_image_dsc_t*)malloc(sizeof(lv_image_dsc_t));
     if (!img_dsc) {
-        ESP_LOGE(TAG, "Failed to allocate memory for image descriptor");
-        free(file_buffer);
+        printf("ERROR: Failed to allocate memory for image descriptor\n");
+        free(png_data_buffer);
         return nullptr;
     }
 
-    // The data buffer itself was allocated by sd_manager_read_file, which uses standard malloc.
-    // If you need it in SPIRAM, you would need a custom read function. For now, this is fine.
-    img_dsc->data = (const uint8_t*)file_buffer;
+    // Configure the descriptor to point to the raw data.
+    // LVGL's PNG decoder will see this and handle it.
+    img_dsc->data = png_data_buffer;
     img_dsc->data_size = file_size;
-    img_dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
-    img_dsc->header.flags = LV_IMAGE_FLAGS_ALLOCATED;
+    img_dsc->header.cf = LV_COLOR_FORMAT_UNKNOWN; // Let LVGL's decoder figure it out.
+    img_dsc->header.w = 0; // Not known until decoded
+    img_dsc->header.h = 0; // Not known until decoded
+    
+    LOG_LOAD(path.c_str(), file_size, png_data_buffer);
 
     return img_dsc;
 }
 
-void SpriteCacheManager::free_sprite_data(CachedSprite& sprite) {
+void SpriteCacheManager::free_sprite_data(const std::string& path, CachedSprite& sprite) {
     if (sprite.dsc) {
+        // Crucial step: Tell LVGL to drop its decoded version of this image from its cache.
+        lv_image_cache_drop(sprite.dsc);
+
         if (sprite.dsc->data) {
-            free((void*)sprite.dsc->data); // Free the image data buffer
+            // Free the raw PNG data buffer we allocated in PSRAM.
+            LOG_FREE(path.c_str(), sprite.dsc->data);
+            free((void*)sprite.dsc->data);
         }
-        free(sprite.dsc); // Free the descriptor struct itself
+        // Free the descriptor struct itself.
+        free(sprite.dsc);
         sprite.dsc = nullptr;
     }
 }

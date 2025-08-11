@@ -15,34 +15,35 @@
 
 static const char* TAG = "PET_HUB_VIEW";
 
+// --- CONSTRUCTOR & DESTRUCTOR ---
 PetHubView::PetHubView() {
     ESP_LOGI(TAG, "PetHubView constructed");
 }
 
 PetHubView::~PetHubView() {
     ESP_LOGI(TAG, "PetHubView destructed. Releasing all view-specific sprites...");
-    if (movement_timer) {
-        lv_timer_delete(movement_timer);
-    }
-    if (animation_timer) {
-        lv_timer_delete(animation_timer);
-    }
+    if (movement_timer) lv_timer_delete(movement_timer);
+    if (animation_timer) lv_timer_delete(animation_timer);
     
     auto& cache_manager = SpriteCacheManager::get_instance();
     
     // Release all sprites for pets currently in the hub
     for (const auto& pet : s_pets) {
+        ESP_LOGI(TAG, "Releasing sprites for pet ID %d", (int)pet.id);
         cache_manager.release_sprite_group(pet.sprite_paths);
     }
     s_pets.clear();
     
     // Release all tile sprites
+    ESP_LOGI(TAG, "Releasing tile sprites");
     cache_manager.release_sprite_group(loaded_tile_sprite_paths);
     loaded_tile_sprite_paths.clear();
+    tile_sprites.clear();
 
     ESP_LOGI(TAG, "PetHubView cleanup complete.");
 }
 
+// --- VIEW CREATION ---
 void PetHubView::create(lv_obj_t* parent) {
     container = lv_obj_create(parent);
     lv_obj_remove_style_all(container);
@@ -53,9 +54,7 @@ void PetHubView::create(lv_obj_t* parent) {
     setup_ui(container);
 
     if (sd_manager_check_ready()) {
-        // Load only the essential background sprites
         if (load_tile_sprites()) {
-            ESP_LOGI(TAG, "Tile sprites loaded. Setting up hub...");
             setup_grid(hub_container);
             place_initial_pets();
         } else {
@@ -67,7 +66,7 @@ void PetHubView::create(lv_obj_t* parent) {
         }
     } else {
         lv_obj_t* err_label = lv_label_create(hub_container);
-        lv_label_set_text(err_label, LV_SYMBOL_SD_CARD " SD Card not found.\nCannot load hub.");
+        lv_label_set_text(err_label, LV_SYMBOL_SD_CARD " SD Card not found.");
         lv_obj_set_style_text_color(err_label, lv_color_white(), 0);
         lv_obj_center(err_label);
     }
@@ -78,49 +77,76 @@ void PetHubView::create(lv_obj_t* parent) {
     animation_timer = lv_timer_create(animation_timer_cb, 300, this);
 }
 
+// --- RESOURCE MANAGEMENT ---
+
+bool PetHubView::load_tile_sprites() {
+    ESP_LOGI(TAG, "Loading tile sprites ONCE for the entire view");
+    loaded_tile_sprite_paths.clear();
+    tile_sprites.clear();
+
+    auto& cache_manager = SpriteCacheManager::get_instance();
+    
+    const char* tile_names[] = {HUB_TILE_GROUND_01, HUB_TILE_GROUND_02};
+    for (const char* tile_name : tile_names) {
+        char tile_path_buffer[256];
+        // Build the standard C-style path (e.g., "/sdcard/assets/...")
+        snprintf(tile_path_buffer, sizeof(tile_path_buffer), "%s%s%s%s%s",
+                 sd_manager_get_mount_point(),
+                 ASSETS_BASE_SUBPATH, ASSETS_SPRITES_SUBPATH, SPRITES_HUB_SUBPATH, tile_name);
+        
+        std::string tile_path_str(tile_path_buffer);
+        const lv_image_dsc_t* sprite_dsc = cache_manager.get_sprite(tile_path_str);
+
+        if (sprite_dsc) {
+            loaded_tile_sprite_paths.push_back(tile_path_str);
+            tile_sprites.push_back(sprite_dsc); // This now compiles correctly
+        } else {
+            cache_manager.release_sprite_group(loaded_tile_sprite_paths);
+            return false;
+        }
+    }
+    return true; 
+}
+
+void PetHubView::setup_grid(lv_obj_t* parent) {
+    if (tile_sprites.empty()) {
+        ESP_LOGE(TAG, "Cannot setup grid, no tile sprites loaded.");
+        return;
+    }
+    for (int row = 0; row < GRID_SIZE; ++row) {
+        for (int col = 0; col < GRID_SIZE; ++col) {
+            // This now compiles correctly
+            const lv_image_dsc_t* tile_sprite_dsc = tile_sprites[esp_random() % tile_sprites.size()];
+            
+            lv_obj_t* tile_img = lv_image_create(parent);
+            lv_image_set_src(tile_img, tile_sprite_dsc);
+            lv_image_set_antialias(tile_img, false);
+            lv_obj_set_pos(tile_img, col * TILE_SIZE, row * TILE_SIZE);
+        }
+    }
+}
+
 std::string PetHubView::build_pet_sprite_path(PetId pet_id, const char* sprite_name) {
     char path_buffer[256];
+    // Build the standard C-style path (e.g., "/sdcard/assets/...")
     snprintf(path_buffer, sizeof(path_buffer), "%s%s%s%s%04d/%s",
-             sd_manager_get_mount_point(), ASSETS_BASE_SUBPATH,
-             ASSETS_SPRITES_SUBPATH, SPRITES_PETS_SUBPATH, (int)pet_id, sprite_name);
+             sd_manager_get_mount_point(),
+             ASSETS_BASE_SUBPATH, ASSETS_SPRITES_SUBPATH, SPRITES_PETS_SUBPATH, (int)pet_id, sprite_name);
     return std::string(path_buffer);
 }
 
-bool PetHubView::load_tile_sprites() {
-    ESP_LOGI(TAG, "Requesting tile sprites from SpriteCacheManager...");
-    loaded_tile_sprite_paths.clear();
-    auto& cache_manager = SpriteCacheManager::get_instance();
-    
-    int successful_loads = 0;
-    const char* tile_options[] = {HUB_TILE_GROUND_01, HUB_TILE_GROUND_02};
-    for (const char* tile_name : tile_options) {
-        char tile_path[256];
-        snprintf(tile_path, sizeof(tile_path), "%s%s%s%s%s",
-                 sd_manager_get_mount_point(), ASSETS_BASE_SUBPATH,
-                 ASSETS_SPRITES_SUBPATH, SPRITES_HUB_SUBPATH, tile_name);
-        
-        if (cache_manager.get_sprite(tile_path)) {
-            loaded_tile_sprite_paths.push_back(tile_path);
-            successful_loads++;
-        }
-    }
-    
-    return (successful_loads == 2); 
+void PetHubView::setup_ui(lv_obj_t* parent) {
+    hub_container = lv_obj_create(parent);
+    lv_obj_remove_style_all(hub_container);
+    lv_obj_set_size(hub_container, HUB_AREA_SIZE, HUB_AREA_SIZE);
+    lv_obj_center(hub_container);
+
+    lv_obj_t* mem_monitor = memory_monitor_create(parent);
+    lv_obj_align(mem_monitor, LV_ALIGN_BOTTOM_RIGHT, -5, -5);
 }
 
-const lv_image_dsc_t* PetHubView::get_sprite_from_cache(const std::string& path) {
-    // This just gets the pointer, it doesn't increment the ref count again.
-    // The manager handles the state internally.
-    return SpriteCacheManager::get_instance().get_sprite(path);
-}
-
-const lv_image_dsc_t* PetHubView::get_random_tile_sprite() {
-    if (loaded_tile_sprite_paths.empty()) return nullptr;
-    int idx = esp_random() % loaded_tile_sprite_paths.size();
-    // We get the sprite again here, which increments the ref count. This is
-    // technically not needed if we assume the tiles are always loaded, but it's safer.
-    // The release will happen in the destructor.
-    return get_sprite_from_cache(loaded_tile_sprite_paths[idx]);
+void PetHubView::place_initial_pets() {
+    add_new_pet();
 }
 
 void PetHubView::add_new_pet() {
@@ -133,14 +159,11 @@ void PetHubView::add_new_pet() {
     auto& cache_manager = SpriteCacheManager::get_instance();
     auto collection = pet_manager.get_collection();
 
-    // Find a collected pet that is not already in the hub
     std::vector<PetId> available_pet_ids;
     for (const auto& entry : collection) {
         if (entry.collected) {
             PetId final_id = pet_manager.get_final_evolution(entry.base_id);
-            auto it = std::find_if(s_pets.begin(), s_pets.end(), [final_id](const HubPet& p) {
-                return p.id == final_id;
-            });
+            auto it = std::find_if(s_pets.begin(), s_pets.end(), [final_id](const HubPet& p) { return p.id == final_id; });
             if (it == s_pets.end()) {
                 available_pet_ids.push_back(final_id);
             }
@@ -160,18 +183,20 @@ void PetHubView::add_new_pet() {
         return;
     }
 
-    ESP_LOGI(TAG, "Attempting to add pet ID %d to hub at (%d, %d)", (int)pet_to_add_id, row, col);
+    ESP_LOGI(TAG, "Adding pet ID %d to hub at (%d, %d)", (int)pet_to_add_id, row, col);
 
-    // DYNAMIC LOADING: Load sprites just for this pet.
     const char* sprite_names[] = {PET_SPRITE_DEFAULT, PET_SPRITE_IDLE_01, PET_SPRITE_IDLE_02};
-    std::vector<std::string> new_pet_paths;
+    HubPet new_pet;
+    new_pet.id = pet_to_add_id;
     bool all_loaded = true;
 
     for (const char* name : sprite_names) {
         std::string path = build_pet_sprite_path(pet_to_add_id, name);
-        // get_sprite loads if not present and increments ref count.
-        if (cache_manager.get_sprite(path)) {
-            new_pet_paths.push_back(path);
+        const lv_image_dsc_t* sprite_dsc = cache_manager.get_sprite(path);
+        
+        if (sprite_dsc) {
+            new_pet.sprite_paths.push_back(path);
+            new_pet.animation_frames.push_back(sprite_dsc); // This now compiles correctly
         } else {
             ESP_LOGE(TAG, "Failed to load required sprite '%s'. Aborting add.", path.c_str());
             all_loaded = false;
@@ -180,62 +205,22 @@ void PetHubView::add_new_pet() {
     }
 
     if (!all_loaded) {
-        // Cleanup any sprites that were successfully loaded for this attempt
-        cache_manager.release_sprite_group(new_pet_paths);
-        grid_occupied[row][col] = false; // Free the spot back up
+        cache_manager.release_sprite_group(new_pet.sprite_paths);
+        grid_occupied[row][col] = false;
         return;
     }
 
-    HubPet new_pet;
-    new_pet.id = pet_to_add_id;
     new_pet.row = row;
     new_pet.col = col;
     new_pet.animation_frame = 0;
-    new_pet.sprite_paths = new_pet_paths;
-
-    // Use the first sprite for the initial image
-    const lv_image_dsc_t* initial_sprite = get_sprite_from_cache(new_pet.sprite_paths[0]);
+    
     new_pet.img_obj = lv_image_create(hub_container);
-    lv_image_set_src(new_pet.img_obj, initial_sprite);
+    lv_image_set_src(new_pet.img_obj, new_pet.animation_frames[0]);
     lv_image_set_antialias(new_pet.img_obj, false);
 
     set_pet_position(new_pet, row, col, false);
     s_pets.push_back(new_pet);
-    ESP_LOGI(TAG, "Successfully added pet %d. Total pets: %d", (int)new_pet.id, s_pets.size());
-}
-
-void PetHubView::animate_pet_sprites() {
-    if (s_pets.empty()) return;
-
-    for (auto& pet : s_pets) {
-        pet.animation_frame = (pet.animation_frame + 1) % 4;
-        
-        // Map animation frame to sprite path index
-        int sprite_idx;
-        switch (pet.animation_frame) {
-            case 0:  sprite_idx = 0; break; // PET_SPRITE_DEFAULT
-            case 1:  sprite_idx = 1; break; // PET_SPRITE_IDLE_01
-            case 2:  sprite_idx = 0; break; // PET_SPRITE_DEFAULT
-            case 3:  sprite_idx = 2; break; // PET_SPRITE_IDLE_02
-            default: sprite_idx = 0; break;
-        }
-        
-        if (sprite_idx < pet.sprite_paths.size()) {
-            const lv_image_dsc_t* cached_sprite = get_sprite_from_cache(pet.sprite_paths[sprite_idx]);
-            if (cached_sprite) {
-                lv_image_set_src(pet.img_obj, cached_sprite);
-            }
-        }
-    }
-}
-
-
-// --- El resto del código no necesita cambios ---
-// (place_initial_pets, remove_last_pet, set_pet_position, move_random_pet, etc.)
-// ...copia el resto de las funciones desde la respuesta anterior...
-void PetHubView::place_initial_pets() {
-    // Start with one pet for demonstration
-    add_new_pet();
+    ESP_LOGI(TAG, "Successfully added pet %d. Total pets: %zu", (int)new_pet.id, s_pets.size());
 }
 
 void PetHubView::remove_last_pet() {
@@ -244,47 +229,37 @@ void PetHubView::remove_last_pet() {
         return;
     }
 
-    // Get the last pet added
     HubPet pet_to_remove = s_pets.back();
     s_pets.pop_back();
 
     ESP_LOGI(TAG, "Removing pet ID %d from hub at (%d, %d)", (int)pet_to_remove.id, pet_to_remove.row, pet_to_remove.col);
 
-    // Mark its grid position as free
     grid_occupied[pet_to_remove.row][pet_to_remove.col] = false;
-
-    // Delete the LVGL object
     lv_obj_delete(pet_to_remove.img_obj);
 
-    // Release its sprites from the cache manager
     SpriteCacheManager::get_instance().release_sprite_group(pet_to_remove.sprite_paths);
-    ESP_LOGI(TAG, "Released %zu sprites for the removed pet.", pet_to_remove.sprite_paths.size());
+    ESP_LOGI(TAG, "Released %zu sprite paths for the removed pet.", pet_to_remove.sprite_paths.size());
 }
 
+void PetHubView::animate_pet_sprites() {
+    if (s_pets.empty()) return;
 
-void PetHubView::setup_ui(lv_obj_t* parent) {
-    hub_container = lv_obj_create(parent);
-    lv_obj_remove_style_all(hub_container);
-    lv_obj_set_size(hub_container, HUB_AREA_SIZE, HUB_AREA_SIZE);
-    lv_obj_center(hub_container);
-
-    lv_obj_t* mem_monitor = memory_monitor_create(parent);
-    lv_obj_align(mem_monitor, LV_ALIGN_BOTTOM_RIGHT, -5, -5);
-}
-
-void PetHubView::setup_grid(lv_obj_t* parent) {
-    for (int row = 0; row < GRID_SIZE; ++row) {
-        for (int col = 0; col < GRID_SIZE; ++col) {
-            const lv_image_dsc_t* tile_sprite = get_random_tile_sprite();
-            if (!tile_sprite) {
-                ESP_LOGW(TAG, "No tile sprite available for grid position (%d, %d)", row, col);
-                continue;
+    for (auto& pet : s_pets) {
+        pet.animation_frame = (pet.animation_frame + 1) % 4;
+        
+        int sprite_idx;
+        switch (pet.animation_frame) {
+            case 1:  sprite_idx = 1; break;
+            case 3:  sprite_idx = 2; break;
+            default: sprite_idx = 0; break;
+        }
+        
+        if (sprite_idx < pet.animation_frames.size()) {
+            // This now compiles correctly
+            const lv_image_dsc_t* frame_dsc = pet.animation_frames[sprite_idx];
+            if (frame_dsc) {
+                lv_image_set_src(pet.img_obj, frame_dsc);
             }
-            
-            lv_obj_t* tile_img = lv_image_create(parent);
-            lv_image_set_src(tile_img, tile_sprite);
-            lv_image_set_antialias(tile_img, false);
-            lv_obj_set_pos(tile_img, col * TILE_SIZE, row * TILE_SIZE);
         }
     }
 }
@@ -306,13 +281,12 @@ void PetHubView::set_pet_position(HubPet& pet, int row, int col, bool animate) {
         lv_anim_set_var(&a, pet.img_obj);
         lv_anim_set_duration(&a, 750);
         lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-
-        lv_anim_set_values(&a, lv_obj_get_x(pet.img_obj), final_x);
         lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_x);
+        lv_anim_set_values(&a, lv_obj_get_x(pet.img_obj), final_x);
         lv_anim_start(&a);
         
-        lv_anim_set_values(&a, lv_obj_get_y(pet.img_obj), final_y);
         lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_y);
+        lv_anim_set_values(&a, lv_obj_get_y(pet.img_obj), final_y);
         lv_anim_start(&a);
     } else {
         lv_obj_set_pos(pet.img_obj, final_x, final_y);
@@ -320,7 +294,7 @@ void PetHubView::set_pet_position(HubPet& pet, int row, int col, bool animate) {
 }
 
 void PetHubView::move_random_pet() {
-    if (s_pets.size() <= 1) return; // No need to move if there's only one or zero pets
+    if (s_pets.size() <= 1) return;
 
     uint32_t pet_idx = esp_random() % s_pets.size();
     HubPet& pet_to_move = s_pets[pet_idx];

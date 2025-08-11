@@ -11,10 +11,10 @@
  * @brief Manages loading, caching, and releasing sprite image data from the SD card.
  *
  * This singleton class implements a reference-counted cache to efficiently manage
- * memory for sprites. A view requests a sprite via its path, and the manager
- * loads it if not already in memory, or returns a cached pointer. The view is
- * responsible for releasing the sprite when it is no longer needed.
- * The manager only frees the memory when no views are using the sprite anymore.
+ * memory for sprites. It reads the raw image file (e.g., PNG) into PSRAM once,
+ * then provides a descriptor to LVGL. LVGL decodes the image and caches the
+ * result internally. This manager ensures the raw data in PSRAM is freed only
+ * when no longer in use.
  */
 class SpriteCacheManager {
 public:
@@ -33,7 +33,7 @@ public:
      * This function implements reference counting. Each successful call increments
      * the reference count for the sprite.
      *
-     * @param full_path The absolute path to the sprite file on the SD card (e.g., "/sdcard/assets/sprites/pet/0001/idle.bin").
+     * @param full_path The absolute C-style path to the sprite file (e.g., "/sdcard/assets/sprites/pet/0001/idle.png").
      * @return A const pointer to the lv_image_dsc_t, or nullptr if loading fails.
      */
     const lv_image_dsc_t* get_sprite(const std::string& full_path);
@@ -71,10 +71,10 @@ private:
 
     // Internal implementation to load from SD card
     lv_image_dsc_t* load_from_sd(const std::string& path);
-    void free_sprite_data(CachedSprite& sprite);
+    void free_sprite_data(const std::string& path, CachedSprite& sprite);
 
     std::unordered_map<std::string, CachedSprite> s_cache;
-    std::mutex s_cache_mutex; // To protect cache access if ever used from multiple tasks
+    std::mutex s_cache_mutex;
 };
 
 #endif // SPRITE_CACHE_MANAGER_H
