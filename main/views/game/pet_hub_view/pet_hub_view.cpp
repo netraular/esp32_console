@@ -29,13 +29,13 @@ PetHubView::~PetHubView() {
     
     // Release all sprites for pets currently in the hub
     for (const auto& pet : s_pets) {
-        ESP_LOGI(TAG, "Releasing sprites for pet ID %d", (int)pet.id);
+        ESP_LOGD(TAG, "Releasing sprites for pet ID %d", (int)pet.id);
         cache_manager.release_sprite_group(pet.sprite_paths);
     }
     s_pets.clear();
     
     // Release all tile sprites
-    ESP_LOGI(TAG, "Releasing tile sprites");
+    ESP_LOGD(TAG, "Releasing tile sprites");
     cache_manager.release_sprite_group(loaded_tile_sprite_paths);
     loaded_tile_sprite_paths.clear();
     tile_sprites.clear();
@@ -100,7 +100,7 @@ bool PetHubView::load_tile_sprites() {
         if (sprite_dsc) {
             loaded_tile_sprite_paths.push_back(tile_path_str);
             tile_sprites.push_back(sprite_dsc);
-            ESP_LOGI(TAG, "Loaded tile sprite: %s (%dx%d)", tile_name, (int)sprite_dsc->header.w, (int)sprite_dsc->header.h);
+            ESP_LOGD(TAG, "Loaded tile sprite: %s (%dx%d)", tile_name, (int)sprite_dsc->header.w, (int)sprite_dsc->header.h);
         } else {
             ESP_LOGE(TAG, "Failed to load tile sprite: %s", tile_name);
             cache_manager.release_sprite_group(loaded_tile_sprite_paths);
@@ -130,7 +130,7 @@ void PetHubView::setup_grid(lv_obj_t* parent) {
             lv_image_set_antialias(tile_img, false);
             lv_obj_set_pos(tile_img, col * TILE_SIZE, row * TILE_SIZE);
             
-            // Set explicit size to ensure proper rendering
+            // Set explicit size to ensure proper grid alignment
             lv_obj_set_size(tile_img, TILE_SIZE, TILE_SIZE);
             
             ESP_LOGD(TAG, "Placed tile at grid[%d][%d] -> pos(%d,%d)", row, col, col * TILE_SIZE, row * TILE_SIZE);
@@ -153,6 +153,9 @@ void PetHubView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_size(hub_container, HUB_AREA_SIZE, HUB_AREA_SIZE);
     lv_obj_center(hub_container);
     
+    // Add the flag that allows children to be drawn outside the container's boundaries.
+    lv_obj_add_flag(hub_container, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+
     // Set a visible background for debugging
     lv_obj_set_style_bg_color(hub_container, lv_color_make(32, 32, 32), 0);
     lv_obj_set_style_bg_opa(hub_container, LV_OPA_COVER, 0);
@@ -220,7 +223,7 @@ void PetHubView::add_new_pet() {
         if (sprite_dsc) {
             new_pet.sprite_paths.push_back(path);
             new_pet.animation_frames.push_back(sprite_dsc);
-            ESP_LOGI(TAG, "Loaded pet sprite: %s (%dx%d)", name, (int)sprite_dsc->header.w, (int)sprite_dsc->header.h);
+            ESP_LOGD(TAG, "Loaded pet sprite: %s (%dx%d)", name, (int)sprite_dsc->header.w, (int)sprite_dsc->header.h);
         } else {
             ESP_LOGE(TAG, "Failed to load required sprite '%s'. Aborting add.", path.c_str());
             all_loaded = false;
@@ -247,8 +250,8 @@ void PetHubView::add_new_pet() {
     lv_image_set_src(new_pet.img_obj, new_pet.animation_frames[0]);
     lv_image_set_antialias(new_pet.img_obj, false);
     
-    // Set explicit size for the pet sprite
-    lv_obj_set_size(new_pet.img_obj, TILE_SIZE, TILE_SIZE);
+    // The image object's size will now automatically match the source sprite.
+    // We do not set an explicit size, to allow sprites to be larger than a tile.
 
     // Position the pet on the grid
     set_pet_position(new_pet, row, col, false);
@@ -301,14 +304,25 @@ void PetHubView::set_pet_position(HubPet& pet, int row, int col, bool animate) {
     pet.row = row;
     pet.col = col;
 
-    lv_coord_t target_x_center = col * TILE_SIZE + (TILE_SIZE / 2);
-    lv_coord_t target_y_bottom = row * TILE_SIZE + TILE_SIZE;
-    
-    constexpr lv_coord_t sprite_size = TILE_SIZE;
-    lv_coord_t final_x = target_x_center - (sprite_size / 2);
-    lv_coord_t final_y = target_y_bottom - sprite_size;
+    // Get the actual dimensions of the sprite currently being displayed
+    const lv_image_dsc_t* current_sprite = (const lv_image_dsc_t*)lv_image_get_src(pet.img_obj);
+    if (!current_sprite) {
+        ESP_LOGE(TAG, "Cannot set pet position, sprite source is null!");
+        return;
+    }
+    lv_coord_t sprite_width = current_sprite->header.w;
+    lv_coord_t sprite_height = current_sprite->header.h;
 
-    ESP_LOGD(TAG, "Setting pet position: grid[%d][%d] -> screen(%d,%d)", row, col, (int)final_x, (int)final_y);
+    // Calculate the anchor points based on the target grid cell
+    lv_coord_t target_x_center = col * TILE_SIZE + (TILE_SIZE / 2);
+    lv_coord_t target_y_bottom = (row + 1) * TILE_SIZE;
+    
+    // Calculate the final top-left coordinate to align the sprite.
+    // It should be horizontally centered and its bottom edge should align with the cell's bottom.
+    lv_coord_t final_x = target_x_center - (sprite_width / 2);
+    lv_coord_t final_y = target_y_bottom - sprite_height;
+
+    ESP_LOGD(TAG, "Setting pet pos: grid[%d][%d], sprite[%dx%d] -> screen(%d,%d)", row, col, (int)sprite_width, (int)sprite_height, (int)final_x, (int)final_y);
 
     if (animate) {
         lv_anim_t a;
@@ -316,6 +330,7 @@ void PetHubView::set_pet_position(HubPet& pet, int row, int col, bool animate) {
         lv_anim_set_var(&a, pet.img_obj);
         lv_anim_set_duration(&a, 750);
         lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+        
         lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_x);
         lv_anim_set_values(&a, lv_obj_get_x(pet.img_obj), final_x);
         lv_anim_start(&a);
