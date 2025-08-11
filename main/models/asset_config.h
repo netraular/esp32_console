@@ -52,9 +52,10 @@ constexpr const char* ASSETS_SOUNDS_SUBPATH  = "sounds/";
 constexpr const char* ASSETS_FONTS_SUBPATH   = "fonts/";
 
 // --- Sprite Sub-directories ---
-constexpr const char* SPRITES_PETS_SUBPATH = "pets/"; // Base folder for all pet sprites. Structure: pets/<ID>/default.png
+constexpr const char* SPRITES_PETS_SUBPATH = "pets/"; // Base folder for all pet sprites. Structure: pets/<ID>/<frame_name>.png
 constexpr const char* SPRITES_EGGS_SUBPATH = "eggs/";
 constexpr const char* SPRITES_UI_SUBPATH   = "ui/";
+constexpr const char* SPRITES_HUB_SUBPATH  = "hub/";
 
 // --- Sound Sub-directories ---
 constexpr const char* SOUNDS_EFFECTS_SUBPATH = "effects/";
@@ -69,5 +70,13 @@ constexpr const char* UI_SOUND_TEST         = "test.wav";
 
 // --- Default/Fallback Sprite Filenames ---
 constexpr const char* DEFAULT_EGG_SPRITE   = "egg_default.png";
+
+// --- Hub View Assets ---
+constexpr const char* HUB_TILE_GROUND_01 = "tile_01.png";
+constexpr const char* HUB_TILE_GROUND_02 = "tile_02.png";
+
+// --- Pet Sprite Frames ---
+constexpr const char* PET_SPRITE_DEFAULT = "sprite_1.png";
+constexpr const char* PET_SPRITE_IDLE_01 = "sprite_2.png";
 
 #endif // ASSET_CONFIG_H

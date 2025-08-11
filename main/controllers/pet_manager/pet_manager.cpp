@@ -26,7 +26,7 @@ static const char* PET_AWAITING_KEY = "pet_await"; // New key to save the waitin
 // --- Game Logic Constants ---
 constexpr time_t SECONDS_IN_DAY = 86400;
 constexpr int MIN_CYCLE_DURATION_DAYS = 10;
-constexpr time_t EGG_HATCH_DURATION_SECONDS = 3 * 60; // 3 minutes for an egg to hatch
+constexpr time_t EGG_HATCH_DURATION_SECONDS = 10; // 3 minutes for an egg to hatch
 
 // --- Evolution Stage Time Percentages ---
 constexpr float STAGE_2_EVOLUTION_PERCENT = 0.33f; // 1/3 of the way through
@@ -115,13 +115,14 @@ std::string PetManager::get_sprite_path_for_id(PetId id) const {
     snprintf(id_str, sizeof(id_str), "%04d", (int)id);
 
     char path_buffer[256];
-    snprintf(path_buffer, sizeof(path_buffer), "%s%s%s%s%s%s/default.png",
-             LVGL_VFS_SD_CARD_PREFIX,
-             SD_CARD_ROOT_PATH,
-             ASSETS_BASE_SUBPATH,
-             ASSETS_SPRITES_SUBPATH,
-             SPRITES_PETS_SUBPATH,
-             id_str);
+    snprintf(path_buffer, sizeof(path_buffer), "%s%s%s%s%s%s/%s",
+         LVGL_VFS_SD_CARD_PREFIX,
+         SD_CARD_ROOT_PATH,
+         ASSETS_BASE_SUBPATH,
+         ASSETS_SPRITES_SUBPATH,
+         SPRITES_PETS_SUBPATH,
+         id_str,
+         PET_SPRITE_DEFAULT);
     return std::string(path_buffer);
 }
 
@@ -252,7 +253,7 @@ void PetManager::hatch_egg() {
     s_pet_state.stage_care_points = 0;
 
 #if PET_LIFECYCLE_DEBUG_7_MINUTES == 1
-    s_pet_state.cycle_end_timestamp = now + (7 * 60);
+    s_pet_state.cycle_end_timestamp = now + (2 * 60);
     ESP_LOGW(TAG, "DEBUG LIFECYCLE ENABLED: Pet cycle will last 7 minutes.");
 #else
     time_t target_end_date = now + (MIN_CYCLE_DURATION_DAYS * SECONDS_IN_DAY);
@@ -302,7 +303,7 @@ void PetManager::finalize_cycle() {
         }
         save_collection();
     } else {
-        ESP_LOGW(TAG, "Failed to collect pet at final stage. It will be remembered only as 'discovered'.");
+        ESP_LOGW(TAG, "Failed to collect pet at final stage. Only %lu care points. It will be remembered only as 'discovered'.",s_pet_state.stage_care_points);
         for (auto& entry : s_collection) {
             if (entry.base_id == s_pet_state.base_pet_id) {
                 entry.discovered = true;
