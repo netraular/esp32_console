@@ -36,8 +36,6 @@ StandbyView::StandbyView() {
     s_instance = this;
     is_time_synced = false;
     update_timer = nullptr;
-    volume_up_timer = nullptr;
-    volume_down_timer = nullptr;
     ESP_LOGI(TAG, "StandbyView constructed");
 }
 
@@ -46,8 +44,6 @@ StandbyView::~StandbyView() {
         lv_timer_delete(update_timer);
         update_timer = nullptr;
     }
-    stop_volume_repeat_timer(&volume_up_timer);
-    stop_volume_repeat_timer(&volume_down_timer);
     s_instance = nullptr;
     ESP_LOGI(TAG, "StandbyView destructed");
 }
@@ -212,14 +208,12 @@ StandbyView::ForecastWidgetUI StandbyView::create_forecast_widget(lv_obj_t* pare
 
 void StandbyView::setup_main_button_handlers() {
     button_manager_unregister_view_handlers();
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, menu_press_cb, true, this);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, pet_hub_press_cb, true, this);
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, habit_tracker_press_cb, true, this);
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, voice_notes_press_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, settings_press_cb, true, this);
     button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_TAP, sleep_press_cb, true, this);
     button_manager_register_handler(BUTTON_ON_OFF, BUTTON_EVENT_LONG_PRESS_START, shutdown_long_press_cb, true, this);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_START, volume_up_long_press_start_cb, true, this);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_PRESS_UP, volume_up_press_up_cb, true, this);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_LONG_PRESS_START, volume_down_long_press_start_cb, true, this);
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_PRESS_UP, volume_down_press_up_cb, true, this);
 }
 
 // --- UI Logic ---
@@ -285,12 +279,20 @@ void StandbyView::update_weather() {
 }
 
 // --- Instance Methods for Actions ---
-void StandbyView::on_menu_press() {
-    view_manager_load_view(VIEW_ID_MENU);
+void StandbyView::on_pet_hub_press() {
+    view_manager_load_view(VIEW_ID_PET_HUB);
 }
 
 void StandbyView::on_settings_press() {
     view_manager_load_view(VIEW_ID_SETTINGS);
+}
+
+void StandbyView::on_habit_tracker_press() {
+    view_manager_load_view(VIEW_ID_TRACK_HABITS);
+}
+
+void StandbyView::on_voice_notes_press() {
+    view_manager_load_view(VIEW_ID_VOICE_NOTE);
 }
 
 void StandbyView::on_sleep_press() {
@@ -312,33 +314,6 @@ void StandbyView::handle_shutdown_result(popup_result_t result) {
     }
 }
 
-void StandbyView::on_volume_up_long_press_start() {
-    stop_volume_repeat_timer(&volume_up_timer);
-    audio_manager_volume_up();
-    status_bar_update_volume_display();
-    volume_up_timer = lv_timer_create([](lv_timer_t* timer){
-        audio_manager_volume_up();
-        status_bar_update_volume_display();
-    }, 150, nullptr);
-}
-
-void StandbyView::on_volume_down_long_press_start() {
-    stop_volume_repeat_timer(&volume_down_timer);
-    audio_manager_volume_down();
-    status_bar_update_volume_display();
-    volume_down_timer = lv_timer_create([](lv_timer_t* timer){
-        audio_manager_volume_down();
-        status_bar_update_volume_display();
-    }, 150, nullptr);
-}
-
-void StandbyView::stop_volume_repeat_timer(lv_timer_t** timer_ptr) {
-    if (timer_ptr && *timer_ptr) {
-        lv_timer_delete(*timer_ptr);
-        *timer_ptr = nullptr;
-    }
-}
-
 // --- Static Callbacks (Bridge to C-style APIs and instance methods) ---
 void StandbyView::update_clock_cb(lv_timer_t* timer) {
     auto* instance = static_cast<StandbyView*>(lv_timer_get_user_data(timer));
@@ -347,12 +322,20 @@ void StandbyView::update_clock_cb(lv_timer_t* timer) {
     }
 }
 
-void StandbyView::menu_press_cb(void* user_data) {
-    static_cast<StandbyView*>(user_data)->on_menu_press();
+void StandbyView::pet_hub_press_cb(void* user_data) {
+    static_cast<StandbyView*>(user_data)->on_pet_hub_press();
 }
 
 void StandbyView::settings_press_cb(void* user_data) {
     static_cast<StandbyView*>(user_data)->on_settings_press();
+}
+
+void StandbyView::habit_tracker_press_cb(void* user_data) {
+    static_cast<StandbyView*>(user_data)->on_habit_tracker_press();
+}
+
+void StandbyView::voice_notes_press_cb(void* user_data) {
+    static_cast<StandbyView*>(user_data)->on_voice_notes_press();
 }
 
 void StandbyView::sleep_press_cb(void* user_data) {
@@ -361,28 +344,6 @@ void StandbyView::sleep_press_cb(void* user_data) {
 
 void StandbyView::shutdown_long_press_cb(void* user_data) {
     static_cast<StandbyView*>(user_data)->on_shutdown_long_press();
-}
-
-void StandbyView::volume_up_long_press_start_cb(void* user_data) {
-    static_cast<StandbyView*>(user_data)->on_volume_up_long_press_start();
-}
-
-void StandbyView::volume_down_long_press_start_cb(void* user_data) {
-    static_cast<StandbyView*>(user_data)->on_volume_down_long_press_start();
-}
-
-void StandbyView::volume_up_press_up_cb(void* user_data) {
-    auto* instance = static_cast<StandbyView*>(user_data);
-    if(instance) {
-        instance->stop_volume_repeat_timer(&instance->volume_up_timer);
-    }
-}
-
-void StandbyView::volume_down_press_up_cb(void* user_data) {
-    auto* instance = static_cast<StandbyView*>(user_data);
-    if(instance) {
-        instance->stop_volume_repeat_timer(&instance->volume_down_timer);
-    }
 }
 
 void StandbyView::shutdown_popup_cb(popup_result_t result, void* user_data) {
