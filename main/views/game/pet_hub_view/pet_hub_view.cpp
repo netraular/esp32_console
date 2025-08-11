@@ -12,6 +12,7 @@
 #include <vector>
 #include <random>
 #include <algorithm>
+#include <cstdio> // For snprintf
 
 static const char* TAG = "PET_HUB_VIEW";
 
@@ -89,7 +90,6 @@ bool PetHubView::load_tile_sprites() {
     const char* tile_names[] = {HUB_TILE_GROUND_01, HUB_TILE_GROUND_02};
     for (const char* tile_name : tile_names) {
         char tile_path_buffer[256];
-        // Build the standard C-style path (e.g., "/sdcard/assets/...")
         snprintf(tile_path_buffer, sizeof(tile_path_buffer), "%s%s%s%s%s",
                  sd_manager_get_mount_point(),
                  ASSETS_BASE_SUBPATH, ASSETS_SPRITES_SUBPATH, SPRITES_HUB_SUBPATH, tile_name);
@@ -129,8 +129,6 @@ void PetHubView::setup_grid(lv_obj_t* parent) {
             lv_image_set_src(tile_img, tile_sprite_dsc);
             lv_image_set_antialias(tile_img, false);
             lv_obj_set_pos(tile_img, col * TILE_SIZE, row * TILE_SIZE);
-            
-            // Set explicit size to ensure proper grid alignment
             lv_obj_set_size(tile_img, TILE_SIZE, TILE_SIZE);
             
             ESP_LOGD(TAG, "Placed tile at grid[%d][%d] -> pos(%d,%d)", row, col, col * TILE_SIZE, row * TILE_SIZE);
@@ -140,7 +138,6 @@ void PetHubView::setup_grid(lv_obj_t* parent) {
 
 std::string PetHubView::build_pet_sprite_path(PetId pet_id, const char* sprite_name) {
     char path_buffer[256];
-    // Build the standard C-style path (e.g., "/sdcard/assets/...")
     snprintf(path_buffer, sizeof(path_buffer), "%s%s%s%s%04d/%s",
              sd_manager_get_mount_point(),
              ASSETS_BASE_SUBPATH, ASSETS_SPRITES_SUBPATH, SPRITES_PETS_SUBPATH, (int)pet_id, sprite_name);
@@ -153,10 +150,8 @@ void PetHubView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_size(hub_container, HUB_AREA_SIZE, HUB_AREA_SIZE);
     lv_obj_center(hub_container);
     
-    // Add the flag that allows children to be drawn outside the container's boundaries.
     lv_obj_add_flag(hub_container, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
 
-    // Set a visible background for debugging
     lv_obj_set_style_bg_color(hub_container, lv_color_make(32, 32, 32), 0);
     lv_obj_set_style_bg_opa(hub_container, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(hub_container, lv_color_white(), 0);
@@ -188,7 +183,6 @@ void PetHubView::add_new_pet() {
         for (const auto& entry : collection) {
             if (entry.collected) {
                 PetId final_id = pet_manager.get_final_evolution(entry.base_id);
-                // Check if this specific pet ID is already in the hub
                 auto it = std::find_if(s_pets.begin(), s_pets.end(), [final_id](const HubPet& p) { return p.id == final_id; });
                 if (it == s_pets.end()) {
                     available_pet_ids.push_back(final_id);
@@ -198,17 +192,13 @@ void PetHubView::add_new_pet() {
     } else {
         ESP_LOGI(TAG, "Selecting a pet in 'Any Stage' mode.");
         for (const auto& entry : collection) {
-            // A 'discovered' line means the user has at least seen the first stage
             if (entry.discovered) {
                 PetId current_id = entry.base_id;
-                // Walk the evolution chain for this discovered pet line
                 while (current_id != PetId::NONE) {
-                    // Check if this specific pet ID is already in the hub
                     auto it = std::find_if(s_pets.begin(), s_pets.end(), [current_id](const HubPet& p) { return p.id == current_id; });
                     if (it == s_pets.end()) {
                         available_pet_ids.push_back(current_id);
                     }
-                    // Move to the next pet in the chain
                     const PetData* data = pet_manager.get_pet_data(current_id);
                     current_id = (data) ? data->evolves_to : PetId::NONE;
                 }
@@ -230,31 +220,33 @@ void PetHubView::add_new_pet() {
     }
 
     ESP_LOGI(TAG, "Adding pet '%s' (ID %d) to hub at (%d, %d)", pet_manager.get_pet_name(pet_to_add_id).c_str(), (int)pet_to_add_id, row, col);
-
-    const char* sprite_names[] = {PET_SPRITE_DEFAULT, PET_SPRITE_IDLE_01, PET_SPRITE_IDLE_02};
+    
     HubPet new_pet;
     new_pet.id = pet_to_add_id;
     new_pet.row = row;
     new_pet.col = col;
     new_pet.animation_frame = 0;
-    bool all_loaded = true;
-
-    for (const char* name : sprite_names) {
-        std::string path = build_pet_sprite_path(pet_to_add_id, name);
+    
+    // Dynamically load sprite frames in sequence
+    char sprite_filename[32];
+    for (int i = 1; i <= NUM_ANIMATION_SPRITES_TO_LOAD; ++i) {
+        snprintf(sprite_filename, sizeof(sprite_filename), "sprite_%d.png", i);
+        std::string path = build_pet_sprite_path(pet_to_add_id, sprite_filename);
         const lv_image_dsc_t* sprite_dsc = cache_manager.get_sprite(path);
         
         if (sprite_dsc) {
             new_pet.sprite_paths.push_back(path);
             new_pet.animation_frames.push_back(sprite_dsc);
-            ESP_LOGD(TAG, "Loaded pet sprite: %s (%dx%d)", name, (int)sprite_dsc->header.w, (int)sprite_dsc->header.h);
+            ESP_LOGD(TAG, "Loaded pet sprite frame: %s", sprite_filename);
         } else {
-            ESP_LOGE(TAG, "Failed to load required sprite '%s'. Aborting add.", path.c_str());
-            all_loaded = false;
-            break;
+            // This sprite frame doesn't exist, so we stop trying to load more for this pet.
+            ESP_LOGI(TAG, "Animation sequence for pet %d ends at frame %d.", (int)pet_to_add_id, i - 1);
+            break; 
         }
     }
 
-    if (!all_loaded) {
+    if (new_pet.animation_frames.empty()) {
+        ESP_LOGE(TAG, "Aborting pet add: no sprite frames could be loaded.");
         cache_manager.release_sprite_group(new_pet.sprite_paths);
         grid_occupied[row][col] = false;
         return;
@@ -274,7 +266,7 @@ void PetHubView::add_new_pet() {
     set_pet_position(new_pet, row, col, false);
     
     s_pets.push_back(new_pet);
-    ESP_LOGI(TAG, "Successfully added pet. Total pets in hub: %zu", s_pets.size());
+    ESP_LOGI(TAG, "Successfully added pet with %zu animation frames. Total pets in hub: %zu", new_pet.animation_frames.size(), s_pets.size());
 }
 
 void PetHubView::remove_last_pet() {
@@ -299,21 +291,16 @@ void PetHubView::animate_pet_sprites() {
     if (s_pets.empty()) return;
 
     for (auto& pet : s_pets) {
-        pet.animation_frame = (pet.animation_frame + 1) % 4;
-        
-        int sprite_idx;
-        switch (pet.animation_frame) {
-            case 1:  sprite_idx = 1; break;
-            case 3:  sprite_idx = 2; break;
-            default: sprite_idx = 0; break;
+        // Skip animation if only one (or zero) frame is loaded
+        if (pet.animation_frames.size() <= 1) {
+            continue;
         }
+
+        // Go to the next frame in the sequence, looping back to the start
+        pet.animation_frame = (pet.animation_frame + 1) % pet.animation_frames.size();
         
-        if (sprite_idx < pet.animation_frames.size()) {
-            const lv_image_dsc_t* frame_dsc = pet.animation_frames[sprite_idx];
-            if (frame_dsc && pet.img_obj) {
-                lv_image_set_src(pet.img_obj, frame_dsc);
-            }
-        }
+        // Set the new sprite from the loaded animation frames
+        lv_image_set_src(pet.img_obj, pet.animation_frames[pet.animation_frame]);
     }
 }
 

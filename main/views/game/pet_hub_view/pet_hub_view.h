@@ -18,6 +18,10 @@ private:
     // Set to 'false' to show any discovered stage of any pet.
     static constexpr bool SHOW_ADULTS_ONLY = false;
 
+    // Number of animation frames to load per pet. Determines the length of the animation cycle.
+    // The system will attempt to load this many sprites from the animation sequence.
+    static constexpr int NUM_ANIMATION_SPRITES_TO_LOAD = 20;
+
     // --- Constants ---
     static constexpr int GRID_SIZE = 5;
     static constexpr int TILE_SIZE = 48;
