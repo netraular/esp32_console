@@ -2,6 +2,7 @@
 #define PET_COLLECTION_VIEW_H
 
 #include "views/view.h"
+#include "models/pet_asset_data.h" // Provides PetData and PetCollectionEntry
 #include <vector>
 
 /**
@@ -9,7 +10,8 @@
  *
  * This view uses a custom scrollable container with manually managed "tiles"
  * for each pet to optimize performance. The selected item is highlighted with
- * a border, and the list scrolls automatically upon navigation.
+ * a border, and the list scrolls automatically upon navigation. All images
+ * are pre-loaded into PSRAM when the view is created to ensure smooth scrolling.
  */
 class PetCollectionView : public View {
 public:
@@ -29,6 +31,7 @@ private:
     // --- UI Setup & Logic ---
     void setup_ui(lv_obj_t* parent);
     void populate_container();
+    void create_pet_tile(const PetData* data, const PetCollectionEntry& collection_entry);
     void setup_button_handlers();
     void update_selection();
 

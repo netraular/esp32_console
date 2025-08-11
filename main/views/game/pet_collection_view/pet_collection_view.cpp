@@ -11,7 +11,7 @@ static const char* TAG = "PET_COLL_VIEW";
 
 PetCollectionView::PetCollectionView() {
     ESP_LOGI(TAG, "PetCollectionView constructed");
-    // Initialize the style object here. It will be configured in create().
+    // Initialize the style object. It will be configured in create().
     lv_style_init(&style_focus);
 }
 
@@ -74,71 +74,84 @@ void PetCollectionView::populate_container() {
         return;
     }
 
-    // Process each evolution line
+    // Use a set to prevent adding the same pet more than once, ensuring robustness.
+    std::set<PetId> added_pets;
+
+    // Process each evolution line from the collection
     for (const auto& entry : collection_status) {
         PetId current_pet_id = entry.base_id;
 
         while (current_pet_id != PetId::NONE) {
+            if (added_pets.count(current_pet_id)) {
+                break; // Should not happen with current data, but good practice
+            }
+            
             const PetData* data = pet_manager.get_pet_data(current_pet_id);
             if (!data) break;
 
-            // --- Create a custom tile object ---
-            lv_obj_t* tile = lv_obj_create(scrollable_container);
-            lv_obj_remove_style_all(tile);
-            lv_obj_set_size(tile, LV_PCT(95), LV_SIZE_CONTENT);
-            lv_obj_set_style_pad_all(tile, 5, 0);
-            // Set a default white background. It will be overridden if the pet is collected.
-            lv_obj_set_style_bg_color(tile, lv_color_white(), 0);
-            lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
-            lv_obj_set_style_radius(tile, 5, 0);
-            lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_ROW);
-            lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-            tile_items.push_back(tile);
-
-            // --- Populate the tile ---
-            lv_obj_t* icon_area = lv_obj_create(tile);
-            lv_obj_remove_style_all(icon_area);
-            lv_obj_set_size(icon_area, 32, 32);
-            lv_obj_set_style_margin_right(icon_area, 10, 0);
-
-            lv_obj_t* name_label = lv_label_create(tile);
-            lv_obj_set_flex_grow(name_label, 1);
-            
-            if (entry.discovered) {
-                lv_obj_t* img = lv_image_create(icon_area);
-                lv_image_set_antialias(img, false);
-                lv_img_set_zoom(img, 256); // 1x zoom for 32x32 sprites
-                lv_obj_center(img);
-                
-                std::string sprite_path = pet_manager.get_sprite_path_for_id(current_pet_id);
-                lv_image_set_src(img, sprite_path.c_str());
-                lv_label_set_text_fmt(name_label, "#%04d\n%s", (int)data->id, data->name.c_str());
-
-                if (entry.collected) {
-                    // Pet line is fully collected: set green background and show checkmark
-                    lv_obj_set_style_bg_color(tile, lv_palette_lighten(LV_PALETTE_GREEN, 4), 0);
-                    lv_obj_set_style_image_recolor_opa(img, LV_OPA_TRANSP, 0);
-                    
-                    lv_obj_t* check_icon = lv_label_create(tile);
-                    lv_label_set_text(check_icon, LV_SYMBOL_OK);
-                    lv_obj_set_style_text_color(check_icon, lv_palette_main(LV_PALETTE_GREEN), 0);
-                } else {
-                    // Discovered but not collected: grayscale sprite, white background
-                    lv_obj_set_style_image_recolor(img, lv_color_black(), 0);
-                    lv_obj_set_style_image_recolor_opa(img, LV_OPA_60, 0);
-                }
-            } else {
-                // Undiscovered: show placeholder
-                lv_obj_t* question_label = lv_label_create(icon_area);
-                lv_label_set_text(question_label, "?");
-                lv_obj_set_style_text_font(question_label, &lv_font_montserrat_24, 0);
-                lv_obj_set_style_text_color(question_label, lv_palette_main(LV_PALETTE_GREY), 0);
-                lv_obj_center(question_label);
-                lv_label_set_text_fmt(name_label, "#%04d\n???", (int)data->id);
-            }
+            create_pet_tile(data, entry);
+            added_pets.insert(current_pet_id);
 
             current_pet_id = data->evolves_to;
         }
+    }
+}
+
+void PetCollectionView::create_pet_tile(const PetData* data, const PetCollectionEntry& collection_entry) {
+    auto& pet_manager = PetManager::get_instance();
+
+    // --- Create a custom tile object ---
+    lv_obj_t* tile = lv_obj_create(scrollable_container);
+    lv_obj_remove_style_all(tile);
+    lv_obj_set_size(tile, LV_PCT(95), LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_all(tile, 5, 0);
+    lv_obj_set_style_bg_color(tile, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(tile, 5, 0);
+    lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    tile_items.push_back(tile);
+
+    // --- Populate the tile ---
+    lv_obj_t* icon_area = lv_obj_create(tile);
+    lv_obj_remove_style_all(icon_area);
+    lv_obj_set_size(icon_area, 32, 32);
+    lv_obj_set_style_margin_right(icon_area, 10, 0);
+
+    lv_obj_t* name_label = lv_label_create(tile);
+    lv_obj_set_flex_grow(name_label, 1);
+    
+    if (collection_entry.discovered) {
+        lv_obj_t* img = lv_image_create(icon_area);
+        lv_image_set_antialias(img, false);
+        lv_img_set_zoom(img, 256); // 1x zoom for 32x32 sprites
+        lv_obj_center(img);
+        
+        std::string sprite_path = pet_manager.get_sprite_path_for_id(data->id);
+        lv_image_set_src(img, sprite_path.c_str());
+        lv_label_set_text_fmt(name_label, "#%04d\n%s", (int)data->id, data->name.c_str());
+
+        if (collection_entry.collected) {
+            // Pet line is fully collected: set green background and show checkmark
+            lv_obj_set_style_bg_color(tile, lv_palette_lighten(LV_PALETTE_GREEN, 4), 0);
+            lv_obj_set_style_image_recolor_opa(img, LV_OPA_TRANSP, 0);
+            
+            lv_obj_t* check_icon = lv_label_create(tile);
+            lv_label_set_text(check_icon, LV_SYMBOL_OK);
+            lv_obj_set_style_text_color(check_icon, lv_palette_main(LV_PALETTE_GREEN), 0);
+        } else {
+            // Discovered but not collected: grayscale sprite
+            lv_obj_set_style_image_recolor(img, lv_color_black(), 0);
+            lv_obj_set_style_image_recolor_opa(img, LV_OPA_60, 0);
+        }
+    } else {
+        // Undiscovered: show placeholder
+        lv_obj_t* question_label = lv_label_create(icon_area);
+        lv_label_set_text(question_label, "?");
+        lv_obj_set_style_text_font(question_label, &lv_font_montserrat_24, 0);
+        lv_obj_set_style_text_color(question_label, lv_palette_main(LV_PALETTE_GREY), 0);
+        lv_obj_center(question_label);
+        lv_label_set_text_fmt(name_label, "#%04d\n???", (int)data->id);
     }
 }
 
