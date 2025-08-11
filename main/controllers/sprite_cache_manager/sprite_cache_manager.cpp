@@ -1,6 +1,7 @@
 #include "sprite_cache_manager.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "arpa/inet.h" // For ntohl
 #include <cstdio>
 
 // Use printf for immediate, unfiltered output during debugging
@@ -9,6 +10,37 @@
 #define LOG_REF_INC(path, count) printf("[REF_INC] Path: %s, New RefCount: %d\n", path, count)
 #define LOG_REF_DEC(path, count) printf("[REF_DEC] Path: %s, New RefCount: %d\n", path, count)
 #define TAG "SPRITE_CACHE"
+
+// --- Helper function to read PNG dimensions ---
+static bool get_png_dimensions(const char* path, int32_t* width, int32_t* height) {
+    uint8_t buf[24]; // PNG header chunk is within the first 24 bytes
+    
+    FILE* f = fopen(path, "rb");
+    if (!f) return false;
+    
+    size_t bytes_read = fread(buf, 1, sizeof(buf), f);
+    fclose(f);
+
+    if (bytes_read != sizeof(buf)) {
+        ESP_LOGE(TAG, "Could not read enough bytes for PNG header from %s", path);
+        return false;
+    }
+
+    // Check for PNG signature
+    if (buf[0] != 0x89 || buf[1] != 0x50 || buf[2] != 0x4E || buf[3] != 0x47 ||
+        buf[4] != 0x0D || buf[5] != 0x0A || buf[6] != 0x1A || buf[7] != 0x0A) {
+        ESP_LOGE(TAG, "Not a valid PNG file: %s", path);
+        return false;
+    }
+
+    // Width is at offset 16, height is at offset 20. Both are 4-byte, network-byte-order integers.
+    *width = ntohl(*(uint32_t*)(buf + 16));
+    *height = ntohl(*(uint32_t*)(buf + 20));
+
+    ESP_LOGD(TAG, "Read dimensions from %s: %ldx%ld", path, (long int)*width, (long int)*height);
+    return true;
+}
+
 
 SpriteCacheManager& SpriteCacheManager::get_instance() {
     static SpriteCacheManager instance;
@@ -77,6 +109,12 @@ void SpriteCacheManager::release_sprite_group(const std::vector<std::string>& pa
 }
 
 lv_image_dsc_t* SpriteCacheManager::load_from_sd(const std::string& path) {
+    int32_t width = 0, height = 0;
+    if (!get_png_dimensions(path.c_str(), &width, &height) || width == 0 || height == 0) {
+        ESP_LOGE(TAG, "Failed to get valid PNG dimensions for: %s", path.c_str());
+        return nullptr;
+    }
+
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) {
         printf("ERROR: Failed to open file: %s\n", path.c_str());
@@ -118,28 +156,12 @@ lv_image_dsc_t* SpriteCacheManager::load_from_sd(const std::string& path) {
         return nullptr;
     }
 
-    // Configure the descriptor to point to the raw data.
+    // Configure the descriptor with the pre-read, correct information.
+    img_dsc->header.cf = LV_COLOR_FORMAT_UNKNOWN; // Let libpng determine color format
+    img_dsc->header.w = width;
+    img_dsc->header.h = height;
     img_dsc->data = png_data_buffer;
     img_dsc->data_size = file_size;
-    
-    // The LVGL PNG decoder will determine the color format automatically from the data.
-    img_dsc->header.cf = LV_COLOR_FORMAT_UNKNOWN; 
-
-    // --- DIAGNOSTIC TEST ---
-    // Manually set the dimensions to bypass LVGL's header decoding, which is failing.
-    // This is a temporary test and assumes all sprites are 48x48.
-    img_dsc->header.w = 48;
-    img_dsc->header.h = 48;
-
-    // Verify that LVGL can now use this descriptor.
-    lv_image_header_t header;
-    lv_result_t res = lv_image_decoder_get_info(img_dsc, &header);
-    if (res != LV_RESULT_OK) {
-        ESP_LOGE(TAG, "Failed to decode PNG header for '%s'. LVGL decoder returned: %d", path.c_str(), res);
-        free(png_data_buffer);
-        free(img_dsc);
-        return nullptr;
-    }
     
     LOG_LOAD(path.c_str(), file_size, png_data_buffer);
 
