@@ -99,12 +99,17 @@ bool PetHubView::load_tile_sprites() {
 
         if (sprite_dsc) {
             loaded_tile_sprite_paths.push_back(tile_path_str);
-            tile_sprites.push_back(sprite_dsc); // This now compiles correctly
+            tile_sprites.push_back(sprite_dsc);
+            ESP_LOGI(TAG, "Loaded tile sprite: %s (%dx%d)", tile_name, (int)sprite_dsc->header.w, (int)sprite_dsc->header.h);
         } else {
+            ESP_LOGE(TAG, "Failed to load tile sprite: %s", tile_name);
             cache_manager.release_sprite_group(loaded_tile_sprite_paths);
+            loaded_tile_sprite_paths.clear();
+            tile_sprites.clear();
             return false;
         }
     }
+    ESP_LOGI(TAG, "Successfully loaded %zu tile sprites", tile_sprites.size());
     return true; 
 }
 
@@ -113,15 +118,22 @@ void PetHubView::setup_grid(lv_obj_t* parent) {
         ESP_LOGE(TAG, "Cannot setup grid, no tile sprites loaded.");
         return;
     }
+    
+    ESP_LOGI(TAG, "Setting up %dx%d grid with %zu tile sprites", GRID_SIZE, GRID_SIZE, tile_sprites.size());
+    
     for (int row = 0; row < GRID_SIZE; ++row) {
         for (int col = 0; col < GRID_SIZE; ++col) {
-            // This now compiles correctly
             const lv_image_dsc_t* tile_sprite_dsc = tile_sprites[esp_random() % tile_sprites.size()];
             
             lv_obj_t* tile_img = lv_image_create(parent);
             lv_image_set_src(tile_img, tile_sprite_dsc);
             lv_image_set_antialias(tile_img, false);
             lv_obj_set_pos(tile_img, col * TILE_SIZE, row * TILE_SIZE);
+            
+            // Set explicit size to ensure proper rendering
+            lv_obj_set_size(tile_img, TILE_SIZE, TILE_SIZE);
+            
+            ESP_LOGD(TAG, "Placed tile at grid[%d][%d] -> pos(%d,%d)", row, col, col * TILE_SIZE, row * TILE_SIZE);
         }
     }
 }
@@ -140,9 +152,17 @@ void PetHubView::setup_ui(lv_obj_t* parent) {
     lv_obj_remove_style_all(hub_container);
     lv_obj_set_size(hub_container, HUB_AREA_SIZE, HUB_AREA_SIZE);
     lv_obj_center(hub_container);
+    
+    // Set a visible background for debugging
+    lv_obj_set_style_bg_color(hub_container, lv_color_make(32, 32, 32), 0);
+    lv_obj_set_style_bg_opa(hub_container, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(hub_container, lv_color_white(), 0);
+    lv_obj_set_style_border_width(hub_container, 1, 0);
 
     lv_obj_t* mem_monitor = memory_monitor_create(parent);
     lv_obj_align(mem_monitor, LV_ALIGN_BOTTOM_RIGHT, -5, -5);
+    
+    ESP_LOGI(TAG, "Hub container created: %dx%d", HUB_AREA_SIZE, HUB_AREA_SIZE);
 }
 
 void PetHubView::place_initial_pets() {
@@ -188,6 +208,9 @@ void PetHubView::add_new_pet() {
     const char* sprite_names[] = {PET_SPRITE_DEFAULT, PET_SPRITE_IDLE_01, PET_SPRITE_IDLE_02};
     HubPet new_pet;
     new_pet.id = pet_to_add_id;
+    new_pet.row = row;
+    new_pet.col = col;
+    new_pet.animation_frame = 0;
     bool all_loaded = true;
 
     for (const char* name : sprite_names) {
@@ -196,7 +219,8 @@ void PetHubView::add_new_pet() {
         
         if (sprite_dsc) {
             new_pet.sprite_paths.push_back(path);
-            new_pet.animation_frames.push_back(sprite_dsc); // This now compiles correctly
+            new_pet.animation_frames.push_back(sprite_dsc);
+            ESP_LOGI(TAG, "Loaded pet sprite: %s (%dx%d)", name, (int)sprite_dsc->header.w, (int)sprite_dsc->header.h);
         } else {
             ESP_LOGE(TAG, "Failed to load required sprite '%s'. Aborting add.", path.c_str());
             all_loaded = false;
@@ -210,17 +234,27 @@ void PetHubView::add_new_pet() {
         return;
     }
 
-    new_pet.row = row;
-    new_pet.col = col;
-    new_pet.animation_frame = 0;
-    
+    // Create the LVGL image object for the pet
     new_pet.img_obj = lv_image_create(hub_container);
+    if (!new_pet.img_obj) {
+        ESP_LOGE(TAG, "Failed to create image object for pet");
+        cache_manager.release_sprite_group(new_pet.sprite_paths);
+        grid_occupied[row][col] = false;
+        return;
+    }
+    
+    // Set the initial sprite (first animation frame)
     lv_image_set_src(new_pet.img_obj, new_pet.animation_frames[0]);
     lv_image_set_antialias(new_pet.img_obj, false);
+    
+    // Set explicit size for the pet sprite
+    lv_obj_set_size(new_pet.img_obj, TILE_SIZE, TILE_SIZE);
 
+    // Position the pet on the grid
     set_pet_position(new_pet, row, col, false);
+    
     s_pets.push_back(new_pet);
-    ESP_LOGI(TAG, "Successfully added pet %d. Total pets: %zu", (int)new_pet.id, s_pets.size());
+    ESP_LOGI(TAG, "Successfully added pet %d at grid[%d][%d]. Total pets: %zu", (int)new_pet.id, row, col, s_pets.size());
 }
 
 void PetHubView::remove_last_pet() {
@@ -255,9 +289,8 @@ void PetHubView::animate_pet_sprites() {
         }
         
         if (sprite_idx < pet.animation_frames.size()) {
-            // This now compiles correctly
             const lv_image_dsc_t* frame_dsc = pet.animation_frames[sprite_idx];
-            if (frame_dsc) {
+            if (frame_dsc && pet.img_obj) {
                 lv_image_set_src(pet.img_obj, frame_dsc);
             }
         }
@@ -274,6 +307,8 @@ void PetHubView::set_pet_position(HubPet& pet, int row, int col, bool animate) {
     constexpr lv_coord_t sprite_size = TILE_SIZE;
     lv_coord_t final_x = target_x_center - (sprite_size / 2);
     lv_coord_t final_y = target_y_bottom - sprite_size;
+
+    ESP_LOGD(TAG, "Setting pet position: grid[%d][%d] -> screen(%d,%d)", row, col, (int)final_x, (int)final_y);
 
     if (animate) {
         lv_anim_t a;
@@ -320,6 +355,7 @@ void PetHubView::move_random_pet() {
         grid_occupied[pet_to_move.row][pet_to_move.col] = false;
         grid_occupied[target_pos.first][target_pos.second] = true;
 
+        ESP_LOGD(TAG, "Moving pet %d from (%d,%d) to (%d,%d)", (int)pet_to_move.id, pet_to_move.row, pet_to_move.col, target_pos.first, target_pos.second);
         set_pet_position(pet_to_move, target_pos.first, target_pos.second, true);
     }
 }

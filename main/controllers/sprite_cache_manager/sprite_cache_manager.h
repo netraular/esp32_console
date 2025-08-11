@@ -73,8 +73,8 @@ private:
     lv_image_dsc_t* load_from_sd(const std::string& path);
     void free_sprite_data(const std::string& path, CachedSprite& sprite);
 
-    std::unordered_map<std::string, CachedSprite> s_cache;
-    std::mutex s_cache_mutex;
+    std::unordered_map<std::string, CachedSprite> m_cache;
+    std::mutex m_cache_mutex;
 };
 
 #endif // SPRITE_CACHE_MANAGER_H

@@ -8,6 +8,7 @@
 #define LOG_FREE(path, addr) printf("[CACHE_FREE] Path: %s, PSRAM Addr: %p\n", path, addr)
 #define LOG_REF_INC(path, count) printf("[REF_INC] Path: %s, New RefCount: %d\n", path, count)
 #define LOG_REF_DEC(path, count) printf("[REF_DEC] Path: %s, New RefCount: %d\n", path, count)
+#define TAG "SPRITE_CACHE"
 
 SpriteCacheManager& SpriteCacheManager::get_instance() {
     static SpriteCacheManager instance;
@@ -15,20 +16,20 @@ SpriteCacheManager& SpriteCacheManager::get_instance() {
 }
 
 SpriteCacheManager::~SpriteCacheManager() {
-    std::lock_guard<std::mutex> lock(s_cache_mutex);
-    printf("Destroying SpriteCacheManager. Releasing all %zu cached sprites.\n", s_cache.size());
-    for (auto& pair : s_cache) {
+    std::lock_guard<std::mutex> lock(m_cache_mutex);
+    printf("Destroying SpriteCacheManager. Releasing all %zu cached sprites.\n", m_cache.size());
+    for (auto& pair : m_cache) {
         printf("WARN: Sprite '%s' had ref_count %d at destruction. Force releasing.\n", pair.first.c_str(), pair.second.ref_count);
         free_sprite_data(pair.first, pair.second);
     }
-    s_cache.clear();
+    m_cache.clear();
 }
 
 const lv_image_dsc_t* SpriteCacheManager::get_sprite(const std::string& full_path) {
-    std::lock_guard<std::mutex> lock(s_cache_mutex);
+    std::lock_guard<std::mutex> lock(m_cache_mutex);
 
-    auto it = s_cache.find(full_path);
-    if (it != s_cache.end()) {
+    auto it = m_cache.find(full_path);
+    if (it != m_cache.end()) {
         it->second.ref_count++;
         LOG_REF_INC(full_path.c_str(), it->second.ref_count);
         return it->second.dsc;
@@ -40,7 +41,7 @@ const lv_image_dsc_t* SpriteCacheManager::get_sprite(const std::string& full_pat
         CachedSprite new_entry;
         new_entry.dsc = new_dsc;
         new_entry.ref_count = 1;
-        s_cache[full_path] = new_entry;
+        m_cache[full_path] = new_entry;
         LOG_REF_INC(full_path.c_str(), 1);
         return new_dsc;
     }
@@ -49,10 +50,10 @@ const lv_image_dsc_t* SpriteCacheManager::get_sprite(const std::string& full_pat
 }
 
 void SpriteCacheManager::release_sprite(const std::string& full_path) {
-    std::lock_guard<std::mutex> lock(s_cache_mutex);
+    std::lock_guard<std::mutex> lock(m_cache_mutex);
 
-    auto it = s_cache.find(full_path);
-    if (it == s_cache.end()) {
+    auto it = m_cache.find(full_path);
+    if (it == m_cache.end()) {
         printf("WARN: Attempted to release a non-cached sprite: %s\n", full_path.c_str());
         return;
     }
@@ -65,7 +66,7 @@ void SpriteCacheManager::release_sprite(const std::string& full_path) {
             printf("ERROR: Ref count for '%s' dropped below zero! This indicates a double-release bug.\n", full_path.c_str());
         }
         free_sprite_data(it->first, it->second);
-        s_cache.erase(it);
+        m_cache.erase(it);
     }
 }
 
@@ -109,8 +110,8 @@ lv_image_dsc_t* SpriteCacheManager::load_from_sd(const std::string& path) {
         return nullptr;
     }
 
-    // Allocate memory for the descriptor itself (this can be in internal RAM).
-    lv_image_dsc_t* img_dsc = (lv_image_dsc_t*)malloc(sizeof(lv_image_dsc_t));
+    // Allocate and zero-initialize memory for the descriptor itself.
+    lv_image_dsc_t* img_dsc = (lv_image_dsc_t*)calloc(1, sizeof(lv_image_dsc_t));
     if (!img_dsc) {
         printf("ERROR: Failed to allocate memory for image descriptor\n");
         free(png_data_buffer);
@@ -118,12 +119,27 @@ lv_image_dsc_t* SpriteCacheManager::load_from_sd(const std::string& path) {
     }
 
     // Configure the descriptor to point to the raw data.
-    // LVGL's PNG decoder will see this and handle it.
     img_dsc->data = png_data_buffer;
     img_dsc->data_size = file_size;
-    img_dsc->header.cf = LV_COLOR_FORMAT_UNKNOWN; // Let LVGL's decoder figure it out.
-    img_dsc->header.w = 0; // Not known until decoded
-    img_dsc->header.h = 0; // Not known until decoded
+    
+    // The LVGL PNG decoder will determine the color format automatically from the data.
+    img_dsc->header.cf = LV_COLOR_FORMAT_UNKNOWN; 
+
+    // --- DIAGNOSTIC TEST ---
+    // Manually set the dimensions to bypass LVGL's header decoding, which is failing.
+    // This is a temporary test and assumes all sprites are 48x48.
+    img_dsc->header.w = 48;
+    img_dsc->header.h = 48;
+
+    // Verify that LVGL can now use this descriptor.
+    lv_image_header_t header;
+    lv_result_t res = lv_image_decoder_get_info(img_dsc, &header);
+    if (res != LV_RESULT_OK) {
+        ESP_LOGE(TAG, "Failed to decode PNG header for '%s'. LVGL decoder returned: %d", path.c_str(), res);
+        free(png_data_buffer);
+        free(img_dsc);
+        return nullptr;
+    }
     
     LOG_LOAD(path.c_str(), file_size, png_data_buffer);
 
