@@ -75,6 +75,12 @@ uint32_t audio_manager_get_duration_s(void);
 /** @brief Gets the current playback progress of the song in seconds. */
 uint32_t audio_manager_get_progress_s(void);
 
+/**
+ * @brief Gets the path of the file currently being played.
+ * @return A const char* to the filepath, or an empty string if nothing is playing.
+ */
+const char* audio_manager_get_current_file(void);
+
 /** @brief Increases volume by one step, respecting the safe physical range. */
 void audio_manager_volume_up(void);
 

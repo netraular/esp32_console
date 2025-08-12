@@ -15,7 +15,7 @@
 
 static const char *TAG = "AUDIO_MGR";
 
-// --- CONFIGURACIÓN DEL FILTRO DE PASO ALTO (HPF) LINKWITZ-RILEY DE 4º ORDEN ---
+// --- HIGH-PASS FILTER (HPF) CONFIGURATION - 4TH ORDER LINKWITZ-RILEY ---
 #define HIGH_PASS_FILTER_THRESHOLD 50 
 #define HPF_MIN_CUTOFF_FREQ 60.0f   
 #define HPF_MAX_CUTOFF_FREQ 350.0f 
@@ -32,7 +32,7 @@ typedef struct { biquad_state_t left; biquad_state_t right; } stereo_biquad_stag
 typedef struct { stereo_biquad_stage_t stages[HPF_STAGES]; } fourth_order_hpf_state_t;
 typedef struct { biquad_coeffs_t stage[HPF_STAGES]; } fourth_order_hpf_coeffs_t;
 
-// Estructura parcial para el header del WAV. La llenaremos por partes.
+// Partial structure for the WAV header. We fill this in parts.
 typedef struct {
     uint16_t audio_format;
     uint16_t num_channels;
@@ -46,9 +46,9 @@ typedef struct {
 // Player state variables
 static TaskHandle_t playback_task_handle = NULL;
 static volatile audio_player_state_t player_state = AUDIO_STATE_STOPPED;
-static char current_filepath[256];
+static char current_filepath[256] = {0};
 static i2s_chan_handle_t tx_chan;
-static wav_format_info_t wav_file_info; // Usamos la nueva estructura parcial
+static wav_format_info_t wav_file_info;
 static volatile uint32_t total_bytes_played = 0;
 static volatile uint32_t song_duration_s = 0;
 static QueueHandle_t visualizer_queue = NULL;
@@ -62,7 +62,7 @@ static SemaphoreHandle_t volume_mutex = NULL;
 // Task synchronization
 static SemaphoreHandle_t playback_task_terminated_sem = NULL;
 
-// --- VARIABLES GLOBALES PARA EL FILTRO DE 4º ORDEN ---
+// --- GLOBAL VARIABLES FOR 4th ORDER FILTER ---
 static fourth_order_hpf_state_t hpf_state;
 static fourth_order_hpf_coeffs_t hpf_coeffs;
 static volatile bool hpf_active = false;
@@ -76,7 +76,7 @@ static void reset_hpf_state();
 static int16_t apply_biquad_filter(biquad_state_t* state, const biquad_coeffs_t* coeffs, int16_t input);
 static inline float map_range(float value, float from_low, float from_high, float to_low, float to_high);
 
-// --- FUNCIONES DEL FILTRO BIQUAD ---
+// --- BIQUAD FILTER FUNCTIONS ---
 static inline float map_range(float value, float from_low, float from_high, float to_low, float to_high) {
     if (value <= from_low) return to_low;
     if (value >= from_high) return to_high;
@@ -147,10 +147,12 @@ bool audio_manager_play(const char *filepath) {
         return false;
     }
     strncpy(current_filepath, filepath, sizeof(current_filepath) - 1);
+    current_filepath[sizeof(current_filepath) - 1] = '\0';
     player_state = AUDIO_STATE_PLAYING;
     if (xTaskCreate(audio_playback_task, "audio_playback", 4096, NULL, 5, &playback_task_handle) != pdPASS) {
         ESP_LOGE(TAG, "Failed to create audio playback task");
         player_state = AUDIO_STATE_STOPPED;
+        current_filepath[0] = '\0';
         xSemaphoreGive(playback_task_terminated_sem);
         return false;
     }
@@ -171,6 +173,7 @@ void audio_manager_stop(void) {
         }
         total_bytes_played = 0; 
         song_duration_s = 0; 
+        current_filepath[0] = '\0';
     }
 }
 
@@ -184,6 +187,10 @@ bool audio_manager_is_playing() {
 }
 uint32_t audio_manager_get_duration_s(void) { return song_duration_s; }
 uint32_t audio_manager_get_progress_s(void) { return (wav_file_info.byte_rate > 0) ? (total_bytes_played / wav_file_info.byte_rate) : 0; }
+
+const char* audio_manager_get_current_file(void) {
+    return current_filepath;
+}
 
 void audio_manager_volume_up(void) {
     uint8_t current_physical_vol = audio_manager_get_volume();
@@ -301,7 +308,6 @@ static void audio_playback_task(void *arg) {
     chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_chan, NULL));
 
-    // --- CORRECCIÓN: Restaurar la configuración detallada de I2S ---
     std_cfg = {};
     std_cfg.clk_cfg.sample_rate_hz = wav_file_info.sample_rate;
     std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
@@ -324,7 +330,6 @@ static void audio_playback_task(void *arg) {
     std_cfg.gpio_cfg.dout = I2S_SPEAKER_DOUT_PIN; 
     std_cfg.gpio_cfg.din = I2S_GPIO_UNUSED;
     std_cfg.gpio_cfg.invert_flags = {.mclk_inv = false, .bclk_inv = false, .ws_inv = false};
-    // --- FIN DE LA CORRECCIÓN ---
 
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_chan, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(tx_chan));
@@ -430,7 +435,10 @@ cleanup:
         tx_chan = NULL;
     }
     
-    if (player_state != AUDIO_STATE_ERROR) player_state = AUDIO_STATE_STOPPED;
+    if (player_state != AUDIO_STATE_ERROR) {
+        player_state = AUDIO_STATE_STOPPED;
+    }
+    current_filepath[0] = '\0'; // Always clear the path when task exits.
     playback_task_handle = NULL;
     xSemaphoreGive(playback_task_terminated_sem);
     ESP_LOGI(TAG, "Playback task self-deleting.");
