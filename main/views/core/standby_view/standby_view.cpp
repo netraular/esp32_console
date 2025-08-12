@@ -208,7 +208,7 @@ StandbyView::ForecastWidgetUI StandbyView::create_forecast_widget(lv_obj_t* pare
 
 void StandbyView::setup_main_button_handlers() {
     button_manager_unregister_view_handlers();
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, pet_hub_press_cb, true, this);
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, menu_press_cb, true, this);
     button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, habit_tracker_press_cb, true, this);
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, voice_notes_press_cb, true, this);
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, settings_press_cb, true, this);
@@ -279,8 +279,8 @@ void StandbyView::update_weather() {
 }
 
 // --- Instance Methods for Actions ---
-void StandbyView::on_pet_hub_press() {
-    view_manager_load_view(VIEW_ID_PET_HUB);
+void StandbyView::on_menu_press() {
+    view_manager_load_view(VIEW_ID_MENU);
 }
 
 void StandbyView::on_settings_press() {
@@ -322,8 +322,8 @@ void StandbyView::update_clock_cb(lv_timer_t* timer) {
     }
 }
 
-void StandbyView::pet_hub_press_cb(void* user_data) {
-    static_cast<StandbyView*>(user_data)->on_pet_hub_press();
+void StandbyView::menu_press_cb(void* user_data) {
+    static_cast<StandbyView*>(user_data)->on_menu_press();
 }
 
 void StandbyView::settings_press_cb(void* user_data) {

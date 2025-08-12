@@ -60,7 +60,7 @@ private:
     void show_weather_placeholders();
 
     // --- Instance Methods for Button Actions ---
-    void on_pet_hub_press();
+    void on_menu_press();
     void on_settings_press();
     void on_habit_tracker_press();
     void on_voice_notes_press();
@@ -70,7 +70,7 @@ private:
 
     // --- Static Callbacks (Bridge to C-style APIs) ---
     static void update_clock_cb(lv_timer_t* timer);
-    static void pet_hub_press_cb(void* user_data);
+    static void menu_press_cb(void* user_data);
     static void settings_press_cb(void* user_data);
     static void habit_tracker_press_cb(void* user_data);
     static void voice_notes_press_cb(void* user_data);
