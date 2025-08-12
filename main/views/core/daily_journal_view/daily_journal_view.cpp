@@ -2,6 +2,7 @@
 #include "views/view_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
 #include "controllers/button_manager/button_manager.h"
+#include "controllers/daily_summary_manager/daily_summary_manager.h"
 #include "models/asset_config.h"
 #include "esp_log.h"
 #include <time.h>
@@ -109,6 +110,15 @@ void DailyJournalView::update_ui() {
     audio_recorder_state_t current_state = audio_recorder_get_state();
     if (current_state != last_known_state) {
         ESP_LOGD(TAG, "Recorder state changed from %d to %d", last_known_state, current_state);
+
+        // Check for successful save completion
+        if (last_known_state == RECORDER_STATE_SAVING && current_state == RECORDER_STATE_IDLE) {
+            ESP_LOGI(TAG, "Journal entry saved successfully. Updating daily summary with path: %s", current_filepath.c_str());
+            // BUG FIX: The path stored in current_filepath is the correct, full path.
+            // Do not prepend SD_CARD_ROOT_PATH again.
+            DailySummaryManager::set_journal_path(time(NULL), current_filepath);
+        }
+
         update_ui_for_state(current_state);
         last_known_state = current_state;
     }
@@ -119,14 +129,15 @@ void DailyJournalView::update_ui() {
     }
 }
 
-void DailyJournalView::get_todays_filepath(std::string& path) {
+void DailyJournalView::get_todays_filepath(std::string& path_from_root) {
     time_t now = time(NULL);
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
     char filename_buf[32];
     strftime(filename_buf, sizeof(filename_buf), "journal_%Y%m%d.wav", &timeinfo);
     
-    path = std::string(SD_CARD_ROOT_PATH) + "/" + USER_DATA_BASE_PATH + JOURNAL_SUBPATH + filename_buf;
+    // Path relative to VFS root, e.g. /sdcard/userdata/journal/journal_...
+    path_from_root = std::string(SD_CARD_ROOT_PATH) + "/" + USER_DATA_BASE_PATH + JOURNAL_SUBPATH + filename_buf;
 }
 
 void DailyJournalView::start_recording() {

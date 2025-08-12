@@ -178,6 +178,10 @@ void audio_manager_pause(void) { if (player_state == AUDIO_STATE_PLAYING && tx_c
 void audio_manager_resume(void) { if (player_state == AUDIO_STATE_PAUSED && tx_chan) { i2s_channel_enable(tx_chan); player_state = AUDIO_STATE_PLAYING; } }
 
 audio_player_state_t audio_manager_get_state(void) { return player_state; }
+bool audio_manager_is_playing() {
+    audio_player_state_t current_state = audio_manager_get_state();
+    return (current_state == AUDIO_STATE_PLAYING || current_state == AUDIO_STATE_PAUSED);
+}
 uint32_t audio_manager_get_duration_s(void) { return song_duration_s; }
 uint32_t audio_manager_get_progress_s(void) { return (wav_file_info.byte_rate > 0) ? (total_bytes_played / wav_file_info.byte_rate) : 0; }
 

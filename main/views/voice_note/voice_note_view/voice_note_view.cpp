@@ -1,6 +1,7 @@
 #include "voice_note_view.h"
 #include "views/view_manager.h"
 #include "controllers/sd_card_manager/sd_card_manager.h"
+#include "controllers/daily_summary_manager/daily_summary_manager.h"
 #include "models/asset_config.h" // Include the asset configuration
 #include <time.h>
 #include <sys/stat.h>
@@ -112,6 +113,13 @@ void VoiceNoteView::update_ui() {
 
     if (current_state != last_known_state) {
         ESP_LOGD(TAG, "Recorder state changed from %d to %d", last_known_state, current_state);
+        
+        // Check for successful save completion
+        if (last_known_state == RECORDER_STATE_SAVING && current_state == RECORDER_STATE_IDLE) {
+            ESP_LOGI(TAG, "Voice note saved successfully. Updating daily summary.");
+            DailySummaryManager::add_voice_note_path(time(NULL), current_filepath);
+        }
+
         update_ui_for_state(current_state);
         last_known_state = current_state;
     }

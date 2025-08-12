@@ -19,6 +19,8 @@ list(APPEND MAIN_SRCS
     "controllers/sprite_cache_manager/sprite_cache_manager.cpp"
     "components/memory_monitor_component/memory_monitor_component.cpp"
     "views/core/daily_journal_view/daily_journal_view.cpp"
+    "controllers/daily_summary_manager/daily_summary_manager.cpp"
+    "views/core/daily_summary_view/daily_summary_view.cpp"
 )
 list(REMOVE_DUPLICATES MAIN_SRCS)
 

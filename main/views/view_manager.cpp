@@ -12,6 +12,7 @@
 #include "views/core/menu_view/menu_view.h"
 #include "views/core/settings_view/settings_view.h"
 #include "views/core/daily_journal_view/daily_journal_view.h"
+#include "views/core/daily_summary_view/daily_summary_view.h"
 // Game Views
 #include "views/game/pet_view/pet_view.h"
 #include "views/game/pet_collection_view/pet_collection_view.h"
@@ -77,6 +78,7 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_MENU] = []() { return new MenuView(); };
     s_view_factory[VIEW_ID_SETTINGS] = []() { return new SettingsView(); };
     s_view_factory[VIEW_ID_DAILY_JOURNAL] = []() { return new DailyJournalView(); };
+    s_view_factory[VIEW_ID_DAILY_SUMMARY] = []() { return new DailySummaryView(); };
     s_view_factory[VIEW_ID_PET_VIEW] = []() { return new PetView(); };
     s_view_factory[VIEW_ID_PET_COLLECTION] = []() { return new PetCollectionView(); };
     s_view_factory[VIEW_ID_PET_HUB] = []() { return new PetHubView(); };

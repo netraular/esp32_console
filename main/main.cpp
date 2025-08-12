@@ -28,6 +28,7 @@
 #include "controllers/power_manager/power_manager.h"
 #include "controllers/habit_data_manager/habit_data_manager.h"
 #include "controllers/notification_manager/notification_manager.h"
+#include "controllers/daily_summary_manager/daily_summary_manager.h"
 #include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
 #include "controllers/weather_manager/weather_manager.h"
 #include "controllers/pet_manager/pet_manager.h"
@@ -102,6 +103,7 @@ extern "C" void app_main(void) {
     // Initialize all other managers that depend on the filesystems.
     HabitDataManager::init();
     NotificationManager::init();
+    DailySummaryManager::init();
 
     if (sd_manager_init()) {
         if (sd_manager_mount()) {

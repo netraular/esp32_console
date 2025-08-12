@@ -63,6 +63,12 @@ void audio_manager_stop(void);
 /** @brief Gets the current state of the audio player. */
 audio_player_state_t audio_manager_get_state(void);
 
+/**
+ * @brief Checks if audio is currently playing or paused.
+ * @return true if the state is PLAYING or PAUSED, false otherwise.
+ */
+bool audio_manager_is_playing();
+
 /** @brief Gets the total duration of the current song in seconds. */
 uint32_t audio_manager_get_duration_s(void);
 

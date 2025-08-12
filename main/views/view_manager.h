@@ -18,6 +18,7 @@
     V(STANDBY) \
     V(MENU) \
     V(SETTINGS) \
+    V(DAILY_SUMMARY) \
     /* Game/Gamification Views */ \
     V(PET_VIEW) \
     V(PET_COLLECTION) \

@@ -1,5 +1,6 @@
 #include "habit_data_manager.h"
 #include "controllers/littlefs_manager/littlefs_manager.h"
+#include "controllers/daily_summary_manager/daily_summary_manager.h" // Added for summary updates
 #include "models/asset_config.h" // Use the centralized asset configuration
 #include "esp_log.h"
 #include <sstream>
@@ -293,6 +294,7 @@ bool HabitDataManager::write_history_file(uint32_t habit_id, const std::vector<t
     std::string path = get_history_filepath(habit_id);
     return littlefs_manager_write_file(path.c_str(), ss.str().c_str());
 }
+
 bool HabitDataManager::mark_habit_as_done(uint32_t habit_id, time_t date) {
     auto dates = read_history_file(habit_id);
     for (const auto& existing_date : dates) {
@@ -302,7 +304,11 @@ bool HabitDataManager::mark_habit_as_done(uint32_t habit_id, time_t date) {
         }
     }
     dates.push_back(date);
-    return write_history_file(habit_id, dates);
+    bool success = write_history_file(habit_id, dates);
+    if (success) {
+        DailySummaryManager::add_completed_habit(date, habit_id);
+    }
+    return success;
 }
 
 bool HabitDataManager::unmark_habit_as_done(uint32_t habit_id, time_t date) {
@@ -321,7 +327,11 @@ bool HabitDataManager::unmark_habit_as_done(uint32_t habit_id, time_t date) {
         return true;
     }
     
-    return write_history_file(habit_id, dates);
+    bool success = write_history_file(habit_id, dates);
+    if (success) {
+        DailySummaryManager::remove_completed_habit(date, habit_id);
+    }
+    return success;
 }
 
 bool HabitDataManager::is_habit_done_today(uint32_t habit_id) {
