@@ -8,9 +8,9 @@
 /**
  * @brief View for displaying system and user settings.
  *
- * This view shows a read-only list of various settings grouped by category,
- * using a modern card-based layout with clear section dividers.
- * It serves as a central place to view device information and user preferences.
+ * This view uses a colorful, icon-driven, card-based layout to present
+ * device information and user preferences in a clear and visually
+ * appealing way.
  */
 class SettingsView : public View {
 public:
@@ -29,6 +29,7 @@ private:
     lv_style_t m_style_card_focused;
     lv_style_t m_style_section_title;
     lv_style_t m_style_divider;
+    lv_style_t m_style_icon;
     bool m_styles_initialized = false;
 
     // --- Private Methods for Setup ---
@@ -40,7 +41,7 @@ private:
 
     // --- Private Methods for UI Logic ---
     void create_section_header(const char* title);
-    void create_setting_card(const char* name, const std::string& value);
+    void create_setting_card(const char* icon, const char* name, const std::string& value);
     
     // --- Instance Methods for Button Actions ---
     void on_cancel_press();
