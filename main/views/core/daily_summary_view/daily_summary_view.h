@@ -12,10 +12,11 @@
 /**
  * @brief A view to display a summary of activities for a specific day.
  *
- * This view allows the user to navigate through different days and see
- * what habits were completed, listen to the daily journal entry, and see
- * other tracked data for that day. It features a two-mode navigation system:
- * DATE mode for changing days and CONTENT mode for interacting with the list.
+ * This view uses a modern, card-based layout to present daily data. It allows
+ * the user to navigate through different days and see what habits were completed,
+ * listen to the daily journal entry, and view other tracked activities.
+ * It features a two-mode navigation system: DATE mode for changing days and
+ * CONTENT mode for interacting with the cards.
  */
 class DailySummaryView : public View {
 public:
@@ -36,11 +37,18 @@ private:
     int m_current_date_index = -1;
 
     // --- LVGL Objects ---
+    lv_obj_t* m_date_header = nullptr;
     lv_obj_t* m_date_label = nullptr;
-    lv_obj_t* m_list = nullptr;
+    lv_obj_t* m_content_area = nullptr;
     lv_group_t* m_content_group = nullptr;
     
-    lv_style_t m_style_focused_content;
+    // --- LVGL Styles ---
+    lv_style_t m_style_date_header;
+    lv_style_t m_style_date_header_active;
+    lv_style_t m_style_card;
+    lv_style_t m_style_card_focused;
+    lv_style_t m_style_card_icon;
+    lv_style_t m_style_card_title;
     bool m_styles_initialized = false;
 
     // --- Private Methods ---
@@ -55,7 +63,7 @@ private:
     void reset_styles();
     void set_nav_mode(NavMode mode);
     void reload_data_if_needed(time_t changed_date);
-    lv_obj_t* add_list_item(ContentItem item_id, const char* title);
+    lv_obj_t* create_content_card(lv_obj_t* parent, ContentItem item_id, const char* icon, const char* title);
     
     // --- Instance Methods for Actions ---
     void on_left_press();
@@ -64,7 +72,7 @@ private:
     void on_cancel_press();
     void on_item_action();
 
-    // --- Static Callbacks ---
+    // --- Static Callbacks (Bridge to C-style APIs) ---
     static void handle_left_press_cb(void* user_data);
     static void handle_right_press_cb(void* user_data);
     static void handle_ok_press_cb(void* user_data);
