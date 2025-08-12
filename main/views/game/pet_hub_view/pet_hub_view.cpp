@@ -75,7 +75,7 @@ void PetHubView::create(lv_obj_t* parent) {
     setup_button_handlers();
 
     movement_timer = lv_timer_create(movement_timer_cb, 3000, this);
-    animation_timer = lv_timer_create(animation_timer_cb, 300, this);
+    animation_timer = lv_timer_create(animation_timer_cb, 150, this);
 }
 
 // --- RESOURCE MANAGEMENT ---

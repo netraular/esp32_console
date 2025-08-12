@@ -14,7 +14,7 @@ static const char *TAG = "AUDIO_PLAYER_COMP";
 typedef struct {
     char current_song_path[256];
     audio_player_exit_callback_t on_exit_cb;
-    void* exit_cb_user_data; // --- NEW --- Store user data for the callback
+    void* exit_cb_user_data;
     bool is_exiting;
     bool is_playing_active;
     bool viz_data_received;
@@ -32,6 +32,7 @@ typedef struct {
 
 
 // --- Internal Prototypes ---
+static void update_volume_label(audio_player_data_t* data);
 static void ui_update_timer_cb(lv_timer_t *timer);
 static void player_container_delete_cb(lv_event_t * e);
 static const char* get_filename_from_path(const char* path);
@@ -65,28 +66,39 @@ static void handle_cancel_press(void* user_data) {
 static void handle_volume_up(void* user_data) {
     audio_player_data_t* data = (audio_player_data_t*)user_data;
     audio_manager_volume_up();
-     if (data->volume_label_widget) {
-        uint8_t vol = audio_manager_get_volume();
-        uint8_t raw_display_vol = (vol * 100) / MAX_VOLUME_PERCENTAGE;
-        uint8_t display_vol = (uint8_t)(roundf((float)raw_display_vol / 5.0f) * 5.0f);
-        const char * icon = (display_vol == 0) ? LV_SYMBOL_MUTE : (display_vol < 50) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
-        lv_label_set_text_fmt(data->volume_label_widget, "%s %u%%", icon, display_vol);
-    }
+    update_volume_label(data);
 }
 
 static void handle_volume_down(void* user_data) {
     audio_player_data_t* data = (audio_player_data_t*)user_data;
     audio_manager_volume_down();
-    if (data->volume_label_widget) {
-        uint8_t vol = audio_manager_get_volume();
-        uint8_t raw_display_vol = (vol * 100) / MAX_VOLUME_PERCENTAGE;
-        uint8_t display_vol = (uint8_t)(roundf((float)raw_display_vol / 5.0f) * 5.0f);
-        const char * icon = (display_vol == 0) ? LV_SYMBOL_MUTE : (display_vol < 50) ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX;
-        lv_label_set_text_fmt(data->volume_label_widget, "%s %u%%", icon, display_vol);
-    }
+    update_volume_label(data);
 }
 
-// --- Main Create Function (MODIFIED) ---
+// --- UI Helper ---
+static void update_volume_label(audio_player_data_t* data) {
+    if (!data || !data->volume_label_widget) return;
+    
+    uint8_t physical_vol = audio_manager_get_volume();
+    // The display volume is a 0-100 scale, mapped from the physical volume (0-MAX_VOLUME_PERCENTAGE)
+    uint8_t raw_display_vol = (physical_vol * 100) / MAX_VOLUME_PERCENTAGE;
+    // Round to nearest 5 for a stepped display
+    uint8_t display_vol = (uint8_t)(roundf((float)raw_display_vol / 5.0f) * 5.0f);
+    
+    const char * icon;
+    if (display_vol == 0) {
+        icon = LV_SYMBOL_MUTE;
+    } else if (display_vol < 50) {
+        icon = LV_SYMBOL_VOLUME_MID;
+    } else {
+        icon = LV_SYMBOL_VOLUME_MAX;
+    }
+    
+    lv_label_set_text_fmt(data->volume_label_widget, "%s %u%%", icon, display_vol);
+}
+
+
+// --- Main Create Function ---
 lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path, audio_player_exit_callback_t on_exit, void* exit_cb_user_data) {
     ESP_LOGI(TAG, "Creating for file: %s", file_path);
     
@@ -97,7 +109,7 @@ lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path,
 
     strncpy(data->current_song_path, file_path, sizeof(data->current_song_path) - 1);
     data->on_exit_cb = on_exit;
-    data->exit_cb_user_data = exit_cb_user_data; // --- NEW --- Store user data
+    data->exit_cb_user_data = exit_cb_user_data;
 
     lv_obj_t *main_cont = lv_obj_create(parent);
     lv_obj_remove_style_all(main_cont);
@@ -122,7 +134,7 @@ lv_obj_t* audio_player_component_create(lv_obj_t* parent, const char* file_path,
 
     data->volume_label_widget = lv_label_create(top_cont);
     lv_obj_set_style_text_font(data->volume_label_widget, &lv_font_montserrat_16, 0);
-    handle_volume_up(data); // Call once to set initial value
+    update_volume_label(data); // Call once to set initial value without changing it.
 
     // --- Visualizer ---
     data->visualizer_widget = audio_visualizer_create(main_cont, VISUALIZER_BAR_COUNT);
@@ -174,7 +186,6 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
 
     if ((data->is_exiting && state == AUDIO_STATE_STOPPED) || state == AUDIO_STATE_ERROR) {
         if (data->on_exit_cb) {
-            // --- MODIFIED --- Pass user data to the callback
             data->on_exit_cb(data->exit_cb_user_data); 
         }
         return; 
