@@ -3,6 +3,7 @@
 
 #include "models/daily_summary_model.h"
 #include <string>
+#include <vector>
 #include <time.h>
 #include <functional> // For std::function
 
@@ -32,6 +33,12 @@ public:
      * @return The timestamp for the latest summary, or 0 if none exist.
      */
     static time_t get_latest_summary_date();
+
+    /**
+     * @brief Scans the summary directory and returns a sorted list of all dates that have data.
+     * @return A vector of timestamps (time_t), each representing a day with a summary file.
+     */
+    static std::vector<time_t> get_all_summary_dates();
 
     /**
      * @brief Adds a completed habit ID to the summary for a given date.

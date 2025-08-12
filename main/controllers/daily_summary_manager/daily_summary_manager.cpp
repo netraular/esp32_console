@@ -6,6 +6,7 @@
 #include <dirent.h>
 #include <algorithm>
 #include <cstring>
+#include <vector>
 
 static const char* TAG = "DAILY_SUMMARY_MGR";
 
@@ -39,6 +40,14 @@ std::string DailySummaryManager::get_filepath_for_date(time_t date) {
 }
 
 bool DailySummaryManager::save_summary(const DailySummaryData& summary) {
+    // Prevent saving an empty summary for a day with no activity
+    if (summary.journal_entry_path.empty() && 
+        summary.completed_habit_ids.empty() && 
+        summary.voice_note_paths.empty()) {
+        ESP_LOGD(TAG, "Skipping save for empty summary on date %lld", (long long)summary.date);
+        return true; // Not a failure, just nothing to do.
+    }
+
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         ESP_LOGE(TAG, "Failed to create cJSON root object.");
@@ -70,7 +79,6 @@ bool DailySummaryManager::save_summary(const DailySummaryData& summary) {
     if (!success) {
         ESP_LOGE(TAG, "Failed to write summary file: %s", filepath.c_str());
     } else {
-        // Invoke callback on successful save
         if (on_data_changed_callback) {
             on_data_changed_callback(summary.date);
         }
@@ -141,35 +149,46 @@ DailySummaryData DailySummaryManager::get_summary_for_date(time_t date) {
 }
 
 time_t DailySummaryManager::get_latest_summary_date() {
+    auto all_dates = get_all_summary_dates();
+    if (all_dates.empty()) {
+        return 0; // No summaries exist
+    }
+    // The vector is sorted, so the last element is the most recent.
+    return all_dates.back();
+}
+
+std::vector<time_t> DailySummaryManager::get_all_summary_dates() {
+    std::vector<time_t> dates;
     std::string dir_path = get_summary_dir_path();
     DIR* dir = opendir(dir_path.c_str());
+
     if (!dir) {
-        return 0; // No directory, no summaries
+        ESP_LOGE(TAG, "Failed to open summary directory: %s", dir_path.c_str());
+        return dates;
     }
 
     struct dirent* entry;
-    std::string latest_filename = "";
     while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_REG) {
-            if (latest_filename == "" || strcmp(entry->d_name, latest_filename.c_str()) > 0) {
-                latest_filename = entry->d_name;
+        if (entry->d_type == DT_REG && strstr(entry->d_name, ".json")) {
+            struct tm timeinfo = {};
+            int year, month, day;
+            if (sscanf(entry->d_name, "%4d%2d%2d.json", &year, &month, &day) == 3) {
+                timeinfo.tm_year = year - 1900;
+                timeinfo.tm_mon = month - 1;
+                timeinfo.tm_mday = day;
+                time_t date_ts = mktime(&timeinfo);
+                if (date_ts != -1) {
+                    dates.push_back(date_ts);
+                }
             }
         }
     }
     closedir(dir);
-
-    if (latest_filename.empty()) {
-        return 0;
-    }
-    
-    // Parse date from filename YYYYMMDD.json
-    struct tm timeinfo = {};
-    sscanf(latest_filename.c_str(), "%4d%2d%2d.json", &timeinfo.tm_year, &timeinfo.tm_mon, &timeinfo.tm_mday);
-    timeinfo.tm_year -= 1900;
-    timeinfo.tm_mon -= 1;
-    
-    return mktime(&timeinfo);
+    std::sort(dates.begin(), dates.end());
+    ESP_LOGD(TAG, "Found %d summary dates.", dates.size());
+    return dates;
 }
+
 
 void DailySummaryManager::add_completed_habit(time_t date, uint32_t habit_id) {
     DailySummaryData summary = get_summary_for_date(date);
