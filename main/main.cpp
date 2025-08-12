@@ -133,6 +133,6 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Entering main loop");
     while (true) {
         lv_timer_handler();
-        vTaskDelay(pdMS_TO_TICKS(25));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
