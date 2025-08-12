@@ -44,7 +44,9 @@
     V(HABIT_HISTORY) \
     /* Notification System Views */ \
     V(ADD_NOTIFICATION) \
-    V(NOTIFICATION_HISTORY)
+    V(NOTIFICATION_HISTORY) \
+    /* Journaling Views */ \
+    V(DAILY_JOURNAL)
 
 // Macro to generate enum members from the list
 #define GENERATE_ENUM(NAME) VIEW_ID_##NAME,

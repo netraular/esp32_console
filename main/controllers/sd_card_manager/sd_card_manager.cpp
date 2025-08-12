@@ -121,6 +121,25 @@ bool sd_manager_is_mounted(void) {
     return s_is_mounted;
 }
 
+bool sd_manager_file_exists(const char* path) {
+    if (!s_is_mounted) {
+        ESP_LOGW(TAG, "Cannot check file existence, SD card not mounted.");
+        return false;
+    }
+    struct stat st;
+    if (stat(path, &st) == 0) {
+        // It exists, check if it's a file, not a directory.
+        return S_ISREG(st.st_mode);
+    }
+    // `stat` returns -1 if file not found, `errno` is set to ENOENT.
+    if (errno == ENOENT) {
+        return false; // File does not exist, this is not an error.
+    }
+    // Another error occurred.
+    ESP_LOGE(TAG, "Error stating file %s: %s", path, strerror(errno));
+    return false;
+}
+
 bool sd_manager_check_ready(void) {
     if (!s_is_mounted) {
         if (!sd_manager_mount()) {

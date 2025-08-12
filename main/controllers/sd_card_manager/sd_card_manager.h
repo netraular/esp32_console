@@ -39,6 +39,13 @@ void sd_manager_deinit(void);
 bool sd_manager_is_mounted(void);
 
 /**
+ * @brief Checks if a file exists on the SD card.
+ * @param path The full path to the file.
+ * @return true if the file exists, false otherwise.
+ */
+bool sd_manager_file_exists(const char* path);
+
+/**
  * @brief Checks if the SD card is ready for use, attempting to mount if necessary.
  * @return true if the card is mounted and accessible, false otherwise.
  */
