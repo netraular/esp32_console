@@ -25,6 +25,7 @@ time_t DailySummaryManager::get_start_of_day(time_t timestamp) {
     timeinfo.tm_hour = 0;
     timeinfo.tm_min = 0;
     timeinfo.tm_sec = 0;
+    timeinfo.tm_isdst = -1; // Let mktime determine DST
     return mktime(&timeinfo);
 }
 
@@ -40,12 +41,11 @@ std::string DailySummaryManager::get_filepath_for_date(time_t date) {
 }
 
 bool DailySummaryManager::save_summary(const DailySummaryData& summary) {
-    // Prevent saving an empty summary for a day with no activity
     if (summary.journal_entry_path.empty() && 
         summary.completed_habit_ids.empty() && 
         summary.voice_note_paths.empty()) {
         ESP_LOGD(TAG, "Skipping save for empty summary on date %lld", (long long)summary.date);
-        return true; // Not a failure, just nothing to do.
+        return true;
     }
 
     cJSON *root = cJSON_CreateObject();
@@ -153,7 +153,6 @@ time_t DailySummaryManager::get_latest_summary_date() {
     if (all_dates.empty()) {
         return 0; // No summaries exist
     }
-    // The vector is sorted, so the last element is the most recent.
     return all_dates.back();
 }
 
@@ -176,6 +175,10 @@ std::vector<time_t> DailySummaryManager::get_all_summary_dates() {
                 timeinfo.tm_year = year - 1900;
                 timeinfo.tm_mon = month - 1;
                 timeinfo.tm_mday = day;
+                timeinfo.tm_hour = 0;
+                timeinfo.tm_min = 0;
+                timeinfo.tm_sec = 0;
+                timeinfo.tm_isdst = -1; // Let mktime determine DST
                 time_t date_ts = mktime(&timeinfo);
                 if (date_ts != -1) {
                     dates.push_back(date_ts);

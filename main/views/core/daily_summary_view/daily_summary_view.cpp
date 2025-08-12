@@ -51,15 +51,12 @@ void DailySummaryView::create(lv_obj_t* parent) {
 void DailySummaryView::load_available_dates() {
     m_available_dates = DailySummaryManager::get_all_summary_dates();
     
-    // Ensure today is always in the list, even if it has no data yet.
     time_t today = get_start_of_day(time(NULL));
     m_available_dates.push_back(today);
     
-    // Sort and remove duplicates to solve the date duplication issue.
     std::sort(m_available_dates.begin(), m_available_dates.end());
     m_available_dates.erase(std::unique(m_available_dates.begin(), m_available_dates.end()), m_available_dates.end());
 
-    // Find today's index to start there.
     auto today_it = std::find(m_available_dates.begin(), m_available_dates.end(), today);
     int initial_index = std::distance(m_available_dates.begin(), today_it);
 
@@ -111,17 +108,24 @@ void DailySummaryView::set_nav_mode(NavMode mode) {
     lv_obj_t* right_arrow = lv_obj_get_child(date_cont, 2);
 
     if (m_nav_mode == NavMode::CONTENT) {
+        // Content is active: Date navigator is inactive (dimmed)
+        lv_obj_set_style_bg_color(date_cont, lv_palette_main(LV_PALETTE_BLUE_GREY), 0);
         lv_obj_set_style_text_color(left_arrow, lv_palette_main(LV_PALETTE_GREY), 0);
         lv_obj_set_style_text_color(right_arrow, lv_palette_main(LV_PALETTE_GREY), 0);
+
+        lv_group_focus_freeze(m_content_group, false);
         lv_group_set_default(m_content_group);
         if (lv_group_get_obj_count(m_content_group) > 0) {
             lv_group_focus_obj(lv_group_get_obj_by_index(m_content_group, 0));
         }
     } else { // DATE mode
+        // Date is active: Date navigator is highlighted
+        lv_obj_set_style_bg_color(date_cont, lv_palette_main(LV_PALETTE_BLUE), 0);
         lv_obj_set_style_text_color(left_arrow, lv_color_white(), 0);
         lv_obj_set_style_text_color(right_arrow, lv_color_white(), 0);
-        lv_group_set_default(nullptr);
+
         lv_group_focus_freeze(m_content_group, true);
+        lv_group_set_default(nullptr);
     }
 }
 
@@ -129,17 +133,18 @@ void DailySummaryView::setup_ui(lv_obj_t* parent) {
     // --- Date Header ---
     lv_obj_t* date_cont = lv_obj_create(parent);
     lv_obj_remove_style_all(date_cont);
+    lv_obj_set_style_bg_opa(date_cont, LV_OPA_COVER, 0); // Ensure background color is visible
     lv_obj_set_size(date_cont, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(date_cont, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(date_cont, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_hor(date_cont, 10, 0);
     lv_obj_set_style_pad_ver(date_cont, 5, 0);
-    lv_obj_set_style_bg_color(date_cont, lv_palette_main(LV_PALETTE_BLUE_GREY), 0);
 
     lv_obj_t* left_arrow = lv_label_create(date_cont);
     lv_label_set_text(left_arrow, LV_SYMBOL_LEFT);
     m_date_label = lv_label_create(date_cont);
     lv_obj_set_style_text_font(m_date_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(m_date_label, lv_color_white(), 0); // Date text is always white on dark bg
     lv_obj_t* right_arrow = lv_label_create(date_cont);
     lv_label_set_text(right_arrow, LV_SYMBOL_RIGHT);
     
@@ -234,6 +239,10 @@ void DailySummaryView::on_left_press() {
         }
     } else { // CONTENT mode
         lv_group_focus_prev(m_content_group);
+        lv_obj_t* focused_obj = lv_group_get_focused(m_content_group);
+        if (focused_obj) {
+            lv_obj_scroll_to_view(focused_obj, LV_ANIM_ON);
+        }
     }
 }
 
@@ -244,6 +253,10 @@ void DailySummaryView::on_right_press() {
         }
     } else { // CONTENT mode
         lv_group_focus_next(m_content_group);
+        lv_obj_t* focused_obj = lv_group_get_focused(m_content_group);
+        if (focused_obj) {
+            lv_obj_scroll_to_view(focused_obj, LV_ANIM_ON);
+        }
     }
 }
 
@@ -304,6 +317,7 @@ time_t DailySummaryView::get_start_of_day(time_t timestamp) {
     timeinfo.tm_hour = 0;
     timeinfo.tm_min = 0;
     timeinfo.tm_sec = 0;
+    timeinfo.tm_isdst = -1; // Let mktime determine DST
     return mktime(&timeinfo);
 }
 
