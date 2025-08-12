@@ -8,7 +8,8 @@
 /**
  * @brief View for displaying system and user settings.
  *
- * This view shows a read-only list of various settings grouped by category.
+ * This view shows a read-only list of various settings grouped by category,
+ * using a modern card-based layout with clear section dividers.
  * It serves as a central place to view device information and user preferences.
  */
 class SettingsView : public View {
@@ -19,11 +20,16 @@ public:
 
 private:
     // --- UI Widgets ---
-    lv_obj_t* list = nullptr;
-    lv_obj_t* first_setting_item = nullptr;
-    lv_group_t* group = nullptr;
-    lv_style_t style_focused;
-    bool styles_initialized = false;
+    lv_obj_t* m_content_area = nullptr;
+    lv_obj_t* m_first_interactive_item = nullptr; // To handle scroll-to-top
+    lv_group_t* m_group = nullptr;
+    
+    // --- LVGL Styles ---
+    lv_style_t m_style_card;
+    lv_style_t m_style_card_focused;
+    lv_style_t m_style_section_title;
+    lv_style_t m_style_divider;
+    bool m_styles_initialized = false;
 
     // --- Private Methods for Setup ---
     void setup_ui(lv_obj_t* parent);
@@ -33,7 +39,8 @@ private:
     void reset_styles();
 
     // --- Private Methods for UI Logic ---
-    void add_setting_item(const char* name, const std::string& value);
+    void create_section_header(const char* title);
+    void create_setting_card(const char* name, const std::string& value);
     
     // --- Instance Methods for Button Actions ---
     void on_cancel_press();
