@@ -11,6 +11,10 @@ constexpr int32_t SCROLL_AMOUNT = 40;
 
 DailySummaryView::DailySummaryView() {
     ESP_LOGI(TAG, "Constructed");
+    // Register to receive data change notifications
+    DailySummaryManager::set_on_data_changed_callback([this](time_t changed_date) {
+        this->reload_data_if_needed(changed_date);
+    });
 }
 
 DailySummaryView::~DailySummaryView() {
@@ -19,6 +23,8 @@ DailySummaryView::~DailySummaryView() {
         audio_manager_stop();
     }
     reset_styles();
+    // Unregister the callback to prevent calls to a deleted object
+    DailySummaryManager::set_on_data_changed_callback(nullptr);
 }
 
 void DailySummaryView::create(lv_obj_t* parent) {
@@ -38,6 +44,14 @@ void DailySummaryView::create(lv_obj_t* parent) {
     }
     load_data_for_date(latest_date);
     set_nav_mode(NavMode::DATE);
+}
+
+void DailySummaryView::reload_data_if_needed(time_t changed_date) {
+    // If the data for the currently displayed day has changed, reload it.
+    if (get_start_of_day(changed_date) == m_current_date) {
+        ESP_LOGI(TAG, "Summary data changed for current view, reloading.");
+        load_data_for_date(m_current_date);
+    }
 }
 
 void DailySummaryView::init_styles() {
@@ -266,6 +280,7 @@ void DailySummaryView::handle_cancel_press_cb(void* user_data) {
 
 void DailySummaryView::play_journal_event_cb(lv_event_t* e) {
     auto* view = static_cast<DailySummaryView*>(lv_event_get_user_data(e));
+    // Only allow playing if in content mode to avoid accidental clicks
     if (view && view->m_nav_mode == NavMode::CONTENT) {
         view->on_play_journal_press();
     }

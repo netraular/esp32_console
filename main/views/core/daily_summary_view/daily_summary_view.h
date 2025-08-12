@@ -49,6 +49,7 @@ private:
     void init_styles();
     void reset_styles();
     void set_nav_mode(NavMode mode);
+    void reload_data_if_needed(time_t changed_date);
 
     // --- Instance Methods for Actions ---
     void on_left_press();

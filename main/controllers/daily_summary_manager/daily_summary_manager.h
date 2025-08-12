@@ -4,6 +4,7 @@
 #include "models/daily_summary_model.h"
 #include <string>
 #include <time.h>
+#include <functional> // For std::function
 
 /**
  * @brief Manages loading, saving, and accessing daily summary data.
@@ -59,11 +60,22 @@ public:
      * @param path The full path to the .wav file.
      */
     static void add_voice_note_path(time_t date, const std::string& path);
+    
+    /**
+     * @brief Sets a callback to be invoked when summary data is changed.
+     *
+     * The active view (e.g., DailySummaryView) should register itself here to be
+     * notified of external changes (e.g., a new voice note being saved).
+     * @param cb The callback function. It receives the timestamp of the day that was modified.
+     */
+    static void set_on_data_changed_callback(std::function<void(time_t)> cb);
 
 private:
     static time_t get_start_of_day(time_t timestamp);
     static std::string get_filepath_for_date(time_t date);
     static bool save_summary(const DailySummaryData& summary);
+
+    static std::function<void(time_t)> on_data_changed_callback;
 };
 
 #endif // DAILY_SUMMARY_MANAGER_H

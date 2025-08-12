@@ -5,9 +5,12 @@
 #include "cJSON.h"
 #include <dirent.h>
 #include <algorithm>
-#include <cstring> // FIX: Added for strcmp
+#include <cstring>
 
 static const char* TAG = "DAILY_SUMMARY_MGR";
+
+// Static member definition
+std::function<void(time_t)> DailySummaryManager::on_data_changed_callback = nullptr;
 
 // --- Private Helper Functions ---
 
@@ -66,6 +69,11 @@ bool DailySummaryManager::save_summary(const DailySummaryData& summary) {
 
     if (!success) {
         ESP_LOGE(TAG, "Failed to write summary file: %s", filepath.c_str());
+    } else {
+        // Invoke callback on successful save
+        if (on_data_changed_callback) {
+            on_data_changed_callback(summary.date);
+        }
     }
     return success;
 }
@@ -80,9 +88,13 @@ void DailySummaryManager::init() {
     }
 }
 
+void DailySummaryManager::set_on_data_changed_callback(std::function<void(time_t)> cb) {
+    on_data_changed_callback = cb;
+}
+
 DailySummaryData DailySummaryManager::get_summary_for_date(time_t date) {
     std::string filepath = get_filepath_for_date(date);
-    DailySummaryData summary{}; // FIX: Use C++ aggregate initialization to zero-initialize and suppress warnings.
+    DailySummaryData summary{};
     summary.date = get_start_of_day(date);
 
     char* buffer = nullptr;
