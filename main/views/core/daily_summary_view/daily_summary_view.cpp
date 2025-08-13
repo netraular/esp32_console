@@ -308,6 +308,15 @@ void DailySummaryView::update_ui() {
     lv_label_set_text_fmt(notes_value_label, "%d saved notes", note_count);
     note_count == 0 ? lv_obj_add_state(notes_card, LV_STATE_DISABLED) : lv_obj_clear_state(notes_card, LV_STATE_DISABLED);
 
+    // If we are in date navigation mode, ensure no content card is visually focused,
+    // even though the group might have an internally focused object.
+    if (m_nav_mode == NavMode::DATE) {
+        lv_obj_t* focused_obj = lv_group_get_focused(m_content_group);
+        if (focused_obj) {
+            lv_obj_clear_state(focused_obj, LV_STATE_FOCUSED);
+        }
+    }
+
     // If no items have data, show an informational message.
     if (m_current_summary.journal_entry_path.empty() && total_count == 0 && note_count == 0) {
         lv_obj_clean(m_content_area);
@@ -330,20 +339,27 @@ void DailySummaryView::set_nav_mode(NavMode mode) {
         lv_obj_set_style_text_color(right_arrow, lv_palette_main(LV_PALETTE_GREY), 0);
 
         // Activate the content group
-        lv_group_focus_freeze(m_content_group, false);
         lv_group_set_default(m_content_group);
+        lv_group_focus_freeze(m_content_group, false);
+
+        // Explicitly focus the first available object in the group
         if (lv_group_get_obj_count(m_content_group) > 0) {
             lv_group_focus_obj(lv_group_get_obj_by_index(m_content_group, 0));
         }
     } else { // DATE mode
-        // Date is active: Emphasize date navigator with an active style
+        // Date is active: Emphasize date navigator
         lv_obj_add_style(m_date_header, &m_style_date_header_active, 0);
         lv_obj_set_style_text_color(left_arrow, lv_palette_main(LV_PALETTE_CYAN), 0);
         lv_obj_set_style_text_color(right_arrow, lv_palette_main(LV_PALETTE_CYAN), 0);
 
-        // Deactivate the content group
-        lv_group_focus_freeze(m_content_group, true);
+        // Deactivate the content group and remove visual focus from its items
         lv_group_set_default(nullptr);
+        lv_group_focus_freeze(m_content_group, true);
+
+        lv_obj_t* focused_obj = lv_group_get_focused(m_content_group);
+        if (focused_obj) {
+            lv_obj_clear_state(focused_obj, LV_STATE_FOCUSED);
+        }
     }
 }
 
