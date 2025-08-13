@@ -6,6 +6,7 @@
 #include "components/popup_manager/popup_manager.h"
 #include "lvgl.h"
 #include <string>
+#include <time.h> // Required for time_t
 
 /**
  * @brief View for recording a daily voice journal entry.
@@ -30,6 +31,7 @@ private:
     // --- State ---
     std::string current_filepath;
     audio_recorder_state_t last_known_state;
+    time_t m_recording_start_time; // Stores the timestamp when recording begins
 
     // --- Private Methods ---
     void setup_ui(lv_obj_t* parent);
@@ -37,7 +39,7 @@ private:
     void format_time(char* buf, size_t buf_size, uint32_t time_s);
     void update_ui_for_state(audio_recorder_state_t state);
     void update_ui();
-    void get_todays_filepath(std::string& path);
+    void get_filepath_for_date(std::string& path, time_t date);
     void start_recording();
 
     // --- Instance Methods for Actions ---

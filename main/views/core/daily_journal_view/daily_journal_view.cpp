@@ -16,6 +16,7 @@ static const char *TAG = "DAILY_JOURNAL_VIEW";
 DailyJournalView::DailyJournalView() {
     ESP_LOGI(TAG, "Constructed");
     last_known_state = (audio_recorder_state_t)-1; // Force initial UI update
+    m_recording_start_time = 0;
 }
 
 DailyJournalView::~DailyJournalView() {
@@ -114,9 +115,8 @@ void DailyJournalView::update_ui() {
         // Check for successful save completion
         if (last_known_state == RECORDER_STATE_SAVING && current_state == RECORDER_STATE_IDLE) {
             ESP_LOGI(TAG, "Journal entry saved successfully. Updating daily summary with path: %s", current_filepath.c_str());
-            // BUG FIX: The path stored in current_filepath is the correct, full path.
-            // Do not prepend SD_CARD_ROOT_PATH again.
-            DailySummaryManager::set_journal_path(time(NULL), current_filepath);
+            // Use the stored start time to ensure the summary is for the correct day
+            DailySummaryManager::set_journal_path(m_recording_start_time, current_filepath);
         }
 
         update_ui_for_state(current_state);
@@ -129,10 +129,9 @@ void DailyJournalView::update_ui() {
     }
 }
 
-void DailyJournalView::get_todays_filepath(std::string& path_from_root) {
-    time_t now = time(NULL);
+void DailyJournalView::get_filepath_for_date(std::string& path_from_root, time_t date) {
     struct tm timeinfo;
-    localtime_r(&now, &timeinfo);
+    localtime_r(&date, &timeinfo);
     char filename_buf[32];
     strftime(filename_buf, sizeof(filename_buf), "journal_%Y%m%d.wav", &timeinfo);
     
@@ -159,7 +158,9 @@ void DailyJournalView::on_ok_press() {
             return;
         }
 
-        get_todays_filepath(current_filepath);
+        // Store the timestamp when the user decides to record
+        m_recording_start_time = time(NULL);
+        get_filepath_for_date(current_filepath, m_recording_start_time);
         ESP_LOGI(TAG, "Checking for existing journal entry at %s", current_filepath.c_str());
 
         if (sd_manager_file_exists(current_filepath.c_str())) {
