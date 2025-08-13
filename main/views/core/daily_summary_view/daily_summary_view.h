@@ -2,12 +2,13 @@
 #define DAILY_SUMMARY_VIEW_H
 
 #include "views/view.h"
-#include "controllers/audio_manager/audio_manager.h"
 #include "models/daily_summary_model.h"
+#include "components/inline_audio_player_component/inline_audio_player_component.h"
 #include "lvgl.h"
 #include <time.h>
 #include <vector>
 #include <string>
+#include <memory>
 
 /**
  * @brief A view to display a summary of activities for a specific day.
@@ -27,19 +28,25 @@ public:
 private:
     // --- Internal Enums for State Management ---
     enum class NavMode { DATE, CONTENT };
+    enum class ViewState { BROWSING, PLAYER_ACTIVE };
     enum class ContentItem { JOURNAL, HABITS, NOTES, POMODORO };
 
     // --- UI and State Members ---
     NavMode m_nav_mode = NavMode::DATE;
+    ViewState m_view_state = ViewState::BROWSING;
     time_t m_current_date;
     DailySummaryData m_current_summary;
     std::vector<time_t> m_available_dates;
     int m_current_date_index = -1;
+    
+    // --- Smart pointer for the player component ---
+    std::unique_ptr<InlineAudioPlayerComponent> m_inline_player;
 
     // --- LVGL Objects ---
     lv_obj_t* m_date_header = nullptr;
     lv_obj_t* m_date_label = nullptr;
     lv_obj_t* m_content_area = nullptr;
+    lv_obj_t* m_journal_content_container = nullptr;
     lv_group_t* m_content_group = nullptr;
     
     // --- LVGL Styles ---
@@ -66,6 +73,10 @@ private:
     void navigate_content(bool is_next);
     lv_obj_t* create_content_card(lv_obj_t* parent, ContentItem item_id, const char* icon, const char* title);
     
+    void populate_journal_card();
+    void create_journal_player();
+    void destroy_journal_player();
+
     // --- Instance Methods for Actions ---
     void on_left_press();
     void on_right_press();
