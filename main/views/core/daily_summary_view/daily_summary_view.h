@@ -63,6 +63,7 @@ private:
     void reset_styles();
     void set_nav_mode(NavMode mode);
     void reload_data_if_needed(time_t changed_date);
+    void navigate_content(bool is_next);
     lv_obj_t* create_content_card(lv_obj_t* parent, ContentItem item_id, const char* icon, const char* title);
     
     // --- Instance Methods for Actions ---

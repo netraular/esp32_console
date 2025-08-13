@@ -204,7 +204,7 @@ void DailySummaryView::setup_ui(lv_obj_t* parent) {
     lv_obj_set_flex_flow(m_content_area, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(m_content_area, 0, 0);
     lv_obj_set_style_pad_gap(m_content_area, 5, 0);
-    lv_obj_clear_flag(m_content_area, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(m_content_area, LV_SCROLLBAR_MODE_AUTO);
 
     m_content_group = lv_group_create();
     lv_group_set_wrap(m_content_group, true);
@@ -347,9 +347,11 @@ void DailySummaryView::set_nav_mode(NavMode mode) {
         lv_group_set_default(m_content_group);
         lv_group_focus_freeze(m_content_group, false);
 
-        // Explicitly focus the first available object in the group
+        // Explicitly focus the first available object in the group and scroll to it
         if (lv_group_get_obj_count(m_content_group) > 0) {
-            lv_group_focus_obj(lv_group_get_obj_by_index(m_content_group, 0));
+            lv_obj_t* first_obj = lv_group_get_obj_by_index(m_content_group, 0);
+            lv_group_focus_obj(first_obj);
+            lv_obj_scroll_to_view(first_obj, LV_ANIM_ON);
         }
     } else { // DATE mode
         // Date is active: Emphasize date navigator
@@ -378,13 +380,26 @@ void DailySummaryView::setup_button_handlers() {
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_cancel_press_cb, true, this);
 }
 
+void DailySummaryView::navigate_content(bool is_next) {
+    if (is_next) {
+        lv_group_focus_next(m_content_group);
+    } else {
+        lv_group_focus_prev(m_content_group);
+    }
+
+    lv_obj_t* focused_obj = lv_group_get_focused(m_content_group);
+    if (focused_obj) {
+        lv_obj_scroll_to_view(focused_obj, LV_ANIM_ON);
+    }
+}
+
 void DailySummaryView::on_left_press() {
     if (m_nav_mode == NavMode::DATE) {
         if (m_current_date_index > 0) {
             load_data_for_date_by_index(m_current_date_index - 1);
         }
     } else { // CONTENT mode
-        lv_group_focus_prev(m_content_group);
+        navigate_content(false);
     }
 }
 
@@ -394,7 +409,7 @@ void DailySummaryView::on_right_press() {
             load_data_for_date_by_index(m_current_date_index + 1);
         }
     } else { // CONTENT mode
-        lv_group_focus_next(m_content_group);
+        navigate_content(true);
     }
 }
 
