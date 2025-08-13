@@ -24,6 +24,7 @@ typedef struct {
     lv_obj_t* progress_arc;
     lv_timer_t* timer;
     pomodoro_exit_callback_t on_exit_cb;
+    pomodoro_work_session_complete_callback_t on_work_session_complete_cb;
     pomodoro_status_t status;
     pomodoro_mode_t mode;
     pomodoro_settings_t settings;
@@ -60,6 +61,10 @@ static void handle_cancel_press(void* user_data) {
 // --- Helper function to switch between WORK and BREAK modes ---
 static void start_next_mode(timer_component_state_t* state) {
     if (state->mode == POMO_MODE_WORK) {
+        // A work session was just completed. Report it.
+        if (state->on_work_session_complete_cb) {
+            state->on_work_session_complete_cb(state->settings.work_seconds);
+        }
         // --- Transition from WORK to BREAK ---
         state->mode = POMO_MODE_BREAK;
         state->remaining_seconds = state->settings.break_seconds;
@@ -123,10 +128,11 @@ static void cleanup_event_cb(lv_event_t * e) {
 }
 
 // --- Public Entry Point ---
-lv_obj_t* pomodoro_timer_component_create(lv_obj_t* parent, const pomodoro_settings_t settings, pomodoro_exit_callback_t on_exit_cb) {
+lv_obj_t* pomodoro_timer_component_create(lv_obj_t* parent, const pomodoro_settings_t settings, pomodoro_exit_callback_t on_exit_cb, pomodoro_work_session_complete_callback_t on_work_session_complete_cb) {
     auto* state = new timer_component_state_t;
     state->settings = settings;
     state->on_exit_cb = on_exit_cb;
+    state->on_work_session_complete_cb = on_work_session_complete_cb;
     state->status = POMO_STATUS_RUNNING;
     state->mode = POMO_MODE_WORK;
     state->current_iteration = 1;

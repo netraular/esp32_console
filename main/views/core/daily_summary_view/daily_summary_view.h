@@ -27,7 +27,7 @@ public:
 private:
     // --- Internal Enums for State Management ---
     enum class NavMode { DATE, CONTENT };
-    enum class ContentItem { JOURNAL, HABITS, NOTES };
+    enum class ContentItem { JOURNAL, HABITS, NOTES, POMODORO };
 
     // --- UI and State Members ---
     NavMode m_nav_mode = NavMode::DATE;

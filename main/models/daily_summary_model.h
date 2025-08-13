@@ -16,6 +16,7 @@ struct DailySummaryData {
     std::string journal_entry_path;
     std::vector<uint32_t> completed_habit_ids;
     std::vector<std::string> voice_note_paths;
+    uint32_t pomodoro_work_seconds = 0; // Total seconds of completed Pomodoro work sessions.
 };
 
 #endif // DAILY_SUMMARY_MODEL_H

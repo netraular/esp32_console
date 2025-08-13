@@ -1,8 +1,10 @@
 #include "pomodoro_view.h"
 #include "views/view_manager.h"
+#include "controllers/daily_summary_manager/daily_summary_manager.h"
 #include "components/pomodoro_config_component.h"
 #include "components/pomodoro_timer_component.h"
 #include "esp_log.h"
+#include <time.h>
 
 static const char* TAG = "POMODORO_VIEW";
 
@@ -70,7 +72,8 @@ void PomodoroView::show_timer_screen(const pomodoro_settings_t& settings) {
     current_component = pomodoro_timer_component_create(
         container, 
         settings, 
-        timer_exit_cb_c // Callback to return to config
+        timer_exit_cb_c, // Callback to return to config
+        work_session_complete_cb_c // Callback for reporting completed work
     );
     current_state = STATE_RUNNING;
 }
@@ -93,6 +96,12 @@ void PomodoroView::on_timer_exit() {
     show_config_screen();
 }
 
+void PomodoroView::on_work_session_complete(uint32_t seconds) {
+    ESP_LOGI(TAG, "Work session completed for %lu seconds. Saving to daily summary.", seconds);
+    DailySummaryManager::add_pomodoro_work_time(time(NULL), seconds);
+}
+
+
 // --- Static Callback Bridges ---
 void PomodoroView::start_pressed_cb_c(const pomodoro_settings_t settings) {
     if (s_instance) {
@@ -109,5 +118,11 @@ void PomodoroView::config_exit_cb_c() {
 void PomodoroView::timer_exit_cb_c() {
     if (s_instance) {
         s_instance->on_timer_exit();
+    }
+}
+
+void PomodoroView::work_session_complete_cb_c(uint32_t seconds) {
+    if (s_instance) {
+        s_instance->on_work_session_complete(seconds);
     }
 }

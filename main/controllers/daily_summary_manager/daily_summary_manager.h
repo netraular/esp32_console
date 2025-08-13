@@ -67,6 +67,13 @@ public:
      * @param path The full path to the .wav file.
      */
     static void add_voice_note_path(time_t date, const std::string& path);
+
+    /**
+     * @brief Adds completed Pomodoro work session time to the summary for a given date.
+     * @param date The date of the session.
+     * @param seconds The duration of the work session in seconds.
+     */
+    static void add_pomodoro_work_time(time_t date, uint32_t seconds);
     
     /**
      * @brief Sets a callback to be invoked when summary data is changed.

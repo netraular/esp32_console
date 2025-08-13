@@ -281,8 +281,7 @@ void DailySummaryView::update_ui() {
     // --- Journal Card ---
     lv_obj_t* journal_card = create_content_card(m_content_area, ContentItem::JOURNAL, LV_SYMBOL_AUDIO, "Daily Journal");
     lv_obj_t* journal_value_label = lv_obj_get_child(lv_obj_get_child(journal_card, 1), 1);
-    bool is_journal_actionable = !m_current_summary.journal_entry_path.empty();
-    if (is_journal_actionable) {
+    if (!m_current_summary.journal_entry_path.empty()) {
         if (audio_manager_is_playing() && m_current_summary.journal_entry_path == audio_manager_get_current_file()) {
              lv_label_set_text(journal_value_label, "Playing...");
         } else {
@@ -304,6 +303,24 @@ void DailySummaryView::update_ui() {
     lv_obj_t* notes_value_label = lv_obj_get_child(lv_obj_get_child(notes_card, 1), 1);
     int note_count = m_current_summary.voice_note_paths.size();
     lv_label_set_text_fmt(notes_value_label, "%d saved notes", note_count);
+
+    // --- Pomodoro Card ---
+    lv_obj_t* pomodoro_card = create_content_card(m_content_area, ContentItem::POMODORO, LV_SYMBOL_REFRESH, "Focus Time");
+    lv_obj_t* pomodoro_value_label = lv_obj_get_child(lv_obj_get_child(pomodoro_card, 1), 1);
+    uint32_t seconds = m_current_summary.pomodoro_work_seconds;
+    if (seconds == 0) {
+        lv_label_set_text(pomodoro_value_label, "None tracked");
+    } else {
+        uint32_t hours = seconds / 3600;
+        uint32_t minutes = (seconds % 3600) / 60;
+        if (hours > 0 && minutes > 0) {
+            lv_label_set_text_fmt(pomodoro_value_label, "%" LV_PRIu32 "h %" LV_PRIu32 "m", hours, minutes);
+        } else if (hours > 0) {
+            lv_label_set_text_fmt(pomodoro_value_label, "%" LV_PRIu32 "h", hours);
+        } else {
+            lv_label_set_text_fmt(pomodoro_value_label, "%" LV_PRIu32 "m", minutes);
+        }
+    }
 
     // If we are in date navigation mode, ensure no content card is visually focused,
     // even though the group might have an internally focused object.
@@ -442,6 +459,11 @@ void DailySummaryView::on_item_action() {
                 ESP_LOGI(TAG, "Navigating to habit tracker");
                 view_manager_load_view(VIEW_ID_TRACK_HABITS);
             }
+            break;
+        
+        case ContentItem::POMODORO:
+            ESP_LOGI(TAG, "Navigating to Pomodoro view.");
+            view_manager_load_view(VIEW_ID_POMODORO);
             break;
     }
 }

@@ -45,6 +45,7 @@ private:
     void on_start_pressed(const pomodoro_settings_t& settings);
     void on_config_exit();
     void on_timer_exit();
+    void on_work_session_complete(uint32_t seconds);
 
     // --- Static Callback Bridges ---
     // These functions are passed to the C-style components and bridge
@@ -52,6 +53,7 @@ private:
     static void start_pressed_cb_c(const pomodoro_settings_t settings);
     static void config_exit_cb_c();
     static void timer_exit_cb_c();
+    static void work_session_complete_cb_c(uint32_t seconds);
 };
 
 #endif // POMODORO_VIEW_H

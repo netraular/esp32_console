@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 #include <vector>
+#include <inttypes.h> // For PRIu32 macro
 
 static const char* TAG = "DAILY_SUMMARY_MGR";
 
@@ -43,7 +44,8 @@ std::string DailySummaryManager::get_filepath_for_date(time_t date) {
 bool DailySummaryManager::save_summary(const DailySummaryData& summary) {
     if (summary.journal_entry_path.empty() && 
         summary.completed_habit_ids.empty() && 
-        summary.voice_note_paths.empty()) {
+        summary.voice_note_paths.empty() &&
+        summary.pomodoro_work_seconds == 0) {
         ESP_LOGD(TAG, "Skipping save for empty summary on date %lld", (long long)summary.date);
         return true;
     }
@@ -56,6 +58,7 @@ bool DailySummaryManager::save_summary(const DailySummaryData& summary) {
 
     cJSON_AddNumberToObject(root, "date", summary.date);
     cJSON_AddStringToObject(root, "journal_path", summary.journal_entry_path.c_str());
+    cJSON_AddNumberToObject(root, "pomodoro_work_seconds", summary.pomodoro_work_seconds);
 
     cJSON *habits = cJSON_CreateArray();
     for (uint32_t id : summary.completed_habit_ids) {
@@ -122,6 +125,11 @@ DailySummaryData DailySummaryManager::get_summary_for_date(time_t date) {
     item = cJSON_GetObjectItem(root, "journal_path");
     if (cJSON_IsString(item)) {
         summary.journal_entry_path = item->valuestring;
+    }
+
+    item = cJSON_GetObjectItem(root, "pomodoro_work_seconds");
+    if (cJSON_IsNumber(item)) {
+        summary.pomodoro_work_seconds = item->valueint;
     }
 
     item = cJSON_GetObjectItem(root, "completed_habit_ids");
@@ -221,5 +229,12 @@ void DailySummaryManager::set_journal_path(time_t date, const std::string& path)
 void DailySummaryManager::add_voice_note_path(time_t date, const std::string& path) {
     DailySummaryData summary = get_summary_for_date(date);
     summary.voice_note_paths.push_back(path);
+    save_summary(summary);
+}
+
+void DailySummaryManager::add_pomodoro_work_time(time_t date, uint32_t seconds) {
+    DailySummaryData summary = get_summary_for_date(date);
+    summary.pomodoro_work_seconds += seconds;
+    ESP_LOGI(TAG, "Adding %" PRIu32 " pomodoro seconds for date %lld. New total: %" PRIu32, seconds, (long long)date, summary.pomodoro_work_seconds);
     save_summary(summary);
 }
