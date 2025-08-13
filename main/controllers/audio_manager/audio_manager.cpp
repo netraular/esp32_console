@@ -16,7 +16,7 @@
 static const char *TAG = "AUDIO_MGR";
 
 // --- HIGH-PASS FILTER (HPF) CONFIGURATION - 4TH ORDER LINKWITZ-RILEY ---
-#define HIGH_PASS_FILTER_THRESHOLD 25 
+#define HIGH_PASS_FILTER_THRESHOLD 50 
 #define HPF_MIN_CUTOFF_FREQ 60.0f   
 #define HPF_MAX_CUTOFF_FREQ 350.0f 
 
@@ -149,7 +149,7 @@ bool audio_manager_play(const char *filepath) {
     strncpy(current_filepath, filepath, sizeof(current_filepath) - 1);
     current_filepath[sizeof(current_filepath) - 1] = '\0';
     player_state = AUDIO_STATE_PLAYING;
-    if (xTaskCreate(audio_playback_task, "audio_playback", 4096, NULL, 10, &playback_task_handle) != pdPASS) {
+    if (xTaskCreate(audio_playback_task, "audio_playback", 4096, NULL, 5, &playback_task_handle) != pdPASS) {
         ESP_LOGE(TAG, "Failed to create audio playback task");
         player_state = AUDIO_STATE_STOPPED;
         current_filepath[0] = '\0';

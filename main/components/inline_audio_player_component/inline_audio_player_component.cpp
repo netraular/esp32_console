@@ -60,8 +60,8 @@ void InlineAudioPlayerComponent::init_styles() {
     lv_style_set_bg_opa(&m_style_knob_paused, LV_OPA_COVER);
     lv_style_set_bg_color(&m_style_knob_paused, lv_palette_main(LV_PALETTE_BLUE));
     lv_style_set_radius(&m_style_knob_paused, 2); 
-    lv_style_set_pad_ver(&m_style_knob_paused, 8); 
-    lv_style_set_pad_hor(&m_style_knob_paused, 2); // Made thinner
+    lv_style_set_pad_ver(&m_style_knob_paused, 6); 
+    lv_style_set_pad_hor(&m_style_knob_paused, 2);
 
     m_styles_initialized = true;
 }
@@ -79,7 +79,10 @@ void InlineAudioPlayerComponent::setup_ui(lv_obj_t* parent) {
     lv_obj_remove_style_all(m_container);
     lv_obj_set_size(m_container, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(m_container, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_all(m_container, 0, 0);
+    // Add vertical padding to ensure the slider knob is not clipped at the top
+    lv_obj_set_style_pad_top(m_container, 8, 0);
+    lv_obj_set_style_pad_hor(m_container, 0, 0);
+    lv_obj_set_style_pad_bottom(m_container, 0, 0);
     lv_obj_set_style_pad_gap(m_container, 5, 0);
     lv_obj_set_align(m_container, LV_ALIGN_CENTER);
 
