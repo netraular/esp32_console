@@ -281,15 +281,14 @@ void DailySummaryView::update_ui() {
     // --- Journal Card ---
     lv_obj_t* journal_card = create_content_card(m_content_area, ContentItem::JOURNAL, LV_SYMBOL_AUDIO, "Daily Journal");
     lv_obj_t* journal_value_label = lv_obj_get_child(lv_obj_get_child(journal_card, 1), 1);
-    if (!m_current_summary.journal_entry_path.empty()) {
-        lv_obj_clear_state(journal_card, LV_STATE_DISABLED);
+    bool is_journal_actionable = !m_current_summary.journal_entry_path.empty();
+    if (is_journal_actionable) {
         if (audio_manager_is_playing() && m_current_summary.journal_entry_path == audio_manager_get_current_file()) {
              lv_label_set_text(journal_value_label, "Playing...");
         } else {
              lv_label_set_text(journal_value_label, "Play " LV_SYMBOL_PLAY);
         }
     } else {
-        lv_obj_add_state(journal_card, LV_STATE_DISABLED);
         lv_label_set_text(journal_value_label, "None recorded");
     }
 
@@ -299,14 +298,12 @@ void DailySummaryView::update_ui() {
     size_t completed_count = m_current_summary.completed_habit_ids.size();
     size_t total_count = HabitDataManager::get_all_active_habits().size();
     lv_label_set_text_fmt(habits_value_label, "%d of %d completed", (int)completed_count, (int)total_count);
-    total_count == 0 ? lv_obj_add_state(habits_card, LV_STATE_DISABLED) : lv_obj_clear_state(habits_card, LV_STATE_DISABLED);
 
     // --- Notes Card ---
     lv_obj_t* notes_card = create_content_card(m_content_area, ContentItem::NOTES, LV_SYMBOL_FILE, "Voice Notes");
     lv_obj_t* notes_value_label = lv_obj_get_child(lv_obj_get_child(notes_card, 1), 1);
     int note_count = m_current_summary.voice_note_paths.size();
     lv_label_set_text_fmt(notes_value_label, "%d saved notes", note_count);
-    note_count == 0 ? lv_obj_add_state(notes_card, LV_STATE_DISABLED) : lv_obj_clear_state(notes_card, LV_STATE_DISABLED);
 
     // If we are in date navigation mode, ensure no content card is visually focused,
     // even though the group might have an internally focused object.
@@ -315,15 +312,6 @@ void DailySummaryView::update_ui() {
         if (focused_obj) {
             lv_obj_clear_state(focused_obj, LV_STATE_FOCUSED);
         }
-    }
-
-    // If no items have data, show an informational message.
-    if (m_current_summary.journal_entry_path.empty() && total_count == 0 && note_count == 0) {
-        lv_obj_clean(m_content_area);
-        lv_group_remove_all_objs(m_content_group);
-        lv_obj_t* no_data_label = lv_label_create(m_content_area);
-        lv_label_set_text(no_data_label, "No activity recorded for this day.");
-        lv_obj_center(no_data_label);
     }
 }
 
@@ -395,10 +383,7 @@ void DailySummaryView::on_right_press() {
 
 void DailySummaryView::on_ok_press() {
     if (m_nav_mode == NavMode::DATE) {
-        // Only switch to content mode if there are interactive items
-        if (lv_group_get_obj_count(m_content_group) > 0) {
-            set_nav_mode(NavMode::CONTENT);
-        }
+        set_nav_mode(NavMode::CONTENT);
     } else { // CONTENT mode
         on_item_action();
     }
@@ -420,29 +405,43 @@ void DailySummaryView::on_cancel_press() {
 
 void DailySummaryView::on_item_action() {
     lv_obj_t* focused_item = lv_group_get_focused(m_content_group);
-    if (!focused_item || lv_obj_has_state(focused_item, LV_STATE_DISABLED)) return;
+    if (!focused_item) return;
 
     ContentItem item_id = (ContentItem)(uintptr_t)lv_obj_get_user_data(focused_item);
+    bool is_today = (m_current_date == get_start_of_day(time(NULL)));
 
     switch (item_id) {
         case ContentItem::JOURNAL:
-            if (audio_manager_is_playing()) {
-                audio_manager_stop();
-            } else if (!m_current_summary.journal_entry_path.empty()) {
-                ESP_LOGI(TAG, "Playing journal: %s", m_current_summary.journal_entry_path.c_str());
-                audio_manager_play(m_current_summary.journal_entry_path.c_str());
+            if (!m_current_summary.journal_entry_path.empty()) {
+                if (audio_manager_is_playing()) {
+                    audio_manager_stop();
+                } else {
+                    ESP_LOGI(TAG, "Playing journal: %s", m_current_summary.journal_entry_path.c_str());
+                    audio_manager_play(m_current_summary.journal_entry_path.c_str());
+                }
+                update_ui(); // Redraw to update "Playing..." status
+            } else if (is_today) {
+                ESP_LOGI(TAG, "No journal for today, navigating to journal creation view.");
+                view_manager_load_view(VIEW_ID_DAILY_JOURNAL);
             }
-            update_ui(); // Redraw to update "Playing..." status
             break;
 
         case ContentItem::NOTES:
-            ESP_LOGI(TAG, "Navigating to voice note player");
-            view_manager_load_view(VIEW_ID_VOICE_NOTE_PLAYER);
+            if (!m_current_summary.voice_note_paths.empty()) {
+                ESP_LOGI(TAG, "Notes exist, navigating to voice note player.");
+                view_manager_load_view(VIEW_ID_VOICE_NOTE_PLAYER);
+            } else if (is_today) {
+                ESP_LOGI(TAG, "No notes for today, navigating to voice note creation view.");
+                view_manager_load_view(VIEW_ID_VOICE_NOTE);
+            }
             break;
 
         case ContentItem::HABITS:
-            ESP_LOGI(TAG, "Navigating to habit tracker");
-            view_manager_load_view(VIEW_ID_TRACK_HABITS);
+            // This action is independent of the day and depends only on habits being defined.
+            if (HabitDataManager::get_all_active_habits().size() > 0) {
+                ESP_LOGI(TAG, "Navigating to habit tracker");
+                view_manager_load_view(VIEW_ID_TRACK_HABITS);
+            }
             break;
     }
 }
