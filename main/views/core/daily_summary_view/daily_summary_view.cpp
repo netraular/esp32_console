@@ -293,33 +293,51 @@ void DailySummaryView::update_ui() {
     else strftime(date_buf, sizeof(date_buf), "%b %d, %Y", &timeinfo);
     lv_label_set_text(m_date_label, date_buf);
 
-    lv_obj_t* journal_card = create_content_card(m_content_area, ContentItem::JOURNAL, LV_SYMBOL_AUDIO, "Daily Journal");
-    m_journal_content_container = lv_obj_get_child(lv_obj_get_child(journal_card, 1), 1);
-    populate_journal_card();
+    bool is_day_empty = m_current_summary.journal_entry_path.empty() &&
+                        m_current_summary.completed_habit_ids.empty() &&
+                        m_current_summary.voice_note_paths.empty() &&
+                        m_current_summary.pomodoro_work_seconds == 0;
 
-    lv_obj_t* habits_card = create_content_card(m_content_area, ContentItem::HABITS, LV_SYMBOL_LIST, "Completed Habits");
-    lv_obj_t* habits_value_label = lv_label_create(lv_obj_get_child(lv_obj_get_child(habits_card, 1), 1));
-    lv_obj_add_style(habits_value_label, &m_style_card_title, 0);
-    lv_label_set_text_fmt(habits_value_label, "%d of %d completed", 
-        (int)m_current_summary.completed_habit_ids.size(), 
-        (int)HabitDataManager::get_all_active_habits().size());
-
-    lv_obj_t* notes_card = create_content_card(m_content_area, ContentItem::NOTES, LV_SYMBOL_FILE, "Voice Notes");
-    lv_obj_t* notes_value_label = lv_label_create(lv_obj_get_child(lv_obj_get_child(notes_card, 1), 1));
-    lv_obj_add_style(notes_value_label, &m_style_card_title, 0);
-    lv_label_set_text_fmt(notes_value_label, "%d saved notes", (int)m_current_summary.voice_note_paths.size());
-
-    lv_obj_t* pomodoro_card = create_content_card(m_content_area, ContentItem::POMODORO, LV_SYMBOL_REFRESH, "Focus Time");
-    lv_obj_t* pomodoro_value_label = lv_label_create(lv_obj_get_child(lv_obj_get_child(pomodoro_card, 1), 1));
-    lv_obj_add_style(pomodoro_value_label, &m_style_card_title, 0);
-    uint32_t seconds = m_current_summary.pomodoro_work_seconds;
-    if (seconds == 0) {
-        lv_label_set_text(pomodoro_value_label, "None tracked");
+    if (is_day_empty) {
+        lv_obj_t* empty_label = lv_label_create(m_content_area);
+        lv_label_set_text(empty_label, "No activity recorded for this day.");
+        lv_obj_set_style_text_align(empty_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_color(empty_label, lv_palette_main(LV_PALETTE_GREY), 0);
+        lv_obj_set_width(empty_label, LV_PCT(100));
+        lv_obj_align(empty_label, LV_ALIGN_CENTER, 0, 0);
     } else {
-        uint32_t h = seconds / 3600, m = (seconds % 3600) / 60;
-        if (h > 0 && m > 0) lv_label_set_text_fmt(pomodoro_value_label, "%" LV_PRIu32 "h %" LV_PRIu32 "m", h, m);
-        else if (h > 0) lv_label_set_text_fmt(pomodoro_value_label, "%" LV_PRIu32 "h", h);
-        else lv_label_set_text_fmt(pomodoro_value_label, "%" LV_PRIu32 "m", m);
+        // Journal card (always shown if day is not empty)
+        lv_obj_t* journal_card = create_content_card(m_content_area, ContentItem::JOURNAL, LV_SYMBOL_AUDIO, "Daily Journal");
+        m_journal_content_container = lv_obj_get_child(lv_obj_get_child(journal_card, 1), 1);
+        populate_journal_card();
+
+        // Habits card (always shown if day is not empty)
+        lv_obj_t* habits_card = create_content_card(m_content_area, ContentItem::HABITS, LV_SYMBOL_LIST, "Completed Habits");
+        lv_obj_t* habits_value_label = lv_label_create(lv_obj_get_child(lv_obj_get_child(habits_card, 1), 1));
+        lv_obj_add_style(habits_value_label, &m_style_card_title, 0);
+        lv_label_set_text_fmt(habits_value_label, "%d of %d completed", 
+            (int)m_current_summary.completed_habit_ids.size(), 
+            (int)HabitDataManager::get_all_active_habits().size());
+
+        // Voice Notes card (conditional)
+        if (!m_current_summary.voice_note_paths.empty()) {
+            lv_obj_t* notes_card = create_content_card(m_content_area, ContentItem::NOTES, LV_SYMBOL_FILE, "Voice Notes");
+            lv_obj_t* notes_value_label = lv_label_create(lv_obj_get_child(lv_obj_get_child(notes_card, 1), 1));
+            lv_obj_add_style(notes_value_label, &m_style_card_title, 0);
+            lv_label_set_text_fmt(notes_value_label, "%d saved notes", (int)m_current_summary.voice_note_paths.size());
+        }
+
+        // Pomodoro/Focus Time card (conditional)
+        if (m_current_summary.pomodoro_work_seconds > 0) {
+            lv_obj_t* pomodoro_card = create_content_card(m_content_area, ContentItem::POMODORO, LV_SYMBOL_REFRESH, "Focus Time");
+            lv_obj_t* pomodoro_value_label = lv_label_create(lv_obj_get_child(lv_obj_get_child(pomodoro_card, 1), 1));
+            lv_obj_add_style(pomodoro_value_label, &m_style_card_title, 0);
+            uint32_t seconds = m_current_summary.pomodoro_work_seconds;
+            uint32_t h = seconds / 3600, m = (seconds % 3600) / 60;
+            if (h > 0 && m > 0) lv_label_set_text_fmt(pomodoro_value_label, "%" LV_PRIu32 "h %" LV_PRIu32 "m", h, m);
+            else if (h > 0) lv_label_set_text_fmt(pomodoro_value_label, "%" LV_PRIu32 "h", h);
+            else lv_label_set_text_fmt(pomodoro_value_label, "%" LV_PRIu32 "m", m);
+        }
     }
     
     if (m_nav_mode == NavMode::DATE) {
