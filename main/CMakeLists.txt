@@ -16,6 +16,7 @@ list(APPEND MAIN_SRCS
     "views/game/pet_view/pet_view.cpp"
     "views/game/pet_collection_view/pet_collection_view.cpp"
     "views/game/pet_hub_view/pet_hub_view.cpp"
+    "views/game/room_view/room_view.cpp"
     "controllers/sprite_cache_manager/sprite_cache_manager.cpp"
     "components/memory_monitor_component/memory_monitor_component.cpp"
     "views/core/daily_journal_view/daily_journal_view.cpp"

@@ -17,6 +17,7 @@
 #include "views/game/pet_view/pet_view.h"
 #include "views/game/pet_collection_view/pet_collection_view.h"
 #include "views/game/pet_hub_view/pet_hub_view.h"
+#include "views/game/room_view/room_view.h"
 // Habit Views
 #include "views/habits/habit_add_view/habit_add_view.h"
 #include "views/habits/habit_category_manager_view/habit_category_manager_view.h"
@@ -82,6 +83,7 @@ static void initialize_view_factory() {
     s_view_factory[VIEW_ID_PET_VIEW] = []() { return new PetView(); };
     s_view_factory[VIEW_ID_PET_COLLECTION] = []() { return new PetCollectionView(); };
     s_view_factory[VIEW_ID_PET_HUB] = []() { return new PetHubView(); };
+    s_view_factory[VIEW_ID_ROOM] = []() { return new RoomView(); };
     s_view_factory[VIEW_ID_MULTI_CLICK_TEST] = []() { return new MultiClickTestView(); };
     s_view_factory[VIEW_ID_CLICK_COUNTER_TEST] = []() { return new ClickCounterView(); };
     s_view_factory[VIEW_ID_IMAGE_TEST] = []() { return new ImageTestView(); };

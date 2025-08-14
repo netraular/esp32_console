@@ -23,6 +23,7 @@
     V(PET_VIEW) \
     V(PET_COLLECTION) \
     V(PET_HUB) \
+    V(ROOM) \
     /* Test Views */ \
     V(MIC_TEST) \
     V(SPEAKER_TEST) \
