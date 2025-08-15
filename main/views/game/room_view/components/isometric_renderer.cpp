@@ -1,5 +1,8 @@
 #include "isometric_renderer.h"
 #include "config/app_config.h" // For SCREEN_WIDTH/HEIGHT
+#include "esp_log.h"
+
+static const char* TAG = "IsometricRenderer";
 
 IsometricRenderer::IsometricRenderer(int room_width, int room_depth, int wall_height_units)
     : ROOM_WIDTH(room_width), ROOM_DEPTH(room_depth), WALL_HEIGHT_UNITS(wall_height_units) {}
@@ -99,46 +102,48 @@ void IsometricRenderer::draw_cursor(lv_layer_t* layer, const lv_point_t& camera_
     highlight_dsc.p1 = {p[3].x, p[3].y}; highlight_dsc.p2 = {p[0].x, p[0].y}; lv_draw_line(layer, &highlight_dsc);
 }
 
-void IsometricRenderer::draw_placeholder_object(lv_layer_t* layer, const lv_point_t& camera_offset, int grid_x, int grid_y, int width, int depth, float height) {
-    lv_draw_triangle_dsc_t fill_dsc;
-    lv_draw_triangle_dsc_init(&fill_dsc);
-    fill_dsc.opa = LV_OPA_COVER;
+void IsometricRenderer::draw_sprite(lv_layer_t* layer, const lv_point_t& camera_offset, const PlacedFurniture& furni,
+                                    const lv_image_dsc_t* sprite_dsc, int offset_x, int offset_y, bool flip_h) {
+    if (!sprite_dsc) return;
 
     lv_point_t origin;
     origin.x = (SCREEN_WIDTH / 2) - camera_offset.x;
     origin.y = (SCREEN_HEIGHT / 2) - camera_offset.y;
 
-    lv_point_t p_floor[4], p_ceil[4];
-    grid_to_screen(grid_x, grid_y, origin, &p_floor[0]);
-    grid_to_screen(grid_x + width, grid_y, origin, &p_floor[1]);
-    grid_to_screen(grid_x + width, grid_y + depth, origin, &p_floor[2]);
-    grid_to_screen(grid_x, grid_y + depth, origin, &p_floor[3]);
+    // Calculate the top-left corner of the tile the furniture sits on.
+    lv_point_t tile_origin;
+    grid_to_screen(furni.grid_x, furni.grid_y, origin, &tile_origin);
+    
+    // Adjust for Z-height (elevation)
+    tile_origin.y -= (int)(furni.grid_z * TILE_HEIGHT);
 
-    const int pixel_h = height * TILE_HEIGHT;
-    for(int i = 0; i < 4; ++i) {
-        p_ceil[i] = {p_floor[i].x, (lv_coord_t)(p_floor[i].y - pixel_h)};
+    // Calculate final screen coordinates including sprite offsets
+    lv_point_t final_pos;
+    final_pos.x = tile_origin.x - offset_x;
+    final_pos.y = tile_origin.y - offset_y;
+
+    // --- FIX START ---
+    // In LVGL v9, the drawing area is passed as a separate parameter, not as part of the descriptor.
+    lv_area_t draw_area;
+    draw_area.x1 = final_pos.x;
+    draw_area.y1 = final_pos.y;
+    draw_area.x2 = final_pos.x + sprite_dsc->header.w - 1;
+    draw_area.y2 = final_pos.y + sprite_dsc->header.h - 1;
+
+    lv_draw_image_dsc_t img_dsc;
+    lv_draw_image_dsc_init(&img_dsc);
+    img_dsc.src = sprite_dsc;
+    
+    // NOTE: Direct horizontal flipping is not supported by lv_draw_image.
+    // This would require more complex matrix transformations. For now, we assume
+    // flip_h is false for the assets we need to render.
+    if (flip_h) {
+        ESP_LOGW(TAG, "Horizontal flipping is not yet implemented in the renderer.");
     }
     
-    // Top face (lightest)
-    fill_dsc.color = lv_color_hex(0x87CEEB); // Sky Blue
-    fill_dsc.p[0] = {p_ceil[0].x, p_ceil[0].y}; fill_dsc.p[1] = {p_ceil[1].x, p_ceil[1].y}; fill_dsc.p[2] = {p_ceil[2].x, p_ceil[2].y};
-    lv_draw_triangle(layer, &fill_dsc);
-    fill_dsc.p[1] = {p_ceil[2].x, p_ceil[2].y}; fill_dsc.p[2] = {p_ceil[3].x, p_ceil[3].y};
-    lv_draw_triangle(layer, &fill_dsc);
-
-    // Left face (darkest)
-    fill_dsc.color = lv_color_hex(0x4682B4); // Steel Blue
-    fill_dsc.p[0] = {p_floor[3].x, p_floor[3].y}; fill_dsc.p[1] = {p_floor[2].x, p_floor[2].y}; fill_dsc.p[2] = {p_ceil[2].x, p_ceil[2].y};
-    lv_draw_triangle(layer, &fill_dsc);
-    fill_dsc.p[1] = {p_ceil[2].x, p_ceil[2].y}; fill_dsc.p[2] = {p_ceil[3].x, p_ceil[3].y};
-    lv_draw_triangle(layer, &fill_dsc);
-    
-    // Right face (medium)
-    fill_dsc.color = lv_color_hex(0x5F9EA0); // Cadet Blue
-    fill_dsc.p[0] = {p_floor[1].x, p_floor[1].y}; fill_dsc.p[1] = {p_floor[2].x, p_floor[2].y}; fill_dsc.p[2] = {p_ceil[2].x, p_ceil[2].y};
-    lv_draw_triangle(layer, &fill_dsc);
-    fill_dsc.p[1] = {p_ceil[2].x, p_ceil[2].y}; fill_dsc.p[2] = {p_ceil[1].x, p_ceil[1].y};
-    lv_draw_triangle(layer, &fill_dsc);
+    // The lv_draw_image function now requires the layer, descriptor, and drawing area.
+    lv_draw_image(layer, &img_dsc, &draw_area);
+    // --- FIX END ---
 }
 
 
@@ -175,16 +180,12 @@ void IsometricRenderer::draw_target_point(lv_layer_t* layer, const lv_point_t& c
 
     lv_point_t center;
     grid_to_screen_center(grid_x, grid_y, origin, &center);
-
-    // --- FIX START ---
-    // In LVGL v9, all parameters are set in the descriptor.
+    
     arc_dsc.center.x = center.x;
     arc_dsc.center.y = center.y;
     arc_dsc.radius = 3;
     arc_dsc.start_angle = 0;
     arc_dsc.end_angle = 360;
 
-    // The draw function now only takes the layer and the descriptor.
     lv_draw_arc(layer, &arc_dsc);
-    // --- FIX END ---
 }

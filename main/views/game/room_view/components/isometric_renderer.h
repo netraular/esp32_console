@@ -2,6 +2,7 @@
 #define ISOMETRIC_RENDERER_H
 
 #include "lvgl.h"
+#include "models/furniture_data_model.h" // For PlacedFurniture
 
 class IsometricRenderer {
 public:
@@ -10,7 +11,10 @@ public:
     void draw_cursor(lv_layer_t* layer, const lv_point_t& camera_offset, int grid_x, int grid_y);
     void draw_target_tile(lv_layer_t* layer, const lv_point_t& camera_offset, int grid_x, int grid_y);
     void draw_target_point(lv_layer_t* layer, const lv_point_t& camera_offset, int grid_x, int grid_y);
-    void draw_placeholder_object(lv_layer_t* layer, const lv_point_t& camera_offset, int grid_x, int grid_y, int width, int depth, float height);
+    
+    // Renders a sprite at a specific grid coordinate with offsets.
+    void draw_sprite(lv_layer_t* layer, const lv_point_t& camera_offset, const PlacedFurniture& furni,
+                     const lv_image_dsc_t* sprite_dsc, int offset_x, int offset_y, bool flip_h);
 
     static void grid_to_screen(int grid_x, int grid_y, const lv_point_t& origin, lv_point_t* p_out);
     static void grid_to_screen_center(int grid_x, int grid_y, const lv_point_t& origin, lv_point_t* p_out);

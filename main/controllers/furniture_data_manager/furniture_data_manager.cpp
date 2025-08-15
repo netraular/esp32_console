@@ -57,12 +57,10 @@ void FurnitureDataManager::file_iterator_callback(const char* name, bool is_dir,
 
     FurnitureDataManager* manager = static_cast<FurnitureDataManager*>(user_data);
 
-    // --- MODIFICATION START ---
     // Construct the path to the expected "furni.json" file inside the directory.
     char json_path[256];
     snprintf(json_path, sizeof(json_path), "%s%s%s%s/furni.json",
              sd_manager_get_mount_point(), ASSETS_BASE_SUBPATH, ASSETS_FURNITURE_SUBPATH, name);
-    // --- MODIFICATION END ---
 
     ESP_LOGD(TAG, "Found furniture directory '%s', checking for definition at '%s'", name, json_path);
 
@@ -97,13 +95,6 @@ bool FurnitureDataManager::parse_furniture_file(const std::string& full_path) {
         cJSON_Delete(root);
         return false;
     }
-    
-    // It's crucial that the type name from the JSON matches the hardcoded name in RoomView.
-    // Let's verify that the file you're loading actually defines "ads_gsArcade_2".
-    if (furni_data->type_name != "ads_gsArcade_2" && full_path.find("ads_gsArcade_2") != std::string::npos) {
-        ESP_LOGW(TAG, "Mismatch: File in folder 'ads_gsArcade_2' defines type '%s'", furni_data->type_name.c_str());
-    }
-
 
     cJSON* logic = cJSON_GetObjectItem(root, "logic");
     cJSON* dimensions = cJSON_GetObjectItem(logic, "dimensions");
@@ -117,12 +108,34 @@ bool FurnitureDataManager::parse_furniture_file(const std::string& full_path) {
         furni_data->layer_count = atoi(cJSON_GetObjectItem(viz64, "layerCount")->valuestring);
     }
     
-    // For simplicity, we are not parsing all details like assets, directions etc.
-    // This is a stub for future expansion to render actual sprites.
+    // --- Parse assets ---
+    cJSON* assets_json = cJSON_GetObjectItem(root, "assets");
+    if (cJSON_IsObject(assets_json)) {
+        cJSON* asset_item = nullptr;
+        cJSON_ArrayForEach(asset_item, assets_json) {
+            FurnitureAsset asset;
+            asset.name = asset_item->string; // The key is the asset name
+            
+            cJSON* source = cJSON_GetObjectItem(asset_item, "source");
+            if(cJSON_IsString(source)) asset.source = source->valuestring;
+            
+            cJSON* flipH = cJSON_GetObjectItem(asset_item, "flipH");
+            if(cJSON_IsString(flipH)) asset.flip_h = (strcmp(flipH->valuestring, "1") == 0);
+
+            cJSON* x_offset = cJSON_GetObjectItem(asset_item, "x");
+            if(cJSON_IsString(x_offset)) asset.x_offset = atoi(x_offset->valuestring);
+
+            cJSON* y_offset = cJSON_GetObjectItem(asset_item, "y");
+            if(cJSON_IsString(y_offset)) asset.y_offset = atoi(y_offset->valuestring);
+            
+            furni_data->assets[asset.name] = asset;
+        }
+    }
 
     cJSON_Delete(root);
 
-    ESP_LOGI(TAG, "Successfully parsed furniture type: %s from %s", furni_data->type_name.c_str(), full_path.c_str());
+    ESP_LOGI(TAG, "Successfully parsed furniture type: %s with %zu assets from %s", 
+             furni_data->type_name.c_str(), furni_data->assets.size(), full_path.c_str());
     m_definitions[furni_data->type_name] = std::move(furni_data);
     return true;
 }

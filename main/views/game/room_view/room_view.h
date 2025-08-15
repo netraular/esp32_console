@@ -10,6 +10,9 @@
 #include "components/room_object_manager.h"
 #include "controllers/furniture_data_manager/furniture_data_manager.h"
 #include <memory>
+#include <vector>
+#include <string>
+#include <map>
 
 class RoomView : public View {
 public:
@@ -34,11 +37,16 @@ private:
     int cursor_grid_x;
     int cursor_grid_y;
     RoomMode current_mode;
-    lv_timer_t* update_timer = nullptr; // Member variable to hold the timer
+    lv_timer_t* update_timer = nullptr;
+    
+    // --- FIX: Map to store pre-loaded sprite descriptors for fast drawing ---
+    std::map<std::string, const lv_image_dsc_t*> m_cached_sprites;
     
     // --- Setup Functions ---
     void setup_ui(lv_obj_t* parent);
     void setup_view_button_handlers();
+    void load_all_furniture_sprites();
+    void release_all_furniture_sprites();
 
     // --- Core Logic ---
     void set_mode(RoomMode new_mode);
