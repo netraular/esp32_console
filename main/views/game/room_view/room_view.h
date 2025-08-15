@@ -21,7 +21,7 @@ private:
     // --- Constants ---
     static constexpr int ROOM_WIDTH = 10;           // Room width in tiles
     static constexpr int ROOM_DEPTH = 10;           // Room depth in tiles
-    static constexpr int WALL_HEIGHT_UNITS = 5;     // Height of the walls in tile-height units
+    static constexpr int WALL_HEIGHT_UNITS = 4;     // Height of the walls in tile-height units
     static constexpr int TILE_WIDTH = 64;           // Isometric tile width in pixels
     static constexpr int TILE_HEIGHT = 32;          // Isometric tile height in pixels
     static constexpr int ANIMATION_DURATION_MS = 100; // Duration of the camera pan animation
