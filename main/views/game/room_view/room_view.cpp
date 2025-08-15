@@ -4,6 +4,7 @@
 #include "config/app_config.h" // For SCREEN_WIDTH/HEIGHT
 #include "esp_log.h"
 #include "lvgl.h" // Main LVGL header - includes everything needed
+#include "draw/lv_draw_triangle.h" // Required for drawing filled polygons
 
 static const char* TAG = "ROOM_VIEW";
 
@@ -74,42 +75,43 @@ void RoomView::draw_event_cb(lv_event_t* e) {
     RoomView* view = (RoomView*)lv_event_get_user_data(e);
     lv_layer_t * layer = lv_event_get_layer(e);
     
-    // Line descriptors
-    lv_draw_line_dsc_t grid_line_dsc, wall_line_dsc, highlight_dsc, floor_fill_dsc;
-    
-    // Grid lines (light gray)
+    // --- Descriptor Initialization ---
+    lv_draw_line_dsc_t grid_line_dsc, wall_line_dsc, highlight_dsc;
+    lv_draw_triangle_dsc_t floor_fill_dsc, wall_fill_dsc;
+
+    // Grid lines (light gray outlines)
     lv_draw_line_dsc_init(&grid_line_dsc);
-    grid_line_dsc.color = lv_color_hex(0xC0C0C0); // Light gray for grid outlines
+    grid_line_dsc.color = lv_color_hex(0xC0C0C0);
     grid_line_dsc.width = 1;
 
     // Wall lines (light gray outlines)
     lv_draw_line_dsc_init(&wall_line_dsc);
-    wall_line_dsc.color = lv_color_hex(0xC0C0C0); // Light gray for wall outlines  
+    wall_line_dsc.color = lv_color_hex(0xC0C0C0);
     wall_line_dsc.width = 1;
 
-    // Floor fill lines (light brown, thicker to simulate fill)
-    lv_draw_line_dsc_init(&floor_fill_dsc);
-    floor_fill_dsc.color = lv_color_hex(0xD2B48C); // Light brown for floor fill
-    floor_fill_dsc.width = 3; // Thicker lines to create fill effect
-
-    // Highlight lines
+    // Highlight lines for the selected tile
     lv_draw_line_dsc_init(&highlight_dsc);
     highlight_dsc.color = lv_palette_main(LV_PALETTE_YELLOW);
     highlight_dsc.width = 2;
 
-    // Rectangle descriptor for wall fills
-    lv_draw_rect_dsc_t wall_rect_dsc;
-    lv_draw_rect_dsc_init(&wall_rect_dsc);
-    wall_rect_dsc.bg_color = lv_color_hex(0xFF8C00); // Dark orange for wall fill
-    wall_rect_dsc.bg_opa = LV_OPA_COVER;
-    wall_rect_dsc.border_width = 0; // No border for fill rectangles
+    // Floor fill using triangles (light brown)
+    lv_draw_triangle_dsc_init(&floor_fill_dsc);
+    floor_fill_dsc.opa = LV_OPA_COVER;
+    floor_fill_dsc.color = lv_color_hex(0xD2B48C);
+
+    // Wall fill using triangles (dark orange)
+    lv_draw_triangle_dsc_init(&wall_fill_dsc);
+    wall_fill_dsc.opa = LV_OPA_COVER;
+    wall_fill_dsc.color = lv_color_hex(0xFF8C00);
 
     // The origin is calculated to center the view based on the current animated camera offset
     lv_point_t origin;
     origin.x = (SCREEN_WIDTH / 2) - view->camera_offset.x;
     origin.y = (SCREEN_HEIGHT / 2) - view->camera_offset.y;
 
-    // Draw Floor Fill (multiple parallel lines following isometric shape)
+    // --- Drawing Order: From back to front ---
+
+    // 1. Draw Floor Fill (using two triangles per tile)
     for (int y = 0; y < ROOM_DEPTH; ++y) {
         for (int x = 0; x < ROOM_WIDTH; ++x) {
             lv_point_t corners[4];
@@ -118,35 +120,20 @@ void RoomView::draw_event_cb(lv_event_t* e) {
             view->grid_to_screen(x + 1, y + 1, origin, &corners[2]); // Bottom
             view->grid_to_screen(x, y + 1, origin, &corners[3]);     // Left
             
-            // Draw horizontal fill lines within the diamond shape
-            int top_y = corners[0].y;
-            int bottom_y = corners[2].y;
-            
-            // Fill with horizontal lines from top to bottom
-            for (int fill_y = top_y; fill_y <= bottom_y; fill_y += 2) {
-                // Calculate left and right boundaries for this y-level
-                int line_left_x, line_right_x;
-                
-                if (fill_y <= (top_y + bottom_y) / 2) {
-                    // Upper half of diamond
-                    float ratio = (float)(fill_y - top_y) / ((top_y + bottom_y) / 2 - top_y);
-                    line_left_x = corners[0].x + ratio * (corners[3].x - corners[0].x);
-                    line_right_x = corners[0].x + ratio * (corners[1].x - corners[0].x);
-                } else {
-                    // Lower half of diamond
-                    float ratio = (float)(fill_y - (top_y + bottom_y) / 2) / (bottom_y - (top_y + bottom_y) / 2);
-                    line_left_x = corners[3].x + ratio * (corners[2].x - corners[3].x);
-                    line_right_x = corners[1].x + ratio * (corners[2].x - corners[1].x);
-                }
-                
-                floor_fill_dsc.p1 = {(lv_coord_t)line_left_x, (lv_coord_t)fill_y};
-                floor_fill_dsc.p2 = {(lv_coord_t)line_right_x, (lv_coord_t)fill_y};
-                lv_draw_line(layer, &floor_fill_dsc);
-            }
+            // Draw the first triangle of the tile
+            floor_fill_dsc.p[0] = { (lv_coord_t)corners[0].x, (lv_coord_t)corners[0].y };
+            floor_fill_dsc.p[1] = { (lv_coord_t)corners[1].x, (lv_coord_t)corners[1].y };
+            floor_fill_dsc.p[2] = { (lv_coord_t)corners[2].x, (lv_coord_t)corners[2].y };
+            lv_draw_triangle(layer, &floor_fill_dsc);
+
+            // Draw the second triangle of the tile
+            floor_fill_dsc.p[1] = { (lv_coord_t)corners[2].x, (lv_coord_t)corners[2].y };
+            floor_fill_dsc.p[2] = { (lv_coord_t)corners[3].x, (lv_coord_t)corners[3].y };
+            lv_draw_triangle(layer, &floor_fill_dsc);
         }
     }
 
-    // Draw Floor Grid Outlines
+    // 2. Draw Floor Grid Outlines
     for (int y = 0; y <= ROOM_DEPTH; ++y) {
         for (int x = 0; x <= ROOM_WIDTH; ++x) {
             lv_point_t p1;
@@ -164,137 +151,51 @@ void RoomView::draw_event_cb(lv_event_t* e) {
         }
     }
 
-    // Draw Floor Grid Outlines
-    for (int y = 0; y <= ROOM_DEPTH; ++y) {
-        for (int x = 0; x <= ROOM_WIDTH; ++x) {
-            lv_point_t p1;
-            view->grid_to_screen(x, y, origin, &p1);
-            if (x < ROOM_WIDTH) {
-                lv_point_t p2; view->grid_to_screen(x + 1, y, origin, &p2);
-                grid_line_dsc.p1 = {p1.x, p1.y}; grid_line_dsc.p2 = {p2.x, p2.y};
-                lv_draw_line(layer, &grid_line_dsc);
-            }
-            if (y < ROOM_DEPTH) {
-                lv_point_t p3; view->grid_to_screen(x, y + 1, origin, &p3);
-                grid_line_dsc.p1 = {p1.x, p1.y}; grid_line_dsc.p2 = {p3.x, p3.y};
-                lv_draw_line(layer, &grid_line_dsc);
-            }
-        }
-    }
-    
-    // Draw Highlighted Tile (always highlights the destination tile)
-    lv_point_t highlight_corners[4];
-    view->grid_to_screen(view->selected_grid_x, view->selected_grid_y, origin, &highlight_corners[0]);
-    view->grid_to_screen(view->selected_grid_x + 1, view->selected_grid_y, origin, &highlight_corners[1]);
-    view->grid_to_screen(view->selected_grid_x + 1, view->selected_grid_y + 1, origin, &highlight_corners[2]);
-    view->grid_to_screen(view->selected_grid_x, view->selected_grid_y + 1, origin, &highlight_corners[3]);
-    highlight_dsc.p1 = {highlight_corners[0].x, highlight_corners[0].y}; highlight_dsc.p2 = {highlight_corners[1].x, highlight_corners[1].y}; lv_draw_line(layer, &highlight_dsc);
-    highlight_dsc.p1 = {highlight_corners[1].x, highlight_corners[1].y}; highlight_dsc.p2 = {highlight_corners[2].x, highlight_corners[2].y}; lv_draw_line(layer, &highlight_dsc);
-    highlight_dsc.p1 = {highlight_corners[2].x, highlight_corners[2].y}; highlight_dsc.p2 = {highlight_corners[3].x, highlight_corners[3].y}; lv_draw_line(layer, &highlight_dsc);
-    highlight_dsc.p1 = {highlight_corners[3].x, highlight_corners[3].y}; highlight_dsc.p2 = {highlight_corners[0].x, highlight_corners[0].y}; lv_draw_line(layer, &highlight_dsc);
-    
-    // Draw Highlighted Tile (always highlights the destination tile)
-    lv_point_t p[4];
-    view->grid_to_screen(view->selected_grid_x, view->selected_grid_y, origin, &p[0]);
-    view->grid_to_screen(view->selected_grid_x + 1, view->selected_grid_y, origin, &p[1]);
-    view->grid_to_screen(view->selected_grid_x + 1, view->selected_grid_y + 1, origin, &p[2]);
-    view->grid_to_screen(view->selected_grid_x, view->selected_grid_y + 1, origin, &p[3]);
-    highlight_dsc.p1 = {p[0].x, p[0].y}; highlight_dsc.p2 = {p[1].x, p[1].y}; lv_draw_line(layer, &highlight_dsc);
-    highlight_dsc.p1 = {p[1].x, p[1].y}; highlight_dsc.p2 = {p[2].x, p[2].y}; lv_draw_line(layer, &highlight_dsc);
-    highlight_dsc.p1 = {p[2].x, p[2].y}; highlight_dsc.p2 = {p[3].x, p[3].y}; lv_draw_line(layer, &highlight_dsc);
-    highlight_dsc.p1 = {p[3].x, p[3].y}; highlight_dsc.p2 = {p[0].x, p[0].y}; lv_draw_line(layer, &highlight_dsc);
-    
-    // Draw Wall Fills (parallelograms following isometric perspective)
+    // 3. Draw Wall Fills (using two triangles per wall segment)
     const int wall_pixel_height = WALL_HEIGHT_UNITS * TILE_HEIGHT;
     
-    // Back-right wall (each segment is a parallelogram)
+    // Back-right wall
     for (int i = 0; i < ROOM_WIDTH; ++i) {
-        lv_point_t bottom_left, bottom_right, top_left, top_right;
-        view->grid_to_screen(i, 0, origin, &bottom_left);
-        view->grid_to_screen(i + 1, 0, origin, &bottom_right);
-        top_left = {bottom_left.x, (lv_coord_t)(bottom_left.y - wall_pixel_height)};
-        top_right = {bottom_right.x, (lv_coord_t)(bottom_right.y - wall_pixel_height)};
+        lv_point_t p[4]; // bottom-left, bottom-right, top-right, top-left
+        view->grid_to_screen(i, 0, origin, &p[0]);
+        view->grid_to_screen(i + 1, 0, origin, &p[1]);
+        p[2] = {p[1].x, (lv_coord_t)(p[1].y - wall_pixel_height)};
+        p[3] = {p[0].x, (lv_coord_t)(p[0].y - wall_pixel_height)};
         
-        // Fill the parallelogram wall segment with horizontal lines
-        int min_y = LV_MIN(top_left.y, top_right.y);
-        int max_y = LV_MAX(bottom_left.y, bottom_right.y);
-        
-        for (int fill_y = min_y; fill_y <= max_y; fill_y += 1) {
-            // Calculate the left and right x positions for this y level
-            // For the left edge: interpolate between top_left and bottom_left
-            // For the right edge: interpolate between top_right and bottom_right
-            float left_ratio = (float)(fill_y - top_left.y) / (bottom_left.y - top_left.y);
-            float right_ratio = (float)(fill_y - top_right.y) / (bottom_right.y - top_right.y);
-            
-            // Clamp ratios to valid range
-            left_ratio = LV_MAX(0.0f, LV_MIN(1.0f, left_ratio));
-            right_ratio = LV_MAX(0.0f, LV_MIN(1.0f, right_ratio));
-            
-            int line_left_x = top_left.x + left_ratio * (bottom_left.x - top_left.x);
-            int line_right_x = top_right.x + right_ratio * (bottom_right.x - top_right.x);
-            
-            // Draw the horizontal fill line
-            lv_draw_line_dsc_t wall_fill_dsc;
-            lv_draw_line_dsc_init(&wall_fill_dsc);
-            wall_fill_dsc.color = lv_color_hex(0xFF8C00); // Dark orange
-            wall_fill_dsc.width = 1;
-            wall_fill_dsc.p1 = {(lv_coord_t)line_left_x, (lv_coord_t)fill_y};
-            wall_fill_dsc.p2 = {(lv_coord_t)line_right_x, (lv_coord_t)fill_y};
-            lv_draw_line(layer, &wall_fill_dsc);
-        }
+        wall_fill_dsc.p[0] = {p[0].x, p[0].y}; wall_fill_dsc.p[1] = {p[1].x, p[1].y}; wall_fill_dsc.p[2] = {p[2].x, p[2].y};
+        lv_draw_triangle(layer, &wall_fill_dsc);
+        wall_fill_dsc.p[1] = {p[2].x, p[2].y}; wall_fill_dsc.p[2] = {p[3].x, p[3].y};
+        lv_draw_triangle(layer, &wall_fill_dsc);
     }
     
-    // Back-left wall (each segment is a parallelogram)
+    // Back-left wall
     for (int i = 0; i < ROOM_DEPTH; ++i) {
-        lv_point_t bottom_left, bottom_right, top_left, top_right;
-        view->grid_to_screen(0, i, origin, &bottom_left);
-        view->grid_to_screen(0, i + 1, origin, &bottom_right);
-        top_left = {bottom_left.x, (lv_coord_t)(bottom_left.y - wall_pixel_height)};
-        top_right = {bottom_right.x, (lv_coord_t)(bottom_right.y - wall_pixel_height)};
+        lv_point_t p[4]; // bottom-left, bottom-right, top-right, top-left
+        view->grid_to_screen(0, i, origin, &p[0]);
+        view->grid_to_screen(0, i + 1, origin, &p[1]);
+        p[2] = {p[1].x, (lv_coord_t)(p[1].y - wall_pixel_height)};
+        p[3] = {p[0].x, (lv_coord_t)(p[0].y - wall_pixel_height)};
         
-        // Fill the parallelogram wall segment with horizontal lines
-        int min_y = LV_MIN(top_left.y, top_right.y);
-        int max_y = LV_MAX(bottom_left.y, bottom_right.y);
-        
-        for (int fill_y = min_y; fill_y <= max_y; fill_y += 1) {
-            // Calculate the left and right x positions for this y level
-            float left_ratio = (float)(fill_y - top_left.y) / (bottom_left.y - top_left.y);
-            float right_ratio = (float)(fill_y - top_right.y) / (bottom_right.y - top_right.y);
-            
-            // Clamp ratios to valid range
-            left_ratio = LV_MAX(0.0f, LV_MIN(1.0f, left_ratio));
-            right_ratio = LV_MAX(0.0f, LV_MIN(1.0f, right_ratio));
-            
-            int line_left_x = top_left.x + left_ratio * (bottom_left.x - top_left.x);
-            int line_right_x = top_right.x + right_ratio * (bottom_right.x - top_right.x);
-            
-            // Draw the horizontal fill line
-            lv_draw_line_dsc_t wall_fill_dsc;
-            lv_draw_line_dsc_init(&wall_fill_dsc);
-            wall_fill_dsc.color = lv_color_hex(0xFF8C00); // Dark orange
-            wall_fill_dsc.width = 1;
-            wall_fill_dsc.p1 = {(lv_coord_t)line_left_x, (lv_coord_t)fill_y};
-            wall_fill_dsc.p2 = {(lv_coord_t)line_right_x, (lv_coord_t)fill_y};
-            lv_draw_line(layer, &wall_fill_dsc);
-        }
+        wall_fill_dsc.p[0] = {p[0].x, p[0].y}; wall_fill_dsc.p[1] = {p[1].x, p[1].y}; wall_fill_dsc.p[2] = {p[2].x, p[2].y};
+        lv_draw_triangle(layer, &wall_fill_dsc);
+        wall_fill_dsc.p[1] = {p[2].x, p[2].y}; wall_fill_dsc.p[2] = {p[3].x, p[3].y};
+        lv_draw_triangle(layer, &wall_fill_dsc);
     }
-    
-    // Draw Wall Outlines (light gray lines over the fills)
-    for (int i = 0; i <= ROOM_WIDTH; ++i) { // Back-right wall outlines
+
+    // 4. Draw Wall Outlines (over the fills)
+    for (int i = 0; i <= ROOM_WIDTH; ++i) { // Back-right wall vertical lines
         lv_point_t p_floor, p_top; 
         view->grid_to_screen(i, 0, origin, &p_floor);
         p_top = {p_floor.x, (lv_coord_t)(p_floor.y - wall_pixel_height)};
-        wall_line_dsc.p1 = {p_floor.x, p_floor.y}; 
-        wall_line_dsc.p2 = {p_top.x, p_top.y}; 
+        wall_line_dsc.p1 = {p_floor.x, p_floor.y}; wall_line_dsc.p2 = {p_top.x, p_top.y}; 
         lv_draw_line(layer, &wall_line_dsc);
     }
     
-    for (int i = 0; i <= ROOM_DEPTH; ++i) { // Back-left wall outlines
+    for (int i = 0; i <= ROOM_DEPTH; ++i) { // Back-left wall vertical lines
         lv_point_t p_floor, p_top; 
         view->grid_to_screen(0, i, origin, &p_floor);
         p_top = {p_floor.x, (lv_coord_t)(p_floor.y - wall_pixel_height)};
-        wall_line_dsc.p1 = {p_floor.x, p_floor.y}; 
-        wall_line_dsc.p2 = {p_top.x, p_top.y}; 
+        wall_line_dsc.p1 = {p_floor.x, p_floor.y}; wall_line_dsc.p2 = {p_top.x, p_top.y}; 
         lv_draw_line(layer, &wall_line_dsc);
     }
     
@@ -305,7 +206,19 @@ void RoomView::draw_event_cb(lv_event_t* e) {
     wall_line_dsc.p1 = {c_wall.x, c_wall.y}; wall_line_dsc.p2 = {r_wall.x, r_wall.y}; lv_draw_line(layer, &wall_line_dsc);
     view->grid_to_screen(0, ROOM_DEPTH, origin, &l_floor); l_wall = {l_floor.x, (lv_coord_t)(l_floor.y - wall_pixel_height)};
     wall_line_dsc.p1 = {c_wall.x, c_wall.y}; wall_line_dsc.p2 = {l_wall.x, l_wall.y}; lv_draw_line(layer, &wall_line_dsc);
+
+    // 5. Draw Highlighted Tile on top of everything else
+    lv_point_t p[4];
+    view->grid_to_screen(view->selected_grid_x, view->selected_grid_y, origin, &p[0]);
+    view->grid_to_screen(view->selected_grid_x + 1, view->selected_grid_y, origin, &p[1]);
+    view->grid_to_screen(view->selected_grid_x + 1, view->selected_grid_y + 1, origin, &p[2]);
+    view->grid_to_screen(view->selected_grid_x, view->selected_grid_y + 1, origin, &p[3]);
+    highlight_dsc.p1 = {p[0].x, p[0].y}; highlight_dsc.p2 = {p[1].x, p[1].y}; lv_draw_line(layer, &highlight_dsc);
+    highlight_dsc.p1 = {p[1].x, p[1].y}; highlight_dsc.p2 = {p[2].x, p[2].y}; lv_draw_line(layer, &highlight_dsc);
+    highlight_dsc.p1 = {p[2].x, p[2].y}; highlight_dsc.p2 = {p[3].x, p[3].y}; lv_draw_line(layer, &highlight_dsc);
+    highlight_dsc.p1 = {p[3].x, p[3].y}; highlight_dsc.p2 = {p[0].x, p[0].y}; lv_draw_line(layer, &highlight_dsc);
 }
+
 
 void RoomView::on_grid_move(int dx, int dy) {
     if (is_animating) return; // Ignore input if already moving
