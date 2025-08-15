@@ -41,13 +41,18 @@ void RoomView::setup_ui(lv_obj_t* parent) {
 }
 
 void RoomView::setup_button_handlers() {
-    // Use BUTTON_EVENT_LONG_PRESS_HOLD for continuous movement while the button is held down.
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_LONG_PRESS_HOLD, handle_up_left_cb, true, this);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_LONG_PRESS_HOLD, handle_down_left_cb, true, this);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_HOLD, handle_up_right_cb, true, this);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_LONG_PRESS_HOLD, handle_down_right_cb, true, this);
+    // --- Movement Handlers (on single tap) ---
+    // Left Button: Move Top-Left
+    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, handle_up_left_cb, true, this);
+    // Right Button: Move Top-Right
+    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, handle_up_right_cb, true, this);
+    // Cancel Button: Move Bottom-Left
+    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_down_left_cb, true, this);
+    // OK Button: Move Bottom-Right
+    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_down_right_cb, true, this);
     
-    // Use BUTTON_EVENT_LONG_PRESS_START to exit after the button is held for the configured time.
+    // --- Action Handler (triggers once after hold time) ---
+    // Cancel Button (Long Press): Go back to menu
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_LONG_PRESS_START, handle_back_long_press_cb, true, this);
 }
 
