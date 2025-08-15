@@ -1,6 +1,7 @@
 #include "room_view.h"
 #include "controllers/button_manager/button_manager.h"
 #include "views/view_manager.h"
+#include "components/memory_monitor_component/memory_monitor_component.h" // Include the memory monitor
 #include "esp_log.h"
 
 static const char* TAG = "RoomView";
@@ -13,6 +14,12 @@ RoomView::RoomView()
 }
 
 RoomView::~RoomView() {
+    // This is the crucial fix. We must delete the timer when the view is destroyed.
+    if (update_timer) {
+        lv_timer_delete(update_timer);
+        update_timer = nullptr;
+        ESP_LOGI(TAG, "Periodic update timer deleted.");
+    }
     ESP_LOGI(TAG, "RoomView destructed");
 }
 
@@ -24,7 +31,7 @@ void RoomView::create(lv_obj_t* parent) {
     lv_obj_set_style_bg_opa(container, LV_OPA_COVER, 0);
 
     setup_ui(container);
-    setup_view_button_handlers();
+    // Button handlers are set by set_mode()
 }
 
 void RoomView::setup_ui(lv_obj_t* parent) {
@@ -37,9 +44,8 @@ void RoomView::setup_ui(lv_obj_t* parent) {
     renderer = std::make_unique<IsometricRenderer>(ROOM_WIDTH, ROOM_DEPTH, WALL_HEIGHT_UNITS);
     camera = std::make_unique<RoomCamera>(room_canvas);
     pet = std::make_unique<RoomPet>(ROOM_WIDTH, ROOM_DEPTH, room_canvas);
+    object_manager = std::make_unique<RoomObjectManager>();
 
-    // Create the mode selector. It will be hidden by default.
-    // Provide both a selection and a cancellation callback.
     mode_selector = std::make_unique<RoomModeSelector>(
         container, 
         [this](RoomMode mode) { this->set_mode(mode); },
@@ -47,21 +53,44 @@ void RoomView::setup_ui(lv_obj_t* parent) {
     );
 
     // Set initial state
-    set_mode(RoomMode::CURSOR);
+    set_mode(RoomMode::DECORATE);
     
-    lv_timer_create(timer_cb, 33, this); // ~30 FPS update timer
+    // Create the timer and store its handle in our member variable
+    update_timer = lv_timer_create(timer_cb, 33, this); // ~30 FPS update timer
+
+    // --- ADDITION START ---
+    // Add the memory monitor component to the view's main container.
+    lv_obj_t* mem_monitor = memory_monitor_create(parent);
+    lv_obj_align(mem_monitor, LV_ALIGN_BOTTOM_RIGHT, -5, -5);
+    // --- ADDITION END ---
 }
 
 void RoomView::setup_view_button_handlers() {
-    ESP_LOGD(TAG, "Setting up view button handlers");
-    button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, handle_move_southwest_cb, true, this);
-    button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, handle_move_northwest_cb, true, this);
-    button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_move_northeast_cb, true, this);
-    button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_move_southeast_cb, true, this);
-    
-    // Long presses
+    ESP_LOGD(TAG, "Setting up button handlers for mode %d", (int)current_mode);
+    button_manager_unregister_view_handlers();
+
+    // These long-press handlers are common to all modes
     button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_LONG_PRESS_START, handle_back_long_press_cb, true, this);
     button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_LONG_PRESS_START, handle_open_mode_selector_cb, true, this);
+
+    // Mode-specific tap handlers
+    switch(current_mode) {
+        case RoomMode::CURSOR:
+        case RoomMode::DECORATE:
+            button_manager_register_handler(BUTTON_LEFT, BUTTON_EVENT_TAP, handle_move_southwest_cb, true, this);
+            button_manager_register_handler(BUTTON_RIGHT, BUTTON_EVENT_TAP, handle_move_northwest_cb, true, this);
+            button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_TAP, handle_move_northeast_cb, true, this);
+            button_manager_register_handler(BUTTON_CANCEL, BUTTON_EVENT_TAP, handle_move_southeast_cb, true, this);
+            if (current_mode == RoomMode::DECORATE) {
+                // Add the long press for placing objects, it can co-exist with tap.
+                button_manager_register_handler(BUTTON_OK, BUTTON_EVENT_LONG_PRESS_START, handle_place_object_cb, true, this);
+            }
+            break;
+
+        case RoomMode::PET:
+            // Pet mode might have different controls, e.g., interact, feed. For now, none.
+            break;
+    }
 }
 
 
@@ -72,13 +101,11 @@ void RoomView::set_mode(RoomMode new_mode) {
         mode_selector->hide();
     }
     
-    // Unregister old handlers before setting the mode and registering new ones.
-    button_manager_unregister_view_handlers();
-
     current_mode = new_mode;
 
     switch (current_mode) {
         case RoomMode::CURSOR:
+        case RoomMode::DECORATE:
             if (pet->is_spawned()) {
                 pet->remove();
             }
@@ -88,47 +115,34 @@ void RoomView::set_mode(RoomMode new_mode) {
         case RoomMode::PET:
             if (!pet->is_spawned()) {
                 if (!pet->spawn()) {
-                    ESP_LOGE(TAG, "Failed to spawn pet, reverting to cursor mode.");
-                    current_mode = RoomMode::CURSOR; // Revert on failure
+                    ESP_LOGE(TAG, "Failed to spawn pet, reverting to DECORATE mode.");
+                    current_mode = RoomMode::DECORATE; // Revert on failure
                 }
             }
-            // The periodic_update will handle camera following the pet.
-            break;
-
-        case RoomMode::DECORATE:
-            ESP_LOGW(TAG, "Decorate mode is not yet implemented.");
-            if (pet->is_spawned()) {
-                pet->remove();
-            }
-            // Here you would load furniture, etc.
-            // For now, just stay in this mode.
             break;
     }
     
-    // Re-register the main view's button handlers after the mode has been set.
     setup_view_button_handlers();
     lv_obj_invalidate(room_canvas);
 }
 
 
 void RoomView::open_mode_selector() {
-    if (camera->is_animating() || pet->is_animating()) return;
+    if (camera->is_animating() || (pet->is_spawned() && pet->is_animating())) return;
     
     ESP_LOGD(TAG, "Opening mode selector");
-    // Unregister view-specific handlers to give control to the menu
     button_manager_unregister_view_handlers();
     mode_selector->show();
 }
 
 void RoomView::on_mode_selector_cancel() {
     ESP_LOGD(TAG, "Mode selector cancelled, restoring view button handlers.");
-    // The selector's hide() method already called unregister_view_handlers.
-    // We just need to put our view's handlers back.
     setup_view_button_handlers();
 }
 
 void RoomView::on_grid_move(int dx, int dy) {
-    if (current_mode != RoomMode::CURSOR || camera->is_animating()) return;
+    if ((current_mode != RoomMode::CURSOR && current_mode != RoomMode::DECORATE) || camera->is_animating()) return;
+
     int new_x = cursor_grid_x + dx;
     int new_y = cursor_grid_y + dy;
     if (new_x >= 0 && new_x < ROOM_WIDTH && new_y >= 0 && new_y < ROOM_DEPTH) {
@@ -138,20 +152,44 @@ void RoomView::on_grid_move(int dx, int dy) {
     }
 }
 
+void RoomView::on_place_object() {
+    if (current_mode != RoomMode::DECORATE) return;
+
+    if (object_manager->remove_object_at(cursor_grid_x, cursor_grid_y)) {
+        ESP_LOGI(TAG, "Object removed at (%d, %d)", cursor_grid_x, cursor_grid_y);
+    } else {
+        PlacedFurniture new_obj;
+        new_obj.type_name = "ads_gsArcade_2"; // Hardcoded for testing
+        new_obj.grid_x = cursor_grid_x;
+        new_obj.grid_y = cursor_grid_y;
+        new_obj.direction = 90;
+
+        // Ensure we have the definition before placing
+        const auto* def = FurnitureDataManager::get_instance().get_definition(new_obj.type_name);
+        if (def) {
+             if (object_manager->add_object(new_obj)) {
+                ESP_LOGI(TAG, "Object '%s' placed at (%d, %d)", new_obj.type_name.c_str(), cursor_grid_x, cursor_grid_y);
+            }
+        } else {
+            ESP_LOGE(TAG, "Cannot place object, definition for '%s' not found!", new_obj.type_name.c_str());
+        }
+    }
+    object_manager->save_layout();
+    lv_obj_invalidate(room_canvas);
+}
+
+
 void RoomView::on_back_to_menu() {
     view_manager_load_view(VIEW_ID_MENU);
 }
 
 void RoomView::periodic_update() {
     if (current_mode == RoomMode::PET && pet->is_spawned()) {
-        // If the pet is moving, smoothly follow its interpolated position.
-        // If it's static, the camera will also remain static, centered on the pet's tile.
         float pet_interp_x, pet_interp_y;
         pet->get_interpolated_grid_pos(pet_interp_x, pet_interp_y);
         camera->center_on(pet_interp_x, pet_interp_y);
     }
     
-    // The pet's screen position depends on the camera, so update it after the camera.
     if (pet->is_spawned()) {
         pet->update_screen_position(camera->get_offset());
     }
@@ -167,7 +205,17 @@ void RoomView::draw_event_cb(lv_event_t* e) {
     lv_layer_t* layer = lv_event_get_layer(e);
     
     view->renderer->draw_world(layer, view->camera->get_offset());
-    if (view->current_mode == RoomMode::CURSOR) {
+
+    // Draw all placed objects
+    auto& furni_manager = FurnitureDataManager::get_instance();
+    for(const auto& obj : view->object_manager->get_all_objects()) {
+        const auto* def = furni_manager.get_definition(obj.type_name);
+        if (def) {
+            view->renderer->draw_placeholder_object(layer, view->camera->get_offset(), obj.grid_x, obj.grid_y, def->dimensions.x, def->dimensions.y, def->dimensions.z);
+        }
+    }
+
+    if (view->current_mode == RoomMode::CURSOR || view->current_mode == RoomMode::DECORATE) {
         view->renderer->draw_cursor(layer, view->camera->get_offset(), view->cursor_grid_x, view->cursor_grid_y);
     } 
     else if (view->current_mode == RoomMode::PET && view->pet->is_animating()) {
@@ -175,10 +223,8 @@ void RoomView::draw_event_cb(lv_event_t* e) {
         int target_y = view->pet->get_target_grid_y();
         if(target_x != -1 && target_y != -1) {
             view->renderer->draw_target_tile(layer, view->camera->get_offset(), target_x, target_y);
-            view->renderer->draw_target_point(layer, view->camera->get_offset(), target_x, target_y);
         }
     }
-    // NOTE: Furniture drawing would be added here in the future
 }
 
 // --- Static Callbacks ---
@@ -188,3 +234,4 @@ void RoomView::handle_move_southeast_cb(void* user_data) { static_cast<RoomView*
 void RoomView::handle_move_southwest_cb(void* user_data) { static_cast<RoomView*>(user_data)->on_grid_move(-1, 0); }
 void RoomView::handle_back_long_press_cb(void* user_data) { static_cast<RoomView*>(user_data)->on_back_to_menu(); }
 void RoomView::handle_open_mode_selector_cb(void* user_data) { static_cast<RoomView*>(user_data)->open_mode_selector(); }
+void RoomView::handle_place_object_cb(void* user_data) { static_cast<RoomView*>(user_data)->on_place_object(); }

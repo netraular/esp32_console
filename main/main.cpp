@@ -32,6 +32,7 @@
 #include "controllers/lvgl_vfs_driver/lvgl_fs_driver.h"
 #include "controllers/weather_manager/weather_manager.h"
 #include "controllers/pet_manager/pet_manager.h"
+#include "controllers/furniture_data_manager/furniture_data_manager.h"
 #include "views/view_manager.h"
 
 static const char *TAG = "main";
@@ -108,6 +109,8 @@ extern "C" void app_main(void) {
     if (sd_manager_init()) {
         if (sd_manager_mount()) {
             ESP_LOGI(TAG, "SD Card mounted successfully during startup.");
+            // Initialize managers that depend on the SD card
+            FurnitureDataManager::get_instance().init();
         } else {
             ESP_LOGW(TAG, "Failed to mount SD Card during startup. Assets will not be available.");
         }

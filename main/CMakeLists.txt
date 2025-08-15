@@ -27,6 +27,8 @@ list(APPEND MAIN_SRCS
     "views/game/room_view/components/room_camera.cpp"
     "views/game/room_view/components/room_pet.cpp"
     "views/game/room_view/components/room_mode_selector.cpp"
+    "controllers/furniture_data_manager/furniture_data_manager.cpp"
+    "views/game/room_view/components/room_object_manager.cpp"
 )
 list(REMOVE_DUPLICATES MAIN_SRCS)
 

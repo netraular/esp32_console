@@ -6,7 +6,9 @@
 #include "components/isometric_renderer.h"
 #include "components/room_camera.h"
 #include "components/room_pet.h"
-#include "components/room_mode_selector.h" // Include the new component
+#include "components/room_mode_selector.h"
+#include "components/room_object_manager.h"
+#include "controllers/furniture_data_manager/furniture_data_manager.h"
 #include <memory>
 
 class RoomView : public View {
@@ -26,11 +28,13 @@ private:
     std::unique_ptr<RoomCamera> camera;
     std::unique_ptr<RoomPet> pet;
     std::unique_ptr<RoomModeSelector> mode_selector;
+    std::unique_ptr<RoomObjectManager> object_manager;
 
     // State members
     int cursor_grid_x;
     int cursor_grid_y;
     RoomMode current_mode;
+    lv_timer_t* update_timer = nullptr; // Member variable to hold the timer
     
     // --- Setup Functions ---
     void setup_ui(lv_obj_t* parent);
@@ -45,6 +49,7 @@ private:
     // --- Action Handlers ---
     void on_grid_move(int dx, int dy);
     void on_back_to_menu();
+    void on_place_object();
 
     // --- Static Callbacks ---
     static void draw_event_cb(lv_event_t* e);
@@ -55,6 +60,7 @@ private:
     static void handle_move_southwest_cb(void* user_data);
     static void handle_back_long_press_cb(void* user_data);
     static void handle_open_mode_selector_cb(void* user_data);
+    static void handle_place_object_cb(void* user_data);
 };
 
 #endif // ROOM_VIEW_H

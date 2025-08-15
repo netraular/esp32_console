@@ -99,6 +99,49 @@ void IsometricRenderer::draw_cursor(lv_layer_t* layer, const lv_point_t& camera_
     highlight_dsc.p1 = {p[3].x, p[3].y}; highlight_dsc.p2 = {p[0].x, p[0].y}; lv_draw_line(layer, &highlight_dsc);
 }
 
+void IsometricRenderer::draw_placeholder_object(lv_layer_t* layer, const lv_point_t& camera_offset, int grid_x, int grid_y, int width, int depth, float height) {
+    lv_draw_triangle_dsc_t fill_dsc;
+    lv_draw_triangle_dsc_init(&fill_dsc);
+    fill_dsc.opa = LV_OPA_COVER;
+
+    lv_point_t origin;
+    origin.x = (SCREEN_WIDTH / 2) - camera_offset.x;
+    origin.y = (SCREEN_HEIGHT / 2) - camera_offset.y;
+
+    lv_point_t p_floor[4], p_ceil[4];
+    grid_to_screen(grid_x, grid_y, origin, &p_floor[0]);
+    grid_to_screen(grid_x + width, grid_y, origin, &p_floor[1]);
+    grid_to_screen(grid_x + width, grid_y + depth, origin, &p_floor[2]);
+    grid_to_screen(grid_x, grid_y + depth, origin, &p_floor[3]);
+
+    const int pixel_h = height * TILE_HEIGHT;
+    for(int i = 0; i < 4; ++i) {
+        p_ceil[i] = {p_floor[i].x, (lv_coord_t)(p_floor[i].y - pixel_h)};
+    }
+    
+    // Top face (lightest)
+    fill_dsc.color = lv_color_hex(0x87CEEB); // Sky Blue
+    fill_dsc.p[0] = {p_ceil[0].x, p_ceil[0].y}; fill_dsc.p[1] = {p_ceil[1].x, p_ceil[1].y}; fill_dsc.p[2] = {p_ceil[2].x, p_ceil[2].y};
+    lv_draw_triangle(layer, &fill_dsc);
+    fill_dsc.p[1] = {p_ceil[2].x, p_ceil[2].y}; fill_dsc.p[2] = {p_ceil[3].x, p_ceil[3].y};
+    lv_draw_triangle(layer, &fill_dsc);
+
+    // Left face (darkest)
+    fill_dsc.color = lv_color_hex(0x4682B4); // Steel Blue
+    fill_dsc.p[0] = {p_floor[3].x, p_floor[3].y}; fill_dsc.p[1] = {p_floor[2].x, p_floor[2].y}; fill_dsc.p[2] = {p_ceil[2].x, p_ceil[2].y};
+    lv_draw_triangle(layer, &fill_dsc);
+    fill_dsc.p[1] = {p_ceil[2].x, p_ceil[2].y}; fill_dsc.p[2] = {p_ceil[3].x, p_ceil[3].y};
+    lv_draw_triangle(layer, &fill_dsc);
+    
+    // Right face (medium)
+    fill_dsc.color = lv_color_hex(0x5F9EA0); // Cadet Blue
+    fill_dsc.p[0] = {p_floor[1].x, p_floor[1].y}; fill_dsc.p[1] = {p_floor[2].x, p_floor[2].y}; fill_dsc.p[2] = {p_ceil[2].x, p_ceil[2].y};
+    lv_draw_triangle(layer, &fill_dsc);
+    fill_dsc.p[1] = {p_ceil[2].x, p_ceil[2].y}; fill_dsc.p[2] = {p_ceil[1].x, p_ceil[1].y};
+    lv_draw_triangle(layer, &fill_dsc);
+}
+
+
 void IsometricRenderer::draw_target_tile(lv_layer_t* layer, const lv_point_t& camera_offset, int grid_x, int grid_y) {
     lv_draw_line_dsc_t highlight_dsc;
     lv_draw_line_dsc_init(&highlight_dsc);
@@ -133,13 +176,15 @@ void IsometricRenderer::draw_target_point(lv_layer_t* layer, const lv_point_t& c
     lv_point_t center;
     grid_to_screen_center(grid_x, grid_y, origin, &center);
 
-    // Set arc properties in the descriptor struct
+    // --- FIX START ---
+    // In LVGL v9, all parameters are set in the descriptor.
     arc_dsc.center.x = center.x;
     arc_dsc.center.y = center.y;
     arc_dsc.radius = 3;
     arc_dsc.start_angle = 0;
     arc_dsc.end_angle = 360;
 
-    // Call the draw function with the layer and the descriptor
+    // The draw function now only takes the layer and the descriptor.
     lv_draw_arc(layer, &arc_dsc);
+    // --- FIX END ---
 }

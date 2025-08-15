@@ -39,6 +39,10 @@ constexpr const char* VOICE_NOTES_SUBPATH = "notes/";      // For the voice note
 constexpr const char* JOURNAL_SUBPATH = "journal/";      // For daily voice journal entries
 constexpr const char* SUMMARY_SUBPATH = "summary/";      // For daily summary JSON files
 
+// --- User Data: Room Sub-structure ---
+constexpr const char* ROOM_SUBPATH = "room/";
+constexpr const char* ROOM_LAYOUT_FILENAME = "layout.json";
+
 // --- Provisioned/Test Filenames (in LittleFS root) ---
 constexpr const char* PROVISIONED_WELCOME_FILENAME = "welcome.txt";
 
@@ -52,6 +56,7 @@ constexpr const char* ASSETS_BASE_SUBPATH    = "/assets/";
 constexpr const char* ASSETS_SPRITES_SUBPATH = "sprites/";
 constexpr const char* ASSETS_SOUNDS_SUBPATH  = "sounds/";
 constexpr const char* ASSETS_FONTS_SUBPATH   = "fonts/";
+constexpr const char* ASSETS_FURNITURE_SUBPATH = "furniture/"; // For furniture definition JSONs and sprites
 
 // --- Sprite Sub-directories ---
 constexpr const char* SPRITES_PETS_SUBPATH = "pets/"; // Base folder for all pet sprites. Structure: pets/<ID>/<frame_name>.png

@@ -8,7 +8,7 @@ static const char *TAG = "MENU_VIEW";
 // --- Static Member Initialization ---
 // The list of views available from the menu.
 const char *MenuView::view_options[] = {
-    "Room Decorator", "Daily Summary", "Pet Status", "Pet Collection", "Pet Hub",  "Test Microphone", "Test Speaker", "Test SD Card",
+    "Room Editor", "Daily Summary", "Pet Status", "Pet Collection", "Pet Hub",  "Test Microphone", "Test Speaker", "Test SD Card",
     "Test Image", "Test LittleFS", "Test Button Events", "WiFi Audio Stream",
     "Pomodoro Clock", "Click Counter", "Voice Notes", "Test Popups",
     "Volume Tester", "Habit Tracker", "Add Notification", "Notification History", "Daily Journal"
