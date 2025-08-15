@@ -26,6 +26,7 @@ list(APPEND MAIN_SRCS
     "views/game/room_view/components/isometric_renderer.cpp"
     "views/game/room_view/components/room_camera.cpp"
     "views/game/room_view/components/room_pet.cpp"
+    "views/game/room_view/components/room_mode_selector.cpp"
 )
 list(REMOVE_DUPLICATES MAIN_SRCS)
 

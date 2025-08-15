@@ -6,6 +6,7 @@
 #include "components/isometric_renderer.h"
 #include "components/room_camera.h"
 #include "components/room_pet.h"
+#include "components/room_mode_selector.h" // Include the new component
 #include <memory>
 
 class RoomView : public View {
@@ -19,28 +20,33 @@ private:
     static constexpr int ROOM_DEPTH = 10;
     static constexpr int WALL_HEIGHT_UNITS = 4;
 
-    enum class ControlMode { CURSOR, PET };
-
+    // UI and component members
     lv_obj_t* room_canvas = nullptr;
-
     std::unique_ptr<IsometricRenderer> renderer;
     std::unique_ptr<RoomCamera> camera;
     std::unique_ptr<RoomPet> pet;
+    std::unique_ptr<RoomModeSelector> mode_selector;
 
+    // State members
     int cursor_grid_x;
     int cursor_grid_y;
-    int last_pet_grid_x;
-    int last_pet_grid_y;
-    ControlMode control_mode;
+    RoomMode current_mode;
     
+    // --- Setup Functions ---
     void setup_ui(lv_obj_t* parent);
-    void setup_button_handlers();
+    void setup_view_button_handlers();
 
-    void on_grid_move(int dx, int dy);
-    void on_back_to_menu();
-    void toggle_pet_mode();
+    // --- Core Logic ---
+    void set_mode(RoomMode new_mode);
+    void open_mode_selector();
+    void on_mode_selector_cancel();
     void periodic_update();
 
+    // --- Action Handlers ---
+    void on_grid_move(int dx, int dy);
+    void on_back_to_menu();
+
+    // --- Static Callbacks ---
     static void draw_event_cb(lv_event_t* e);
     static void timer_cb(lv_timer_t* timer);
     static void handle_move_northeast_cb(void* user_data);
@@ -48,7 +54,7 @@ private:
     static void handle_move_southeast_cb(void* user_data);
     static void handle_move_southwest_cb(void* user_data);
     static void handle_back_long_press_cb(void* user_data);
-    static void handle_pet_mode_toggle_cb(void* user_data);
+    static void handle_open_mode_selector_cb(void* user_data);
 };
 
 #endif // ROOM_VIEW_H
