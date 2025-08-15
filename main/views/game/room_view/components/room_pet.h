@@ -19,6 +19,7 @@ public:
     int get_grid_y() const;
     int get_target_grid_x() const;
     int get_target_grid_y() const;
+    void get_interpolated_grid_pos(float& x, float& y) const;
 
     bool is_animating() const;
     bool is_spawned() const;

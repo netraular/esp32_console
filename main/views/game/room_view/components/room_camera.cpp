@@ -1,4 +1,5 @@
 #include "room_camera.h"
+#include <cmath> // For roundf
 
 static constexpr int TILE_WIDTH = 64;
 static constexpr int TILE_HEIGHT = 32;
@@ -41,9 +42,27 @@ void RoomCamera::move_to(int grid_x, int grid_y, bool animate) {
     }
 }
 
+void RoomCamera::center_on(float grid_x, float grid_y) {
+    if (animating) return; // Do not interfere with an ongoing animation (e.g., from mode switch)
+    
+    lv_point_t new_offset;
+    calculate_target_offset_float(grid_x, grid_y, &new_offset);
+
+    // Only invalidate and update if the camera's offset has actually changed.
+    if (new_offset.x != current_offset.x || new_offset.y != current_offset.y) {
+        current_offset = new_offset;
+        lv_obj_invalidate(canvas); // Redraw the canvas with the new offset
+    }
+}
+
 void RoomCamera::calculate_target_offset(int grid_x, int grid_y, lv_point_t* out_offset) {
     out_offset->x = (grid_x - grid_y) * (TILE_WIDTH / 2);
     out_offset->y = (grid_x + grid_y) * (TILE_HEIGHT / 2) + (TILE_HEIGHT / 2);
+}
+
+void RoomCamera::calculate_target_offset_float(float grid_x, float grid_y, lv_point_t* out_offset) {
+    out_offset->x = roundf((grid_x - grid_y) * (TILE_WIDTH / 2.0f));
+    out_offset->y = roundf((grid_x + grid_y) * (TILE_HEIGHT / 2.0f) + (TILE_HEIGHT / 2.0f));
 }
 
 void RoomCamera::anim_exec_cb(void* var, int32_t v) {

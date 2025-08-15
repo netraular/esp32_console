@@ -93,15 +93,16 @@ void RoomView::toggle_pet_mode() {
 
 void RoomView::periodic_update() {
     if (control_mode == ControlMode::PET && pet->is_spawned()) {
-        // The camera should follow the pet if the pet's target grid position has changed.
-        int pet_target_x = pet->get_target_grid_x();
-        int pet_target_y = pet->get_target_grid_y();
-
-        if (!camera->is_animating() && pet_target_x != -1 && (pet_target_x != last_pet_grid_x || pet_target_y != last_pet_grid_y)) {
-            last_pet_grid_x = pet_target_x;
-            last_pet_grid_y = pet_target_y;
-            camera->move_to(last_pet_grid_x, last_pet_grid_y, true);
-        }
+        // If the pet is moving, smoothly follow its interpolated position.
+        // If it's static, the camera will also remain static, centered on the pet's tile.
+        float pet_interp_x, pet_interp_y;
+        pet->get_interpolated_grid_pos(pet_interp_x, pet_interp_y);
+        camera->center_on(pet_interp_x, pet_interp_y);
+    }
+    
+    // The pet's screen position depends on the camera, so update it after the camera.
+    // This needs to run even if not in PET mode, in case a pet was moving when we switched modes.
+    if (pet->is_spawned()) {
         pet->update_screen_position(camera->get_offset());
     }
 }

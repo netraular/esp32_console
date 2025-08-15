@@ -9,11 +9,13 @@ public:
     ~RoomCamera();
 
     void move_to(int grid_x, int grid_y, bool animate);
+    void center_on(float grid_x, float grid_y);
     bool is_animating() const;
     const lv_point_t& get_offset() const;
 
 private:
     static void calculate_target_offset(int grid_x, int grid_y, lv_point_t* out_offset);
+    static void calculate_target_offset_float(float grid_x, float grid_y, lv_point_t* out_offset);
     static void anim_exec_cb(void* var, int32_t v);
     static void anim_ready_cb(lv_anim_t* a);
 
