@@ -1,8 +1,10 @@
 #include "room_view.h"
 #include "controllers/button_manager/button_manager.h"
 #include "views/view_manager.h"
-#include "components/memory_monitor_component/memory_monitor_component.h" // Include the memory monitor
+#include "components/memory_monitor_component/memory_monitor_component.h"
 #include "esp_log.h"
+#include <algorithm> // For std::sort
+#include <vector>    // For std::vector copy
 
 static const char* TAG = "RoomView";
 
@@ -14,7 +16,7 @@ RoomView::RoomView()
 }
 
 RoomView::~RoomView() {
-    // This is the crucial fix. We must delete the timer when the view is destroyed.
+    // We must delete the timer when the view is destroyed to prevent use-after-free errors.
     if (update_timer) {
         lv_timer_delete(update_timer);
         update_timer = nullptr;
@@ -58,11 +60,9 @@ void RoomView::setup_ui(lv_obj_t* parent) {
     // Create the timer and store its handle in our member variable
     update_timer = lv_timer_create(timer_cb, 33, this); // ~30 FPS update timer
 
-    // --- ADDITION START ---
     // Add the memory monitor component to the view's main container.
     lv_obj_t* mem_monitor = memory_monitor_create(parent);
     lv_obj_align(mem_monitor, LV_ALIGN_BOTTOM_RIGHT, -5, -5);
-    // --- ADDITION END ---
 }
 
 void RoomView::setup_view_button_handlers() {
@@ -206,9 +206,23 @@ void RoomView::draw_event_cb(lv_event_t* e) {
     
     view->renderer->draw_world(layer, view->camera->get_offset());
 
-    // Draw all placed objects
+    // Create a mutable copy of the objects to sort for rendering.
+    std::vector<PlacedFurniture> sorted_objects = view->object_manager->get_all_objects();
+
+    // Sort the objects using the painter's algorithm for this isometric projection.
+    // Objects are drawn from back to front (increasing Y) and left to right (increasing X).
+    std::sort(sorted_objects.begin(), sorted_objects.end(),
+        [](const PlacedFurniture& a, const PlacedFurniture& b) {
+            if (a.grid_y != b.grid_y) {
+                return a.grid_y < b.grid_y;
+            }
+            return a.grid_x < b.grid_x;
+        }
+    );
+
+    // Draw all placed objects in the correct z-order.
     auto& furni_manager = FurnitureDataManager::get_instance();
-    for(const auto& obj : view->object_manager->get_all_objects()) {
+    for(const auto& obj : sorted_objects) {
         const auto* def = furni_manager.get_definition(obj.type_name);
         if (def) {
             view->renderer->draw_placeholder_object(layer, view->camera->get_offset(), obj.grid_x, obj.grid_y, def->dimensions.x, def->dimensions.y, def->dimensions.z);
