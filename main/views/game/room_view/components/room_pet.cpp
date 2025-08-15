@@ -11,12 +11,13 @@
 
 static const char* TAG = "RoomPet";
 
-// The timer will trigger every 3 seconds, giving the pet an opportunity to move.
-static constexpr int PET_MOVE_INTERVAL_MS = 3000;
-// The pet only has a 40% chance of actually moving when the timer triggers.
+// The timer will trigger every 1 seconds, giving the pet an opportunity to move.
+static constexpr int PET_MOVE_INTERVAL_MS = 1000;
+// The pet only has a 70% chance of actually moving when the timer triggers.
 // This results in longer, more variable pauses.
-static constexpr int PET_MOVE_CHANCE_PERCENT = 40;
-static constexpr int PET_ANIMATION_DURATION_MS = 1200; // Increased for a slower, smoother movement
+static constexpr int PET_MOVE_CHANCE_PERCENT = 70;
+static constexpr int PET_ANIMATION_DURATION_MS = 1200; // Duration of movement from one tile to another
+static constexpr int PET_ANIMATION_FRAME_INTERVAL_MS = 250; // How fast to swap sprites during movement
 static constexpr int PET_Y_OFFSET = 10; // Vertical offset to visually place the pet better on the tile
 
 RoomPet::RoomPet(int room_width, int room_depth, lv_obj_t* parent_canvas)
@@ -61,7 +62,6 @@ void RoomPet::get_interpolated_grid_pos(float& x, float& y) const {
 bool RoomPet::spawn() {
     if (is_spawned()) return true;
     if (!parent_canvas) { ESP_LOGE(TAG, "Cannot spawn, parent canvas is null."); return false; }
-
     if (!sd_manager_check_ready()) { ESP_LOGE(TAG, "Cannot spawn, SD card not ready."); return false; }
 
     auto& pet_manager = PetManager::get_instance();
@@ -71,12 +71,24 @@ bool RoomPet::spawn() {
     if (discovered_pet_ids.empty()) { ESP_LOGE(TAG, "No discovered pets to spawn."); return false; }
 
     id = discovered_pet_ids[esp_random() % discovered_pet_ids.size()];
-    sprite_path = build_pet_sprite_path(id, PET_SPRITE_DEFAULT);
-    const lv_image_dsc_t* sprite_dsc = SpriteCacheManager::get_instance().get_sprite(sprite_path);
     
-    if (!sprite_dsc) {
-        ESP_LOGE(TAG, "Failed to load pet sprite: %s", sprite_path.c_str());
-        sprite_path.clear();
+    // Load animation sprites
+    auto& sprite_cache = SpriteCacheManager::get_instance();
+    const char* sprite_names[] = {PET_SPRITE_DEFAULT, PET_SPRITE_IDLE_01};
+    for (const char* sprite_name : sprite_names) {
+        std::string path = build_pet_sprite_path(id, sprite_name);
+        const lv_image_dsc_t* sprite_dsc = sprite_cache.get_sprite(path);
+        if (sprite_dsc) {
+            sprite_paths.push_back(path);
+            animation_frames.push_back(sprite_dsc);
+        } else {
+            ESP_LOGW(TAG, "Failed to load sprite frame '%s' for pet ID %d", sprite_name, (int)id);
+        }
+    }
+
+    if (animation_frames.empty()) {
+        ESP_LOGE(TAG, "Failed to load any sprites for pet ID %d. Aborting spawn.", (int)id);
+        sprite_paths.clear(); // Ensure paths are cleared if loading fails
         id = PetId::NONE;
         return false;
     }
@@ -85,10 +97,10 @@ bool RoomPet::spawn() {
     grid_y = esp_random() % ROOM_DEPTH;
     
     img_obj = lv_image_create(parent_canvas);
-    lv_image_set_src(img_obj, sprite_dsc);
+    lv_image_set_src(img_obj, animation_frames[0]); // Start with the first frame
     lv_image_set_antialias(img_obj, false);
 
-    ESP_LOGI(TAG, "Spawning pet '%s' at (%d, %d)", pet_manager.get_pet_name(id).c_str(), grid_x, grid_y);
+    ESP_LOGI(TAG, "Spawning pet '%s' at (%d, %d) with %zu frames", pet_manager.get_pet_name(id).c_str(), grid_x, grid_y, animation_frames.size());
 
     movement_timer = lv_timer_create(movement_timer_cb, PET_MOVE_INTERVAL_MS, this);
     return true;
@@ -98,13 +110,15 @@ void RoomPet::remove() {
     if (!is_spawned()) return;
 
     if (movement_timer) { lv_timer_delete(movement_timer); movement_timer = nullptr; }
+    if (animation_timer) { lv_timer_delete(animation_timer); animation_timer = nullptr; }
     
     lv_obj_delete(img_obj);
     img_obj = nullptr;
     
-    if (!sprite_path.empty()) {
-        SpriteCacheManager::get_instance().release_sprite(sprite_path);
-        sprite_path.clear();
+    if (!sprite_paths.empty()) {
+        SpriteCacheManager::get_instance().release_sprite_group(sprite_paths);
+        sprite_paths.clear();
+        animation_frames.clear();
     }
     id = PetId::NONE;
     animating = false;
@@ -130,13 +144,15 @@ void RoomPet::move_to_random_tile() {
     target_grid_x = target_pos.first;
     target_grid_y = target_pos.second;
     
-    // Start the animation process on the next update loop
     animating = true;
     anim_start_tick = lv_tick_get();
 
-    // Invalidate the canvas to ensure the target marker is drawn correctly from the first frame.
-    lv_obj_invalidate(parent_canvas);
+    // Start the frame-swapping animation timer
+    if (animation_frames.size() > 1) {
+        animation_timer = lv_timer_create(animation_timer_cb, PET_ANIMATION_FRAME_INTERVAL_MS, this);
+    }
 
+    lv_obj_invalidate(parent_canvas); // Redraw to show the target marker
     ESP_LOGD(TAG, "Move requested from (%d, %d) to (%d, %d)", grid_x, grid_y, target_grid_x, target_grid_y);
 }
 
@@ -163,14 +179,22 @@ void RoomPet::update_screen_position(const lv_point_t& camera_offset) {
             target_grid_x = -1;
             target_grid_y = -1;
             
+            // Stop the frame-swapping animation
+            if (animation_timer) {
+                lv_timer_delete(animation_timer);
+                animation_timer = nullptr;
+            }
+            // Reset to default sprite
+            current_animation_frame = 0;
+            lv_image_set_src(img_obj, animation_frames[0]);
+            sprite_dsc = animation_frames[0]; // Update local pointer for positioning
+            
             // Set final position accurately
-            // Position the sprite so its center-bottom point is at the tile's visual center, plus the offset.
             lv_coord_t final_x = end_pos.x - (sprite_dsc->header.w / 2);
             lv_coord_t final_y = end_pos.y - sprite_dsc->header.h + PET_Y_OFFSET;
             lv_obj_set_pos(img_obj, final_x, final_y);
             
-            // Invalidate to remove the target marker
-            lv_obj_invalidate(parent_canvas);
+            lv_obj_invalidate(parent_canvas); // Redraw to remove the target marker
             ESP_LOGD(TAG, "Movement animation finished. New position: (%d, %d)", grid_x, grid_y);
         } else {
             // Animation in progress, calculate interpolated position with sinusoidal easing
@@ -180,15 +204,12 @@ void RoomPet::update_screen_position(const lv_point_t& camera_offset) {
             lv_coord_t current_x = start_pos.x + (lv_coord_t)((end_pos.x - start_pos.x) * eased_progress);
             lv_coord_t current_y = start_pos.y + (lv_coord_t)((end_pos.y - start_pos.y) * eased_progress);
 
-            // Position the sprite so its center-bottom point is at the interpolated position, plus the offset.
             lv_obj_set_pos(img_obj, current_x - (sprite_dsc->header.w / 2), current_y - sprite_dsc->header.h + PET_Y_OFFSET);
         }
     } else {
-        // Static position, e.g., when camera is panning
+        // Static position
         lv_point_t tile_center;
         IsometricRenderer::grid_to_screen_center(grid_x, grid_y, world_origin, &tile_center);
-
-        // Position the sprite so its center-bottom point is at the tile's visual center, plus the offset.
         lv_coord_t final_x = tile_center.x - (sprite_dsc->header.w / 2);
         lv_coord_t final_y = tile_center.y - sprite_dsc->header.h + PET_Y_OFFSET;
         lv_obj_set_pos(img_obj, final_x, final_y);
@@ -206,12 +227,21 @@ std::string RoomPet::build_pet_sprite_path(PetId pet_id, const char* sprite_name
 void RoomPet::movement_timer_cb(lv_timer_t* timer) {
     auto* pet = static_cast<RoomPet*>(lv_timer_get_user_data(timer));
     
-    // The pet will "decide" whether to move based on a random chance.
-    uint32_t roll = esp_random() % 100; // Get a random number from 0 to 99
+    uint32_t roll = esp_random() % 100;
     if (roll < PET_MOVE_CHANCE_PERCENT) {
         pet->move_to_random_tile();
     } else {
-        // The pet decided to stay still for this interval.
         ESP_LOGD(TAG, "Pet decided to stay still.");
     }
+}
+
+void RoomPet::animation_timer_cb(lv_timer_t* timer) {
+    auto* pet = static_cast<RoomPet*>(lv_timer_get_user_data(timer));
+    if (!pet->is_spawned() || pet->animation_frames.size() <= 1) {
+        return;
+    }
+
+    pet->current_animation_frame = (pet->current_animation_frame + 1) % pet->animation_frames.size();
+    const lv_image_dsc_t* next_frame = pet->animation_frames[pet->current_animation_frame];
+    lv_image_set_src(pet->img_obj, next_frame);
 }
