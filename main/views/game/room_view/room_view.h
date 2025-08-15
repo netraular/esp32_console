@@ -3,14 +3,11 @@
 
 #include "views/view.h"
 #include "lvgl.h"
+#include "components/isometric_renderer.h"
+#include "components/room_camera.h"
+#include "components/room_pet.h"
+#include <memory>
 
-/**
- * @brief A view for displaying and interacting with an isometric room.
- *
- * This view uses LVGL's core drawing engine to render an isometric grid.
- * The user can move a cursor tile-by-tile with smooth animated transitions,
- * and the camera will automatically center on the selected tile.
- */
 class RoomView : public View {
 public:
     RoomView();
@@ -18,50 +15,40 @@ public:
     void create(lv_obj_t* parent) override;
 
 private:
-    // --- Constants ---
-    static constexpr int ROOM_WIDTH = 10;           // Room width in tiles
-    static constexpr int ROOM_DEPTH = 10;           // Room depth in tiles
-    static constexpr int WALL_HEIGHT_UNITS = 4;     // Height of the walls in tile-height units
-    static constexpr int TILE_WIDTH = 64;           // Isometric tile width in pixels
-    static constexpr int TILE_HEIGHT = 32;          // Isometric tile height in pixels
-    static constexpr int ANIMATION_DURATION_MS = 100; // Duration of the camera pan animation
+    static constexpr int ROOM_WIDTH = 10;
+    static constexpr int ROOM_DEPTH = 10;
+    static constexpr int WALL_HEIGHT_UNITS = 4;
 
-    // --- LVGL Objects ---
-    lv_obj_t* room_canvas = nullptr; // A basic object that acts as our drawing surface
+    enum class ControlMode { CURSOR, PET };
 
-    // --- State ---
-    int selected_grid_x; // The X coordinate of the selected tile on the grid
-    int selected_grid_y; // The Y coordinate of the selected tile on the grid
+    lv_obj_t* room_canvas = nullptr;
+
+    std::unique_ptr<IsometricRenderer> renderer;
+    std::unique_ptr<RoomCamera> camera;
+    std::unique_ptr<RoomPet> pet;
+
+    int cursor_grid_x;
+    int cursor_grid_y;
+    int last_pet_grid_x;
+    int last_pet_grid_y;
+    ControlMode control_mode;
     
-    // --- Animation State ---
-    bool is_animating;           // Flag to prevent input during animation
-    lv_point_t camera_offset;      // The current, animated camera offset
-    lv_point_t anim_start_offset;  // Camera offset at the start of an animation
-    lv_point_t anim_end_offset;    // Target camera offset for the end of an animation
-    
-    // --- Drawing & Logic ---
-    void grid_to_screen(int grid_x, int grid_y, const lv_point_t& origin, lv_point_t* p_out);
-    void calculate_camera_offset(int grid_x, int grid_y, lv_point_t* out_offset);
-
-    // --- UI & Button Handling ---
     void setup_ui(lv_obj_t* parent);
     void setup_button_handlers();
 
-    // --- Button Actions ---
     void on_grid_move(int dx, int dy);
     void on_back_to_menu();
+    void toggle_pet_mode();
+    void periodic_update();
 
-    // --- Static Callbacks ---
     static void draw_event_cb(lv_event_t* e);
-    // Button callbacks
-    static void handle_move_northeast_cb(void* user_data); // Top-Right
-    static void handle_move_northwest_cb(void* user_data); // Top-Left
-    static void handle_move_southeast_cb(void* user_data); // Bottom-Right
-    static void handle_move_southwest_cb(void* user_data); // Bottom-Left
+    static void timer_cb(lv_timer_t* timer);
+    static void handle_move_northeast_cb(void* user_data);
+    static void handle_move_northwest_cb(void* user_data);
+    static void handle_move_southeast_cb(void* user_data);
+    static void handle_move_southwest_cb(void* user_data);
     static void handle_back_long_press_cb(void* user_data);
-    // Animation callbacks
-    static void anim_exec_cb(void* var, int32_t v);
-    static void anim_ready_cb(lv_anim_t* a);
+    static void handle_pet_mode_toggle_cb(void* user_data);
 };
 
 #endif // ROOM_VIEW_H

@@ -23,6 +23,9 @@ list(APPEND MAIN_SRCS
     "components/inline_audio_player_component/inline_audio_player_component.cpp"
     "controllers/daily_summary_manager/daily_summary_manager.cpp"
     "views/core/daily_summary_view/daily_summary_view.cpp"
+    "views/game/room_view/components/isometric_renderer.cpp"
+    "views/game/room_view/components/room_camera.cpp"
+    "views/game/room_view/components/room_pet.cpp"
 )
 list(REMOVE_DUPLICATES MAIN_SRCS)
 
