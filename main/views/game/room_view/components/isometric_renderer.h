@@ -18,6 +18,10 @@ public:
 
     static void grid_to_screen(int grid_x, int grid_y, const lv_point_t& origin, lv_point_t* p_out);
     static void grid_to_screen_center(int grid_x, int grid_y, const lv_point_t& origin, lv_point_t* p_out);
+    
+    // New functions for smooth sub-tile positioning
+    static void grid_to_screen_float(float grid_x, float grid_y, const lv_point_t& origin, lv_point_t* p_out);
+    static void grid_to_screen_center_float(float grid_x, float grid_y, const lv_point_t& origin, lv_point_t* p_out);
 
 private:
     // --- Constants ---

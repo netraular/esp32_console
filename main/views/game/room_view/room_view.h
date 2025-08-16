@@ -39,8 +39,23 @@ private:
     RoomMode current_mode;
     lv_timer_t* update_timer = nullptr;
     
-    // --- FIX: Map to store pre-loaded sprite descriptors for fast drawing ---
     std::map<std::string, const lv_image_dsc_t*> m_cached_sprites;
+
+    // Helper struct for sorting all drawable entities
+    struct DrawableObject {
+        enum Type { FURNITURE, PET };
+        Type type;
+        const void* data;
+        float sort_y;
+        float sort_x;
+
+        // Custom comparator for sorting from back to front
+        bool operator<(const DrawableObject& other) const {
+            if (sort_y < other.sort_y - 0.001f) return true;
+            if (sort_y > other.sort_y + 0.001f) return false;
+            return sort_x < other.sort_x;
+        }
+    };
     
     // --- Setup Functions ---
     void setup_ui(lv_obj_t* parent);

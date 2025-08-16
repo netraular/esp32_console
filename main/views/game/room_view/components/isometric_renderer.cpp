@@ -1,6 +1,7 @@
 #include "isometric_renderer.h"
 #include "config/app_config.h" // For SCREEN_WIDTH/HEIGHT
 #include "esp_log.h"
+#include <cmath> // For roundf
 
 static const char* TAG = "IsometricRenderer";
 
@@ -13,9 +14,17 @@ void IsometricRenderer::grid_to_screen(int grid_x, int grid_y, const lv_point_t&
 }
 
 void IsometricRenderer::grid_to_screen_center(int grid_x, int grid_y, const lv_point_t& origin, lv_point_t* p_out) {
-    // First, get the top corner of the tile
     grid_to_screen(grid_x, grid_y, origin, p_out);
-    // The visual center is halfway down the tile's height from the top corner, and at the same x.
+    p_out->y += (TILE_HEIGHT / 2);
+}
+
+void IsometricRenderer::grid_to_screen_float(float grid_x, float grid_y, const lv_point_t& origin, lv_point_t* p_out) {
+    p_out->x = origin.x + (lv_coord_t)roundf((grid_x - grid_y) * (TILE_WIDTH / 2.0f));
+    p_out->y = origin.y + (lv_coord_t)roundf((grid_x + grid_y) * (TILE_HEIGHT / 2.0f));
+}
+
+void IsometricRenderer::grid_to_screen_center_float(float grid_x, float grid_y, const lv_point_t& origin, lv_point_t* p_out) {
+    grid_to_screen_float(grid_x, grid_y, origin, p_out);
     p_out->y += (TILE_HEIGHT / 2);
 }
 
@@ -110,20 +119,15 @@ void IsometricRenderer::draw_sprite(lv_layer_t* layer, const lv_point_t& camera_
     origin.x = (SCREEN_WIDTH / 2) - camera_offset.x;
     origin.y = (SCREEN_HEIGHT / 2) - camera_offset.y;
 
-    // Calculate the top-left corner of the tile the furniture sits on.
     lv_point_t tile_origin;
     grid_to_screen(furni.grid_x, furni.grid_y, origin, &tile_origin);
     
-    // Adjust for Z-height (elevation)
     tile_origin.y -= (int)(furni.grid_z * TILE_HEIGHT);
 
-    // Calculate final screen coordinates including sprite offsets
     lv_point_t final_pos;
     final_pos.x = tile_origin.x - offset_x;
     final_pos.y = tile_origin.y - offset_y;
 
-    // --- FIX START ---
-    // In LVGL v9, the drawing area is passed as a separate parameter, not as part of the descriptor.
     lv_area_t draw_area;
     draw_area.x1 = final_pos.x;
     draw_area.y1 = final_pos.y;
@@ -134,16 +138,11 @@ void IsometricRenderer::draw_sprite(lv_layer_t* layer, const lv_point_t& camera_
     lv_draw_image_dsc_init(&img_dsc);
     img_dsc.src = sprite_dsc;
     
-    // NOTE: Direct horizontal flipping is not supported by lv_draw_image.
-    // This would require more complex matrix transformations. For now, we assume
-    // flip_h is false for the assets we need to render.
     if (flip_h) {
         ESP_LOGW(TAG, "Horizontal flipping is not yet implemented in the renderer.");
     }
     
-    // The lv_draw_image function now requires the layer, descriptor, and drawing area.
     lv_draw_image(layer, &img_dsc, &draw_area);
-    // --- FIX END ---
 }
 
 

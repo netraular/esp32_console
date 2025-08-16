@@ -8,18 +8,20 @@
 
 class RoomPet {
 public:
-    RoomPet(int room_width, int room_depth, lv_obj_t* parent_canvas);
+    RoomPet(int room_width, int room_depth);
     ~RoomPet();
 
     bool spawn();
     void remove();
-    void update_screen_position(const lv_point_t& camera_offset);
+    void update_state();
+    void draw(lv_layer_t* layer, const lv_point_t& camera_offset);
     
     int get_grid_x() const;
     int get_grid_y() const;
     int get_target_grid_x() const;
     int get_target_grid_y() const;
     void get_interpolated_grid_pos(float& x, float& y) const;
+    const lv_image_dsc_t* get_current_sprite() const;
 
     bool is_animating() const;
     bool is_spawned() const;
@@ -31,8 +33,6 @@ private:
     static void movement_timer_cb(lv_timer_t* timer);
     static void animation_timer_cb(lv_timer_t* timer);
 
-    lv_obj_t* parent_canvas;
-    lv_obj_t* img_obj = nullptr;
     PetId id = PetId::NONE;
     
     // Current logical position
@@ -49,14 +49,15 @@ private:
     int current_animation_frame = 0;
 
     // Movement state
-    bool animating = false; // Flag to indicate a movement animation is in progress.
+    bool animating = false;
     uint32_t anim_start_tick = 0;
+    bool spawned = false;
 
     const int ROOM_WIDTH;
     const int ROOM_DEPTH;
 
     lv_timer_t* movement_timer = nullptr;
-    lv_timer_t* animation_timer = nullptr; // Timer for sprite frame swapping
+    lv_timer_t* animation_timer = nullptr;
 };
 
 #endif // ROOM_PET_H

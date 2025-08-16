@@ -24,7 +24,6 @@ RoomView::~RoomView() {
         lv_timer_delete(update_timer);
         update_timer = nullptr;
     }
-    // Release all sprites that were pre-loaded by this view.
     release_all_furniture_sprites();
     ESP_LOGI(TAG, "RoomView destructed");
 }
@@ -48,7 +47,7 @@ void RoomView::setup_ui(lv_obj_t* parent) {
     
     renderer = std::make_unique<IsometricRenderer>(ROOM_WIDTH, ROOM_DEPTH, WALL_HEIGHT_UNITS);
     camera = std::make_unique<RoomCamera>(room_canvas);
-    pet = std::make_unique<RoomPet>(ROOM_WIDTH, ROOM_DEPTH, room_canvas);
+    pet = std::make_unique<RoomPet>(ROOM_WIDTH, ROOM_DEPTH);
     object_manager = std::make_unique<RoomObjectManager>();
 
     mode_selector = std::make_unique<RoomModeSelector>(
@@ -58,7 +57,7 @@ void RoomView::setup_ui(lv_obj_t* parent) {
     );
     
     load_all_furniture_sprites();
-    set_mode(RoomMode::DECORATE);
+    set_mode(RoomMode::PET);
     
     update_timer = lv_timer_create(timer_cb, 33, this); // ~30 FPS
 
@@ -78,7 +77,6 @@ void RoomView::release_all_furniture_sprites() {
 }
 
 void RoomView::load_all_furniture_sprites() {
-    // --- FIX: Release old sprites before loading new ones ---
     release_all_furniture_sprites();
 
     ESP_LOGI(TAG, "Pre-loading all required furniture sprites...");
@@ -112,7 +110,6 @@ void RoomView::load_all_furniture_sprites() {
         }
     }
 
-    // --- FIX: Load sprites and store their descriptors in the map ---
     auto& sprite_cache = SpriteCacheManager::get_instance();
     for (const auto& path : unique_paths) {
         const lv_image_dsc_t* dsc = sprite_cache.get_sprite(path);
@@ -213,7 +210,7 @@ void RoomView::on_place_object() {
     }
     if (changed) {
         object_manager->save_layout();
-        load_all_furniture_sprites(); // Reload sprites cache for the view
+        load_all_furniture_sprites();
         lv_obj_invalidate(room_canvas);
     }
 }
@@ -223,13 +220,23 @@ void RoomView::on_back_to_menu() {
 }
 
 void RoomView::periodic_update() {
-    if (current_mode == RoomMode::PET && pet->is_spawned()) {
-        float pet_interp_x, pet_interp_y;
-        pet->get_interpolated_grid_pos(pet_interp_x, pet_interp_y);
-        camera->center_on(pet_interp_x, pet_interp_y);
-    }
+    bool needs_redraw = false;
+
     if (pet->is_spawned()) {
-        pet->update_screen_position(camera->get_offset());
+        if (pet->is_animating()) {
+            needs_redraw = true;
+        }
+        pet->update_state();
+        
+        if (current_mode == RoomMode::PET) {
+            float pet_interp_x, pet_interp_y;
+            pet->get_interpolated_grid_pos(pet_interp_x, pet_interp_y);
+            camera->center_on(pet_interp_x, pet_interp_y);
+        }
+    }
+    
+    if (needs_redraw) {
+        lv_obj_invalidate(room_canvas);
     }
 }
 
@@ -243,72 +250,73 @@ void RoomView::draw_event_cb(lv_event_t* e) {
     
     view->renderer->draw_world(layer, view->camera->get_offset());
 
-    std::vector<PlacedFurniture> sorted_objects = view->object_manager->get_all_objects();
-    std::sort(sorted_objects.begin(), sorted_objects.end(),
-        [](const PlacedFurniture& a, const PlacedFurniture& b) {
-            if (a.grid_y != b.grid_y) return a.grid_y < b.grid_y;
-            return a.grid_x < b.grid_x;
-        }
-    );
+    std::vector<DrawableObject> drawables;
+
+    for (const auto& obj : view->object_manager->get_all_objects()) {
+        drawables.push_back({DrawableObject::FURNITURE, &obj, (float)obj.grid_y, (float)obj.grid_x});
+    }
+
+    if (view->pet->is_spawned()) {
+        float pet_x, pet_y;
+        view->pet->get_interpolated_grid_pos(pet_x, pet_y);
+        drawables.push_back({DrawableObject::PET, view->pet.get(), pet_y, pet_x});
+    }
+
+    std::sort(drawables.begin(), drawables.end());
 
     auto& furni_manager = FurnitureDataManager::get_instance();
+    const lv_point_t& camera_offset = view->camera->get_offset();
 
-    for(const auto& obj : sorted_objects) {
-        const auto* def = furni_manager.get_definition(obj.type_name);
-        if (!def) {
-            ESP_LOGW(TAG, "Definition not found for placed object type '%s'", obj.type_name.c_str());
-            continue;
-        }
+    for(const auto& drawable : drawables) {
+        if (drawable.type == DrawableObject::FURNITURE) {
+            const PlacedFurniture* obj = static_cast<const PlacedFurniture*>(drawable.data);
+            const auto* def = furni_manager.get_definition(obj->type_name);
+            if (!def) continue;
 
-        int habbo_dir = (obj.direction == 90) ? 2 : 4;
+            int habbo_dir = (obj->direction == 90) ? 2 : 4;
 
-        for (int i = 0; i < def->layer_count; ++i) {
-            char layer_char = 'a' + i;
-            
-            char asset_key_buf[128];
-            snprintf(asset_key_buf, sizeof(asset_key_buf), "%s_64_%c_%d_0", obj.type_name.c_str(), layer_char, habbo_dir);
-            std::string asset_key(asset_key_buf);
+            for (int i = 0; i < def->layer_count; ++i) {
+                char layer_char = 'a' + i;
+                char asset_key_buf[128];
+                snprintf(asset_key_buf, sizeof(asset_key_buf), "%s_64_%c_%d_0", obj->type_name.c_str(), layer_char, habbo_dir);
+                std::string asset_key(asset_key_buf);
 
-            auto asset_it = def->assets.find(asset_key);
-            if (asset_it == def->assets.end()) continue;
-            
-            const FurnitureAsset& asset = asset_it->second;
-            const FurnitureAsset* final_asset = &asset;
-            bool flip_h = asset.flip_h;
+                auto asset_it = def->assets.find(asset_key);
+                if (asset_it == def->assets.end()) continue;
+                
+                const FurnitureAsset& asset = asset_it->second;
+                const FurnitureAsset* final_asset = &asset;
+                bool flip_h = asset.flip_h;
 
-            if (!asset.source.empty()) {
-                auto source_it = def->assets.find(asset.source);
-                if (source_it != def->assets.end()) {
-                    final_asset = &source_it->second;
-                } else {
-                    continue;
+                if (!asset.source.empty()) {
+                    auto source_it = def->assets.find(asset.source);
+                    if (source_it != def->assets.end()) final_asset = &source_it->second;
+                    else continue;
+                }
+                
+                char path_buf[256];
+                snprintf(path_buf, sizeof(path_buf), "%s%s%s%s/%s.png",
+                         sd_manager_get_mount_point(), ASSETS_BASE_SUBPATH, ASSETS_FURNITURE_SUBPATH,
+                         obj->type_name.c_str(), final_asset->name.c_str());
+
+                auto sprite_it = view->m_cached_sprites.find(path_buf);
+                if(sprite_it != view->m_cached_sprites.end()) {
+                    view->renderer->draw_sprite(layer, camera_offset, *obj, sprite_it->second, final_asset->x_offset, final_asset->y_offset, flip_h);
                 }
             }
-            
-            const std::string& asset_name_to_load = final_asset->name;
-            
-            char path_buf[256];
-            snprintf(path_buf, sizeof(path_buf), "%s%s%s%s/%s.png",
-                     sd_manager_get_mount_point(), ASSETS_BASE_SUBPATH, ASSETS_FURNITURE_SUBPATH,
-                     obj.type_name.c_str(), asset_name_to_load.c_str());
-
-            // --- FIX: Look up the pre-loaded descriptor instead of calling get_sprite() ---
-            auto sprite_it = view->m_cached_sprites.find(path_buf);
-            if(sprite_it != view->m_cached_sprites.end()) {
-                const lv_image_dsc_t* sprite_dsc = sprite_it->second;
-                view->renderer->draw_sprite(layer, view->camera->get_offset(), obj, sprite_dsc, final_asset->x_offset, final_asset->y_offset, flip_h);
-            }
+        } else if (drawable.type == DrawableObject::PET) {
+            view->pet->draw(layer, camera_offset);
         }
     }
 
     if (view->current_mode == RoomMode::CURSOR || view->current_mode == RoomMode::DECORATE) {
-        view->renderer->draw_cursor(layer, view->camera->get_offset(), view->cursor_grid_x, view->cursor_grid_y);
+        view->renderer->draw_cursor(layer, camera_offset, view->cursor_grid_x, view->cursor_grid_y);
     } 
     else if (view->current_mode == RoomMode::PET && view->pet->is_animating()) {
         int target_x = view->pet->get_target_grid_x();
         int target_y = view->pet->get_target_grid_y();
         if(target_x != -1 && target_y != -1) {
-            view->renderer->draw_target_tile(layer, view->camera->get_offset(), target_x, target_y);
+            view->renderer->draw_target_tile(layer, camera_offset, target_x, target_y);
         }
     }
 }
